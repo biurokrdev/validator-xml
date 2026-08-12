@@ -183,6 +183,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   showBarcodeDialog = signal(false);
   errorMessage = signal<string | null>(null);
   successMessage = signal<string | null>(null);
+  infoMessage = signal<string | null>(null);
   documentNotFound = signal(false);
 
   showContextMenu = signal(false);
@@ -816,7 +817,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         this._applyLoadedContent(content, fileName);
         this.logOpenDiagnostics();
         if (content.isReadOnlyProtected === true) {
-          this.showError(READ_ONLY_PROTECTED_MESSAGE);
+          this.showInfo(READ_ONLY_PROTECTED_MESSAGE);
         } else if (announce) {
           this.showSuccess(`Otwarto dokument: ${fileName}`);
         }
@@ -1410,12 +1411,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
 
   private showSuccess(message: string): void {
     this.errorMessage.set(null);
+    this.infoMessage.set(null);
     this.successMessage.set(message);
     setTimeout(() => this.successMessage.set(null), 3000);
   }
 
+  private showInfo(message: string): void {
+    this.errorMessage.set(null);
+    this.successMessage.set(null);
+    this.infoMessage.set(message);
+    setTimeout(() => this.infoMessage.set(null), 5000);
+  }
+
   private showError(message: string): void {
     this.successMessage.set(null);
+    this.infoMessage.set(null);
     this.errorMessage.set(message);
     setTimeout(() => this.errorMessage.set(null), 5000);
   }
@@ -1596,7 +1606,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showMenu.set(false);
 
     if (this.readOnly()) {
-      this.showError('Tryb podglądu — dokument jest tylko do odczytu.');
+      this.showInfo('Tryb podglądu — dokument jest tylko do odczytu.');
       return;
     }
 
@@ -3036,8 +3046,8 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       else this.paragraphData.alignment = 'left';
 
       const pxToCm = (px: number) => Math.round((px / CSS_PX_PER_CM) * 10) / 10;
-      this.paragraphData.indentLeft = pxToCm(parseFloat(style.paddingLeft) || 0);
-      this.paragraphData.indentRight = pxToCm(parseFloat(style.paddingRight) || 0);
+      this.paragraphData.indentLeft = pxToCm(parseFloat(style.marginLeft) || 0);
+      this.paragraphData.indentRight = pxToCm(parseFloat(style.marginRight) || 0);
 
       const textIndent = parseFloat(style.textIndent) || 0;
       if (textIndent > 0) {
@@ -3098,14 +3108,15 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
 
       el.style.textAlign = this.paragraphData.alignment;
 
-      el.style.paddingLeft = cmToPx(this.paragraphData.indentLeft) + 'px';
-      el.style.paddingRight = cmToPx(this.paragraphData.indentRight) + 'px';
+      el.style.marginLeft = cmToPx(this.paragraphData.indentLeft) + 'px';
+      el.style.marginRight = cmToPx(this.paragraphData.indentRight) + 'px';
+      el.style.removeProperty('padding-left');
+      el.style.removeProperty('padding-right');
 
       if (this.paragraphData.specialIndent === 'firstLine') {
         el.style.textIndent = cmToPx(this.paragraphData.specialIndentBy) + 'px';
       } else if (this.paragraphData.specialIndent === 'hanging') {
         el.style.textIndent = '-' + cmToPx(this.paragraphData.specialIndentBy) + 'px';
-        el.style.paddingLeft = cmToPx(this.paragraphData.indentLeft + this.paragraphData.specialIndentBy) + 'px';
       } else {
         el.style.textIndent = '0';
       }

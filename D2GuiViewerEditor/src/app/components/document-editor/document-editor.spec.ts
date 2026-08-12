@@ -1035,6 +1035,7 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
     it('_applyLoadedContent ustawia stan blokady, ale sam nie emituje komunikatu', () => {
       const showError = vi.spyOn(component as any, 'showError');
       const showSuccess = vi.spyOn(component as any, 'showSuccess');
+      const showInfo = vi.spyOn(component as any, 'showInfo');
 
       (component as any)._applyLoadedContent(content(true), 'chroniony.docx');
 
@@ -1042,16 +1043,29 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
       expect(component.editingDisabled()).toBe(true);
       expect(showError).not.toHaveBeenCalled();
       expect(showSuccess).not.toHaveBeenCalled();
+      expect(showInfo).not.toHaveBeenCalled();
     });
 
-    it('otwarcie chronionego dokumentu pokazuje JEDEN komunikat read-only, bez sukcesu', () => {
+    it('otwarcie chronionego dokumentu pokazuje JEDEN komunikat read-only jako INFO, bez sukcesu i błędu', () => {
       openResult = of(content(true));
 
       (component as any)._convertAndLoad(new File(['x'], 'chroniony.docx'), 'chroniony.docx', undefined, true);
 
       expect(component.documentEditProtected()).toBe(true);
-      expect(component.errorMessage()).toContain('tylko do odczytu');
+      expect(component.infoMessage()).toContain('tylko do odczytu');
+      expect(component.errorMessage()).toBeNull();
       expect(component.successMessage()).toBeNull();
+    });
+
+    it('ponowne wczytanie tego samego chronionego dokumentu znów daje INFO, nie błąd (13865553)', () => {
+      openResult = of(content(true));
+      const file = new File(['x'], 'chroniony.docx');
+
+      (component as any)._convertAndLoad(file, 'chroniony.docx', undefined, true);
+      (component as any)._convertAndLoad(file, 'chroniony.docx', undefined, true);
+
+      expect(component.infoMessage()).toContain('tylko do odczytu');
+      expect(component.errorMessage()).toBeNull();
     });
 
     it('otwarcie zwykłego dokumentu pokazuje sukces bez komunikatu read-only', () => {

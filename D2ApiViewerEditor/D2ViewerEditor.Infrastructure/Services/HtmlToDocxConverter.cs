@@ -1209,7 +1209,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         var style = node.GetAttributeValue("style", "");
         if (!string.IsNullOrEmpty(style))
         {
-            ApplyParagraphStyleExtras(props, style);
+            ApplyParagraphStyle(props, style);
         }
 
         paragraph.Append(props);
@@ -1318,10 +1318,17 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             var liStyle = child.GetAttributeValue("style", "");
             if (!string.IsNullOrEmpty(liStyle))
             {
-                ApplyParagraphStyleExtras(props, liStyle);
+                ApplyParagraphStyle(props, liStyle, includeIndentation: false);
             }
 
             AppendListItemIndentation(props, child);
+
+            var markColorRaw = child.GetAttributeValue("data-mark-color", "");
+            if (Regex.IsMatch(markColorRaw, "^[0-9A-Fa-f]{6}$"))
+            {
+                props.Append(new ParagraphMarkRunProperties(new Color { Val = markColorRaw }));
+                NormalizeParagraphPropertiesOrder(props);
+            }
 
             para.Append(props);
 
@@ -3786,7 +3793,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return tabs.HasChildren ? tabs : null;
     }
 
-    private void ApplyParagraphStyle(ParagraphProperties props, string style)
+    private void ApplyParagraphStyle(ParagraphProperties props, string style, bool includeIndentation = true)
     {
         if (string.IsNullOrEmpty(style)) return;
 
@@ -3808,40 +3815,48 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             props.Append(new Justification { Val = align });
         }
 
-        var indentation = new Indentation();
-        bool hasIndent = false;
-        
-        var marginLeftMatch = Regex.Match(style, @"margin-left:\s*(\d+)px");
-        if (marginLeftMatch.Success)
+        if (includeIndentation)
         {
-            indentation.Left = PxToTwips(int.Parse(marginLeftMatch.Groups[1].Value)).ToString();
-            hasIndent = true;
-        }
-        
-        var marginRightMatch = Regex.Match(style, @"margin-right:\s*(\d+)px");
-        if (marginRightMatch.Success)
-        {
-            indentation.Right = PxToTwips(int.Parse(marginRightMatch.Groups[1].Value)).ToString();
-            hasIndent = true;
-        }
-        
-        var textIndentMatch = Regex.Match(style, @"text-indent:\s*(-?\d+)px");
-        if (textIndentMatch.Success)
-        {
-            var indent = int.Parse(textIndentMatch.Groups[1].Value);
-            if (indent < 0)
+            var indentation = new Indentation();
+            bool hasIndent = false;
+            var invInd = System.Globalization.CultureInfo.InvariantCulture;
+
+            int? LengthToTwips(string prop)
             {
-                indentation.Hanging = PxToTwips(Math.Abs(indent)).ToString();
+                var m = Regex.Match(style, $@"(?<![\w-]){Regex.Escape(prop)}:\s*(-?[\d.,]+)(px|pt)");
+                if (!m.Success) return null;
+                var val = double.Parse(m.Groups[1].Value.Replace(',', '.'), invInd);
+                if (m.Groups[2].Value == "px") val = OoxmlUnits.PixelsToPoints(val);
+                return (int)Math.Round(OoxmlUnits.PointsToTwips(val));
             }
-            else
+
+            var leftTw = LengthToTwips("margin-left");
+            if (leftTw.HasValue)
             {
-                indentation.FirstLine = PxToTwips(indent).ToString();
+                indentation.Left = leftTw.Value.ToString();
+                hasIndent = true;
             }
-            hasIndent = true;
+
+            var rightTw = LengthToTwips("margin-right");
+            if (rightTw.HasValue)
+            {
+                indentation.Right = rightTw.Value.ToString();
+                hasIndent = true;
+            }
+
+            var indentTw = LengthToTwips("text-indent");
+            if (indentTw.HasValue)
+            {
+                if (indentTw.Value < 0)
+                    indentation.Hanging = Math.Abs(indentTw.Value).ToString();
+                else
+                    indentation.FirstLine = indentTw.Value.ToString();
+                hasIndent = true;
+            }
+
+            if (hasIndent)
+                props.Append(indentation);
         }
-        
-        if (hasIndent)
-            props.Append(indentation);
 
         var spacing = new SpacingBetweenLines();
         bool hasSpacing = false;

@@ -124,4 +124,107 @@ describe('WysiwygEditorComponent — toolbar action guards', () => {
       editor.remove();
     }
   });
+
+
+  describe('Tab w tabeli (13259982)', () => {
+    let editor: HTMLDivElement;
+    let table: HTMLTableElement;
+
+    function setCaret(cell: HTMLTableCellElement): void {
+      const range = document.createRange();
+      range.setStart(cell, 0);
+      range.collapse(true);
+      const sel = window.getSelection()!;
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+
+    function caretCell(): HTMLTableCellElement | null {
+      const sel = window.getSelection();
+      const node = sel?.anchorNode;
+      const el = node?.nodeType === Node.TEXT_NODE ? node.parentElement : (node as HTMLElement | null);
+      return (el?.closest?.('td') ?? null) as HTMLTableCellElement | null;
+    }
+
+    beforeEach(() => {
+      editor = document.createElement('div');
+      editor.setAttribute('contenteditable', 'true');
+      table = document.createElement('table');
+      table.innerHTML =
+        '<tr><td class="docx-borderless-cell" style="border:none;padding:4px;">A1</td><td>B1</td></tr>' +
+        '<tr><td>A2</td><td>B2</td></tr>';
+      editor.appendChild(table);
+      document.body.appendChild(editor);
+      (component as any).getActiveEditor = () => editor;
+      (component as any).onContentChange = () => {};
+    });
+
+    afterEach(() => editor.remove());
+
+    it('Tab przechodzi do następnej komórki, na końcu wiersza do pierwszej w kolejnym', () => {
+      setCaret(table.rows[0].cells[0]);
+      expect((component as any)._handleTableTab(false)).toBe(true);
+      expect(caretCell()?.textContent).toBe('B1');
+
+      expect((component as any)._handleTableTab(false)).toBe(true);
+      expect(caretCell()?.textContent).toBe('A2');
+    });
+
+    it('Shift+Tab wraca do poprzedniej komórki i do ostatniej w poprzednim wierszu', () => {
+      setCaret(table.rows[1].cells[0]);
+      expect((component as any)._handleTableTab(true)).toBe(true);
+      expect(caretCell()?.textContent).toBe('B1');
+
+      expect((component as any)._handleTableTab(true)).toBe(true);
+      expect(caretCell()?.textContent).toBe('A1');
+      expect((component as any)._handleTableTab(true)).toBe(true);
+      expect(caretCell()?.textContent).toBe('A1');
+    });
+
+    it('Tab w OSTATNIEJ komórce dokłada wiersz dziedziczący atrybuty wzorca', () => {
+      setCaret(table.rows[1].cells[1]);
+      expect((component as any)._handleTableTab(false)).toBe(true);
+
+      expect(table.rows).toHaveLength(3);
+      expect(caretCell()).toBe(table.rows[2].cells[0]);
+      expect(table.rows[2].cells).toHaveLength(2);
+    });
+
+    it('poza tabelą Tab NIE jest konsumowany (zostaje wcięcie)', () => {
+      const p = document.createElement('p');
+      p.textContent = 'zwykly akapit';
+      editor.appendChild(p);
+      const range = document.createRange();
+      range.setStart(p.firstChild!, 0);
+      range.collapse(true);
+      const sel = window.getSelection()!;
+      sel.removeAllRanges();
+      sel.addRange(range);
+
+      expect((component as any)._handleTableTab(false)).toBe(false);
+    });
+  });
+
+
+  it('insertTable ustawia karetkę w PIERWSZEJ komórce nowej tabeli', () => {
+    const editor = document.createElement('div');
+    editor.setAttribute('contenteditable', 'true');
+    document.body.appendChild(editor);
+    try {
+      (component as any).getActiveEditor = () => editor;
+      (component as any).onContentChange = () => {};
+      window.getSelection()?.removeAllRanges();
+
+      component.insertTable('2x2');
+
+      const firstCell = editor.querySelector('td')!;
+      const sel = window.getSelection()!;
+      expect(sel.rangeCount).toBe(1);
+      const anchor = sel.anchorNode!;
+      const anchorEl = anchor.nodeType === Node.TEXT_NODE ? anchor.parentElement : (anchor as HTMLElement);
+      expect(anchorEl === firstCell || firstCell.contains(anchorEl)).toBe(true);
+    } finally {
+      editor.remove();
+    }
+  });
 });

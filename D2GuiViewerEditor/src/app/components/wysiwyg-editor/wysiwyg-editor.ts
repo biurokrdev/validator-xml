@@ -2517,6 +2517,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     if (e.key === 'Tab') {
       e.preventDefault();
+      if (this._handleTableTab(e.shiftKey)) return;
       if (e.shiftKey) {
         this.executeCommand('outdent');
       } else {
@@ -2533,6 +2534,85 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         );
       }
     }
+  }
+
+  private _handleTableTab(backwards: boolean): boolean {
+    const editor = this.getActiveEditor();
+    const sel = window.getSelection();
+    if (!editor || !sel || sel.rangeCount === 0) return false;
+    const start = sel.getRangeAt(0).startContainer;
+    const node = start.nodeType === Node.TEXT_NODE ? start.parentElement : (start as HTMLElement);
+    const cell = (node?.closest?.('td, th') ?? null) as HTMLTableCellElement | null;
+    if (!cell || !editor.contains(cell)) return false;
+    const row = cell.parentElement as HTMLTableRowElement | null;
+    const table = cell.closest('table');
+    if (!row || !table) return false;
+
+    const cells = Array.from(row.cells);
+    const idx = cells.indexOf(cell);
+
+    if (!backwards) {
+      if (idx < cells.length - 1) { this._focusTableCell(cells[idx + 1]); return true; }
+      const nextRow = table.rows[row.rowIndex + 1];
+      if (nextRow?.cells.length) { this._focusTableCell(nextRow.cells[0]); return true; }
+      const nextFragment = this._siblingTableFragment(table, +1);
+      if (nextFragment?.rows[0]?.cells.length) {
+        this._focusTableCell(nextFragment.rows[0].cells[0]);
+        return true;
+      }
+      const newRow = this._appendTableRowLike(table);
+      this._focusTableCell(newRow.cells[0]);
+      this.onContentChange();
+      return true;
+    }
+
+    if (idx > 0) { this._focusTableCell(cells[idx - 1]); return true; }
+    const prevRow = table.rows[row.rowIndex - 1];
+    if (prevRow?.cells.length) { this._focusTableCell(prevRow.cells[prevRow.cells.length - 1]); return true; }
+    const prevFragment = this._siblingTableFragment(table, -1);
+    const lastRow = prevFragment?.rows[prevFragment.rows.length - 1];
+    if (lastRow?.cells.length) { this._focusTableCell(lastRow.cells[lastRow.cells.length - 1]); return true; }
+    return true; // pierwsza komórka tabeli: jak Word — nic, ale bez outdentu
+  }
+
+  private _siblingTableFragment(table: HTMLTableElement, direction: 1 | -1): HTMLTableElement | null {
+    const id = table.getAttribute('data-split-table-id');
+    if (!id) return null;
+    const fragments = Array.from(document.querySelectorAll<HTMLTableElement>(
+      `table[data-split-table-id="${CSS.escape(id)}"]`));
+    const i = fragments.indexOf(table);
+    if (i < 0) return null;
+    return fragments[i + direction] ?? null;
+  }
+
+  private _appendTableRowLike(table: HTMLTableElement): HTMLTableRowElement {
+    const last = table.rows[table.rows.length - 1];
+    const newRow = last.cloneNode(false) as HTMLTableRowElement;
+    for (const ref of Array.from(last.cells)) {
+      const td = ref.cloneNode(false) as HTMLTableCellElement;
+      td.removeAttribute('rowspan');
+      td.removeAttribute('data-split-row-id');
+      td.removeAttribute('data-split-row-cont');
+      td.innerHTML = '<br>';
+      newRow.appendChild(td);
+    }
+    last.parentElement!.appendChild(newRow);
+    return newRow;
+  }
+
+  private _focusTableCell(cell: HTMLTableCellElement): void {
+    (cell.closest('[contenteditable="true"]') as HTMLElement | null)?.focus();
+    const range = document.createRange();
+    if ((cell.textContent ?? '').trim().length === 0) {
+      range.setStart(cell, 0);
+      range.collapse(true);
+    } else {
+      range.selectNodeContents(cell);
+    }
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    this.savedSelection = range.cloneRange();
   }
 
   private _captureInlineTextStyleAtCaret(): { fontFamily?: string; fontSize?: string } | null {
@@ -3785,6 +3865,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
 
     this.savedSelection = null;
+    const firstCell = table.rows[0]?.cells[0];
+    if (firstCell) this._focusTableCell(firstCell);
     this.onContentChange();
   }
 

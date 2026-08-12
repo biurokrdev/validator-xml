@@ -331,6 +331,10 @@ img[data-legacy-graphic='blank'] {
   color: var(--marker-color, inherit);
 }
 
+.editor-content li::marker {
+  color: var(--marker-color, currentColor);
+}
+
 .editor-content :is(ul, ol)[style*='--ind-hanging'] > li[data-list-label]::before,
 .editor-content li[data-list-label][style*='--ind-hanging']::before {
   right: auto;

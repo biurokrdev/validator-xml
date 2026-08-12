@@ -8,6 +8,10 @@
   height: 100%;
   overflow: auto;
   box-sizing: border-box;
+
+  > :not(.workspace) {
+    flex-shrink: 0;
+  }
 }
 
 .page-header { margin-bottom: 2px; }

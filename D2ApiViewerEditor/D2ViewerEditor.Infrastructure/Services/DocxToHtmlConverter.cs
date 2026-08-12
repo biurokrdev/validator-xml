@@ -160,6 +160,8 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
         using var document = WordprocessingDocument.Open(docxStream, false);
 
+        AcceptTrackedRevisions(document);
+
         _numberingPart = document.MainDocumentPart?.NumberingDefinitionsPart;
         _themePart = document.MainDocumentPart?.ThemePart;
         LoadThemeFonts();
@@ -1242,6 +1244,20 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                     itemAttrs = indAttrs.ToString();
                 }
 
+                string? itemMarkerColorCss = null;
+                if (firstInfo.MarkerColorCss == null)
+                {
+                    var markColor = p.ParagraphProperties
+                        ?.GetFirstChild<ParagraphMarkRunProperties>()
+                        ?.GetFirstChild<Color>();
+                    itemMarkerColorCss = ResolveRunColorCss(markColor);
+                    if (itemMarkerColorCss != null)
+                    {
+                        cssStyle += $"--marker-color:{itemMarkerColorCss};";
+                        itemAttrs += $" data-mark-color=\"{itemMarkerColorCss.TrimStart('#')}\"";
+                    }
+                }
+
                 html.Append($"<li{itemAttrs} style=\"{cssStyle}\">");
 
                 var markerBoxCss = itemHangingPx is { } markerHang
@@ -1249,6 +1265,8 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                     : "display:inline-block;min-width:1.2em;margin-right:0.4em;";
                 if (firstInfo.MarkerColorCss != null)
                     markerBoxCss += $"color:{firstInfo.MarkerColorCss};";
+                else if (itemMarkerColorCss != null)
+                    markerBoxCss += $"color:{itemMarkerColorCss};";
                 if (firstInfo.BulletImageDataUri != null)
                 {
                     html.Append($"<span class=\"list-marker\" style=\"{markerBoxCss}\"><img src=\"{firstInfo.BulletImageDataUri}\" alt=\"\" style=\"height:1em;vertical-align:-0.125em;\"/></span>");
@@ -5049,6 +5067,54 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         if (sysColor?.LastColor?.Value != null) return "#" + sysColor.LastColor.Value;
         
         return null;
+    }
+
+    private static void AcceptTrackedRevisions(WordprocessingDocument document)
+    {
+        var main = document.MainDocumentPart;
+        if (main == null) return;
+
+        var roots = new List<OpenXmlElement?> { main.Document?.Body };
+        foreach (var headerPart in main.HeaderParts) roots.Add(headerPart.Header);
+        foreach (var footerPart in main.FooterParts) roots.Add(footerPart.Footer);
+        roots.Add(main.FootnotesPart?.Footnotes);
+        roots.Add(main.EndnotesPart?.Endnotes);
+
+        foreach (var root in roots)
+        {
+            if (root == null) continue;
+
+            foreach (var row in root.Descendants<TableRow>().ToList())
+            {
+                var trPr = row.TableRowProperties;
+                if (trPr?.GetFirstChild<Deleted>() != null) row.Remove();
+                else trPr?.GetFirstChild<Inserted>()?.Remove();
+            }
+
+            foreach (var deleted in root.Descendants<DeletedRun>().ToList()) deleted.Remove();
+            foreach (var moveFrom in root.Descendants<MoveFromRun>().ToList()) moveFrom.Remove();
+            foreach (var inserted in root.Descendants<InsertedRun>().ToList()) UnwrapRevisionContainer(inserted);
+            foreach (var moveTo in root.Descendants<MoveToRun>().ToList()) UnwrapRevisionContainer(moveTo);
+
+            foreach (var mark in root.Descendants<Inserted>().ToList()) mark.Remove();
+            foreach (var mark in root.Descendants<Deleted>().ToList()) mark.Remove();
+            foreach (var change in root.Descendants<ParagraphPropertiesChange>().ToList()) change.Remove();
+            foreach (var change in root.Descendants<RunPropertiesChange>().ToList()) change.Remove();
+        }
+    }
+
+    private static void UnwrapRevisionContainer(OpenXmlElement wrapper)
+    {
+        var parent = wrapper.Parent;
+        if (parent == null) return;
+        OpenXmlElement anchor = wrapper;
+        foreach (var child in wrapper.ChildElements.ToList())
+        {
+            child.Remove();
+            parent.InsertAfter(child, anchor);
+            anchor = child;
+        }
+        wrapper.Remove();
     }
 
     private string GetHighlightColor(HighlightColorValues value)
