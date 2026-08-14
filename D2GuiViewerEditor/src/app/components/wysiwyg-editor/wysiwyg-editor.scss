@@ -1,4 +1,5 @@
-﻿.wysiwyg-editor-wrapper {
+﻿/* Edytor WYSIWYG z paginacją */
+.wysiwyg-editor-wrapper {
   height: 100%;
   width: 100%;
   overflow: visible;
@@ -22,15 +23,19 @@
 }
 
 .page {
-  width: 794px;
-  height: 1122px;
+  width: 794px; /* 21cm * 96 DPI / 2.54 = 793.7px */
+  /* DEFINITYWNA wysokość (nie min-height): dzięki temu flex ogranicza `.editor-content`,
+     a `overflow:hidden` na nim PRZYCINA nadmiar zamiast rozciągać kartkę w pion — strona
+     nigdy nie przekracza formatu (jak w MS Word), a repaginacja przelewa nadmiar na kolejną
+     stronę. Realna wartość nadawana inline z geometrii (`pageHeightPx`); ta jest fallbackiem. */
+  height: 1122px; /* 29.7cm * 96 DPI / 2.54 */
   background: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   position: relative;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  overflow: visible;
+  overflow: visible; /* Pozwala na wyświetlanie pasków narzędzi poza stroną */
 }
 
 .page.landscape {
@@ -38,6 +43,7 @@
   height: 794px;
 }
 
+/* Separator między stronami - styl Google Docs */
 .page-separator {
   width: 794px;
   height: 8px;
@@ -48,6 +54,7 @@
     inset 0 -1px 2px rgba(255, 255, 255, 0.5);
 }
 
+/* Linie marginesów */
 .margin-guides {
   position: absolute;
   top: 0;
@@ -91,6 +98,7 @@
   border-left: 1px dashed #c0c0c0;
 }
 
+/* Narożniki marginesów - małe znaczniki w narożnikach */
 .margin-corner {
   position: absolute;
   width: 8px;
@@ -121,6 +129,7 @@
   transform: translate(4px, 4px);
 }
 
+/* Hover na edytorze - podświetlenie linii marginesów */
 .wysiwyg-editor:hover .margin-guide {
   border-color: #a0a0a0;
 }
@@ -134,17 +143,35 @@
   flex: 1;
   background: white;
   outline: none;
+  // Firmowa czcionka (z _corporate-font.scss) ma najwyższy priorytet;
+  // fallback zachowuje dotychczasowe wartości na wypadek braku konfiguracji.
   font-family: var(--corporate-font-family, 'Calibri', 'Segoe UI', Arial, sans-serif);
   font-size: 11pt;
   line-height: 1.15;
   color: #000;
+  // Reset globalnego -webkit-font-smoothing: antialiased ze styles.scss.
+  // Natywny rendering (DirectWrite/ClearType) daje efekt „grubszego” tekstu,
+  // zgodny z wyglądem MS Word. Wymuszenie grayscale sprawia, że litery wydają się cięższe.
   -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: auto;
   text-rendering: geometricPrecision;
   box-sizing: border-box;
   position: relative;
-  overflow: hidden;
+  /* clip zamiast hidden + BUFOR RENDERU (zgłoszenie „treść znika pod stopką/nagłówkiem"):
+     twarde cięcie na krawędzi paska treści obcinało descendery ostatniej linii (po ADR-0085
+     tusz siedzi przy dole slotu) i obiekty pływające z małym ujemnym offsetem (textbox
+     top:-6px) — wyglądało to jak pasmo z wyższym z-indexem i białym tłem. clip daje te same
+     gwarancje paginacji co hidden (pasek się nie rozrasta, bez scroll-containera), a 16px
+     marginesu pozwala TUSZOWI wystawać odrobinę — jak w Wordzie, gdzie obiekt może wystawać
+     poza obszar treści. Duży przelew (np. w trakcie debounce repaginacji) nadal jest cięty. */
+  overflow: clip;
+  overflow-clip-margin: 16px;
+  // Word nie kolapsuje ciągów spacji z w:t — pre-wrap zachowuje je wizualnie
+  // (zawijanie linii bez zmian; reader nie emituje formatującego whitespace między tagami).
   white-space: pre-wrap;
+  // Kolumny (ADR-0039): gdy column-count > 1 (binding), wypełniaj kolumnę do pełna od góry,
+  // potem następną — jak Word (nie balansuj). Dla 1 kolumny bez efektu. Wymaga stałej wysokości
+  // strony (.page height + flex), którą już mamy (ADR-0038).
   column-fill: auto;
 }
 
@@ -165,11 +192,37 @@
   white-space: pre-wrap;
 }
 
+/* Nośnik tabulatora (reader: span z literalnym \t, min-width:2em) — pod odziedziczonym
+   pre-wrap literalny tab renderowałby się jako skok do stopu i zmieniał szerokość boksu;
+   normal przywraca dotychczasowe 2em (znak \t w DOM zostaje — round-trip nietknięty). */
 .editor-content span[style*='min-width:2em'],
 .page-overflow-content span[style*='min-width:2em'] {
   white-space: normal;
 }
 
+/* Rozkład interlinii jak w Wordzie (ADR-0085, koryguje ADR-0079): Word kotwiczy zawartość
+   linii przy DOLE jej slotu — nadmiarowy odstęp (leading ponad pojedynczy odstęp fontu)
+   renderuje się NAD tekstem. Dowód modelu: „Dokładnie" mniejsze niż font obcina w Wordzie
+   GÓRĘ liter (tusz trzyma się dołu slotu). CSS rozkłada pół nad / pół pod, więc
+   „Wielokrotność 3" renderowała tekst wyśrodkowany w slocie, a pierwszy akapit strony
+   siedział za wysoko względem Worda. Przesuwamy TUSZ o pół leadingu W DÓŁ relative/top
+   (ADR-0079 przesuwał w górę — premisa była odwrócona, zgłoszenie „Interlinia 3"):
+   - layout boxów NIETKNIĘTY (paginacja, wysokości stron i odstępy między boxami bez zmian),
+   - tusz nie wychodzi POD box (po przesunięciu dół tuszu = dół ostatniego slotu linii),
+     góra tym bardziej bezpieczna — brak regresu przycinania z ADR/title-clip,
+   - dla interlinii MNIEJSZEJ niż pojedyncza (Dokładnie < font) wyrażenie jest ujemne:
+     tusz idzie w górę, dół tuszu dalej trzyma dół slotu — góra może być przycięta
+     krawędzią strony dokładnie jak w Wordzie,
+   - `--w-line-single` = pojedynczy odstęp fontu dokumentu w em ([style] na .page z tabeli
+     PG-09); token w em rozwiązuje się względem font-size AKAPITU,
+   - measurer paginacji jest poza .page → pomiary bloków bez przesunięć,
+   - wykluczone akapity z elementami pływającymi ([data-pos-mode] — abspos względem .page
+     nie może dostać spozycjonowanego przodka) — zachowują dotychczasowy rendering,
+   - wykluczone akapity z tłem/obramowaniem: relative/top przesuwa CAŁY malowany box,
+     więc cieniowanie wyjeżdżałoby poza slot akapitu na sąsiedni blok
+     (repro QA: „To jest test interlinii 3" z cieniowaniem przy w:line=720) —
+     bez przesunięcia tekst jest wyśrodkowany w slocie (kompromis: pół leadingu różnicy,
+     zero artefaktów). */
 .page :is(p, h1, h2, h3, h4, h5, h6, li):not(:has([data-pos-mode])):not([style*='background-color']):not([style*='border']) {
   position: relative;
   top: calc((1lh - var(--w-line-single, 1.221em)) / 2);
@@ -185,16 +238,21 @@
   outline: none;
 }
 
+/* Naprawienie problemów z font-size w spanach */
 .editor-content span[style*="font-size"] {
   line-height: normal;
   vertical-align: baseline;
 }
 
+/* Usuń domyślne style z elementów font */
 .editor-content font {
   line-height: normal;
   vertical-align: baseline;
 }
 
+/* Style dla elementów dokumentu. Odstęp „po" nagłówku = padding-bottom (ADR-0053, jak
+   dla akapitów): inline padding-bottom ze stylu Worda nadpisuje wartość klasy zamiast
+   sumować się z klasowym margin-bottom. */
 .editor-content h1 {
   font-size: 24pt;
   font-weight: 700;
@@ -243,6 +301,10 @@
   color: #1a1a1a;
 }
 
+/* Nagłówki i tytuły używają w Wordzie 'Calibri Light'. Web nie ma odpowiednika
+ * 'Calibri Light Bold', więc przeglądarka syntetyzuje bold z Light → wychodzi cienko.
+ * Dla spanów wewnątrz nagłówków nadpisujemy font-family na zwykłego Calibri
+ * (ma prawdziwą wagę Bold), aby wygląd był zgodny z MS Word. */
 .editor-content :is(h1, h2, h3, h4, h5, h6, .doc-title, .doc-subtitle) span[style*="Calibri Light"],
 .editor-content :is(h1, h2, h3, h4, h5, h6, .doc-title, .doc-subtitle) span[style*="Aptos Display"] {
   font-family: 'Calibri', 'Segoe UI', Arial, sans-serif !important;
@@ -250,11 +312,15 @@
   font-synthesis: weight style;
 }
 
+/* Dodatkowe wzmocnienie syntezy boldu dla pozostałych spanów w nagłówkach */
 .editor-content :is(h1, h2, h3, h4, h5, h6, .doc-title) strong,
 .editor-content :is(h1, h2, h3, h4, h5, h6, .doc-title) b {
   font-weight: 800;
 }
 
+/* Title (Word): duży tekst, domyślnie Calibri Light, bez <h1>.
+ * Wymuszamy cięższy rysunek litery — w Wordzie subpikselowy rendering DirectWrite
+ * sprawia, że Title wygląda masywnie; w web bez tego trzeba to emulować wagą. */
 .editor-content .doc-title {
   font-weight: 700;
 }
@@ -262,10 +328,29 @@
   font-weight: 600;
 }
 
+/* Domyślny odstęp PO akapicie: z docDefaults dokumentu (--doc-par-margin ustawiane przez
+   wysiwyg-editor z data-default-after-tw kontenera), fallback = dotychczasowe 10px.
+   PADDING, nie margin (ADR-0053): Word SUMUJE odstęp „po" akapitu z odstępem „przed"
+   następnego, a marginesy CSS rodzeństwa kolapsują do max — między akapitami znikał
+   mniejszy z odstępów. Padding nie kolapsuje; reader emituje w:after tak samo. */
 .editor-content p {
   margin: 0;
+  /* Domyślny odstęp PRZED akapitem (data-default-before-tw → --doc-par-margin-top).
+     Word renderuje go przy każdym akapicie, także na górze strony (por. flaga kompatybilności
+     „Suppress Space Before…" — domyślnie wyłączona). Fallback 0 = dotychczasowe zachowanie.
+     Odstęp „przed" zostaje MARGINESEM (nie paddingiem): gap = padding-bottom(A) + margin-top(B),
+     czyli suma jak w Wordzie (ADR-0053). Inline margin-top z readera wygrywa nad tą regułą. */
   margin-top: var(--doc-par-margin-top, 0px);
   padding-bottom: var(--doc-par-margin, 10px);
+  /* NIE dodawać tu `text-box-trim: trim-start`. Ta reguła przesuwa TUSZ pierwszej linii
+     akapitu w górę o połowę interlinii (half-leading), poza box akapitu. Dla PIERWSZEGO
+     akapitu strony (np. duży „Title" tuż pod nagłówkiem) tusz trafiał POWYŻEJ górnej
+     krawędzi `.editor-content` i był przycinany przez jego `overflow:hidden` (paginacja,
+     ADR-0038) — górna część znaków znikała (objaw: „nagłówek nachodzi na tytuł").
+     Dla dużego tytułu W ŚRODKU strony ta sama reguła nasuwała pierwszą linię na akapit
+     powyżej (nakładanie). Efekt rósł z rozmiarem fontu (~37px przy 40pt), więc dotykał
+     tylko dużych tytułów; zwykły tekst 11pt maskował go tłem. Standardowe rozkładanie
+     interlinii (bez trim) renderuje tytuł zgodnie z Wordem (~2px różnicy) i nie przycina. */
 }
 
 .editor-content > p:last-child {
@@ -273,6 +358,11 @@
   padding-bottom: 0;
 }
 
+/* Legacy grafiki wektorowe (EMF/WMF) bez rasteryzacji renderują się jako PRZEZROCZYSTY
+   pusty obraz o właściwym rozmiarze (podgląd niedostępny, oryginał wraca do DOCX). Bez
+   żadnego stylu były NIEWIDOCZNE (np. logo/linie w stopce). Pokazujemy je jako subtelny,
+   poprawnie wymiarowany placeholder — użytkownik widzi, że grafika istnieje i gdzie jest.
+   Element <img> pozostaje (round-trip do EMF nietknięty). */
 img[data-legacy-graphic='blank'] {
   border: 1px dashed #b3b3b3;
   background:
@@ -286,6 +376,10 @@ img[data-legacy-graphic='blank'] {
   box-sizing: border-box;
 }
 
+/* Word table cells default to zero paragraph spacing. The blanket `.editor-content p`
+   bottom margin above pushes single-line content upward, which visually defeats
+   vertical-align:middle/bottom on the cell and inflates dense tables. Inline margins the
+   backend emits for paragraphs that DO declare spacing still win (higher specificity). */
 .editor-content table td > p,
 .editor-content table th > p {
   margin: 0;
@@ -300,22 +394,39 @@ img[data-legacy-graphic='blank'] {
 
 .editor-content ul[style*="padding-left"],
 .editor-content ol[style*="padding-left"] {
+  /* Gdy backend ustawia padding-left inline — zaufaj mu, nie dodawaj marginesów */
   margin: 0;
 }
 
+/* Word nie dodaje własnego odstępu do elementów listy — odstępy niesie inline spacing
+   akapitu z readera; edytorowe 2px rozdymało listy (zwłaszcza w komórkach tabel). */
 .editor-content li {
   margin: 0;
 }
 
+/* Wysunięcie Worda (w:ind hanging) dla punktorów in-flow (span.list-marker): reader emituje
+   `--ind-hanging` na kontenerze listy (px z definicji poziomu). Pierwsza linia li startuje
+   o hanging W LEWO od wcięcia tekstu, marker (min-width = hanging, inline z readera) wypełnia
+   wysunięcie, tekst pierwszej linii ORAZ linie zawijane stoją na wcięciu — jak w Wordzie
+   (dotąd punktor stał na wcięciu tekstu, a zawinięte linie równały się z punktorem). */
 .editor-content :is(ul, ol) > li:has(> .list-marker) {
   text-indent: calc(-1 * var(--ind-hanging, 0px));
 }
 
+/* Marker jest inline-block — ujemny text-indent li nie może przesuwać jego WNĘTRZA
+   (glif zostaje przy lewej krawędzi wysunięcia), a zagnieżdżona lista wraca do zera. */
 .editor-content li .list-marker,
 .editor-content li :is(ul, ol) {
   text-indent: 0;
 }
 
+/* Etykiety list DOCX liczone silnikiem (data-list-label z list-label.util) — natywne
+   markery przeglądarki nie umieją szablonów wielopoziomowych ("2.4.1."), sufiksów
+   lvlText ("1)"), numeracji legal ani kontynuacji fragmentów po edycji. Pseudo-element
+   jest POZA edytowalnym tekstem: nie łapie się w zaznaczenie, nie kopiuje i nie
+   serializuje; atrybut zdejmowany przy zapisie. Pozycjonowanie right:100% = prawa
+   krawędź etykiety przy lewej krawędzi tekstu (wiersze zawijane zaczynają się na
+   pozycji tekstu, jak w Wordzie). */
 .editor-content li[data-list-label] {
   list-style: none;
   position: relative;
@@ -328,13 +439,25 @@ img[data-legacy-graphic='blank'] {
   top: 0;
   padding-right: 0.4em;
   white-space: nowrap;
+  /* Kolor znacznika z w:lvl/w:rPr (var na kontenerze) LUB z rPr znaku końca akapitu
+     (var per <li>, 14104878) — własna wartość elementu wygrywa z odziedziczoną. */
   color: var(--marker-color, inherit);
+  /* Rozmiar znacznika (14104xxx: punktator inny niż tekst): w:lvl/w:rPr/w:sz → var na
+     kontenerze; rPr znaku końca akapitu / rozmiar 1. runu → var per <li>. Bez var etykieta
+     dziedziczyła rozmiar KONTENERA (default dokumentu), nie tekstu punktu. */
+  font-size: var(--marker-font-size, inherit);
 }
 
+/* Natywne znaczniki list (bez silnika etykiet) — ten sam kontrakt koloru (14104878)
+   i rozmiaru znacznika. */
 .editor-content li::marker {
   color: var(--marker-color, currentColor);
+  font-size: var(--marker-font-size, inherit);
 }
 
+/* Ze znanym wysunięciem (w:ind hanging, var z readera) etykieta stoi jak w Wordzie:
+   LEWA krawędź na (wcięcie tekstu − hanging), a nie prawą krawędzią przy tekście
+   (lvlJc=left — domyślne wyrównanie znacznika Worda). */
 .editor-content :is(ul, ol)[style*='--ind-hanging'] > li[data-list-label]::before,
 .editor-content li[data-list-label][style*='--ind-hanging']::before {
   right: auto;
@@ -380,6 +503,16 @@ img[data-legacy-graphic='blank'] {
   font-weight: bold;
 }
 
+/* Symulowane linie siatki jak Word „Wyświetl linie siatki": komórki bez ŻADNEJ widocznej
+   krawędzi (klasa-marker z readera; util obramowań utrzymuje ją przy edycji) dostają szare
+   PRZERYWANE linie kanałem background-image (repeating-linear-gradient). CELOWO nie property
+   border: inline'owe border:*none z readera zostaje nienaruszone, więc zapis dalej emituje
+   w:val="nil" i w wyeksportowanym pliku linii nie ma — siatka istnieje wyłącznie w edytorze.
+   background-image nie wpływa na layout (paginacja i measurer bez zmian) i maluje się NAD
+   inline'owym background-color (cieniowanie komórek zostaje widoczne pod kreskami).
+   Rysujemy top+left per komórka (współdzielona krawędź = jedna kreska, nie dwie); prawą
+   i dolną domalowują reguły :last-child / tr:last-child na brzegu tabeli.
+   Zakres: body, przelew, pasma i wpisy przypisów. */
 :is(.editor-content, .page-overflow-content, .header-editor-content, .footer-editor-content,
     .header-display, .footer-display, .footnote-item-content) {
   :is(td, th).docx-borderless-cell {
@@ -410,10 +543,13 @@ img[data-legacy-graphic='blank'] {
   }
 }
 
+/* background-COLOR, nie skrót background: skrót zerowałby background-image
+   symulowanej siatki (wyższa specyficzność przez tr:hover). */
 .editor-content table tr:hover td {
   background-color: #fafafa;
 }
 
+/* Narożnik tabeli - uchwyt resize całej tabeli */
 .editor-content table::after {
   content: '';
   position: absolute;
@@ -435,6 +571,7 @@ img[data-legacy-graphic='blank'] {
   opacity: 1;
 }
 
+/* Blokada zaznaczania tekstu podczas resize tabeli */
 body.table-resizing,
 body.table-resizing * {
   user-select: none !important;
@@ -458,14 +595,29 @@ body.table-resizing * {
 :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display) .editor-image-wrapper img {
   display: block;
   max-width: 100%;
+  // No `width: 100%` / `height: auto` — those would override the img's inline
+  // width/height kept by wrapExistingImages and rescale the image on entering
+  // edit mode (rule 14).
   pointer-events: none;
 }
 
+// Obrazy w pozycjonowanych segmentach tab-stopów (.docx-tab-seg ma
+// position:absolute → szerokość shrink-to-fit). Procentowe max-width:100%
+// (inline z importera i z wrapExistingImages) tworzy cykl rozmiaru: wkład
+// obrazka do intrinsic width kontenera liczy się jako 0, kontener zapada się,
+// a obraz renderuje się jako pionowy pasek ~0px szerokości przy zachowanym
+// height. Obrazy z importera zawsze niosą jawne width/height w px, więc
+// `none` jest bezpieczne. !important — max-width:100% siedzi w stylu inline.
 .docx-tab-seg .editor-image-wrapper,
 .docx-tab-seg img {
   max-width: none !important;
 }
 
+// Kształty XML (ADR-0056): div.docx-shape niesie inline SVG/rozmiar z readera;
+// generyczne reguły img { max-width:100% } w absolutnie pozycjonowanym kontenerze
+// zapadałyby podgląd do ~0px (ta sama klasa buga co .docx-tab-seg wyżej). Podgląd
+// jest niedotykalny (contenteditable=false z readera; źródłem prawdy jest
+// data-docx-xml) — user-select:none gasi przypadkowe zaznaczenia wnętrza SVG.
 .docx-shape {
   box-sizing: border-box;
   user-select: none;
@@ -476,10 +628,14 @@ body.table-resizing * {
   }
 }
 
+// Niewidoczny placeholder pass-through (grafika bez reprezentacji webowej —
+// nieznany preset/VML/wykres): trzyma wymiary extentu w układzie, zero tuszu.
 .docx-preserved {
   user-select: none;
 }
 
+// Selekcja i uchwyt kształtów pass-through (ADR-0063). Kształty są contenteditable=false,
+// więc chwyta się je całą powierzchnią; uchwyt SE skaluje proporcjonalnie.
 .docx-shape[data-docx-xml] {
   cursor: move;
 
@@ -503,6 +659,12 @@ body.table-resizing * {
   pointer-events: auto;
 }
 
+// Wypełniacz tabulatora (w:leader — kropki spisu treści, podkreślenia formularzy).
+// Span niesie inline flex:1/position:relative/overflow:hidden (reader); tu malujemy
+// znaki wypełniacza pseudo-elementem: realne glify w foncie akapitu (jak w Wordzie),
+// przycięte do szerokości luki, dosunięte do prawej (do numeru strony). Literalny \t
+// w środku spanu jest niewidoczny (kolapsuje do spacji pod pseudo-elementem) i służy
+// wyłącznie round-tripowi w:tab. pointer-events:none — klik trafia w span (karetka).
 span.docx-tab-leader::after {
   position: absolute;
   inset: 0;
@@ -530,6 +692,10 @@ span.docx-tab-leader[data-leader='heavy']::after {
   content: '________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________________';
 }
 
+// Word-like floating modes — wrapper is absolute-positioned inside .page
+// (which already has `position: relative`). z-index governs layering:
+// "front" sits above text, "behind" sits under it. Inline mode is the default
+// (no data attribute) and follows the text flow.
 .editor-image-wrapper[data-pos-mode="front"] {
   position: absolute;
   z-index: 10;
@@ -540,6 +706,8 @@ span.docx-tab-leader[data-leader='heavy']::after {
   z-index: -1;
 }
 
+// Establish a stacking context on the editor content so the "behind" layer
+// renders under the text and the page background, not under the page itself.
 .editor-content,
 .header-editor-content,
 .footer-editor-content,
@@ -549,6 +717,7 @@ span.docx-tab-leader[data-leader='heavy']::after {
   z-index: 0;
 }
 
+/* Pasma dzielą z body zachowanie białych znaków (Word nie kolapsuje spacji). */
 .header-editor-content,
 .footer-editor-content,
 .header-display,
@@ -569,11 +738,13 @@ span.docx-tab-leader[data-leader='heavy']::after {
   outline: 3px solid #0066cc;
 }
 
+/* Styl podczas przeciągania (przenoszenia) obrazu */
 :is(.editor-content, .header-editor-content, .footer-editor-content) .editor-image-wrapper.image-dragging {
   opacity: 0.35;
   outline: 2px dashed #0066cc;
 }
 
+/* Blokada kursora i selekcji podczas przenoszenia obrazu */
 body.image-moving,
 body.image-moving * {
   cursor: grabbing !important;
@@ -581,6 +752,7 @@ body.image-moving * {
   -webkit-user-select: none !important;
 }
 
+/* Kursor wskazujący miejsce upuszczenia grafiki */
 .image-drop-caret {
   position: fixed;
   width: 2px;
@@ -590,6 +762,7 @@ body.image-moving * {
   z-index: 9999;
   animation: image-drop-caret-pulse 0.6s ease-in-out infinite alternate;
 
+  /* Górna zaślepka */
   &::before {
     content: '';
     position: absolute;
@@ -601,6 +774,7 @@ body.image-moving * {
     border-radius: 2px 2px 0 0;
   }
 
+  /* Dolna zaślepka */
   &::after {
     content: '';
     position: absolute;
@@ -618,6 +792,7 @@ body.image-moving * {
   to   { opacity: 0.4; transform: scaleX(1.5); }
 }
 
+/* Wspólne style uchwytów resize */
 :is(.editor-content, .header-editor-content, .footer-editor-content) .image-resize-handle {
   position: absolute;
   display: none;
@@ -629,6 +804,7 @@ body.image-moving * {
   display: block;
 }
 
+/* Prawy uchwyt - zmiana szerokości */
 :is(.editor-content, .header-editor-content, .footer-editor-content) .resize-handle-right {
   right: -4px;
   top: 50%;
@@ -641,6 +817,7 @@ body.image-moving * {
   cursor: ew-resize;
 }
 
+/* Dolny uchwyt - zmiana wysokości */
 :is(.editor-content, .header-editor-content, .footer-editor-content) .resize-handle-bottom {
   bottom: -4px;
   left: 50%;
@@ -653,6 +830,7 @@ body.image-moving * {
   cursor: ns-resize;
 }
 
+/* Narożnik - zmiana proporcjonalna */
 :is(.editor-content, .header-editor-content, .footer-editor-content) .resize-handle-corner {
   right: -5px;
   bottom: -5px;
@@ -697,6 +875,11 @@ body.image-moving * {
   margin: 20px 0;
 }
 
+/* Manual page break — a SEMANTIC, non-printing marker, not a graphic.
+   The real page boundary is produced by pagination (content starts on a new
+   page) and by the writer (w:br type=page). By default the marker takes no
+   space and shows no line/label, so it never reads as an inserted image in the
+   content. It stays non-selectable/non-focusable. */
 .editor-content .page-break {
   page-break-after: always;
   display: block;
@@ -707,14 +890,16 @@ body.image-moving * {
   user-select: none;
 }
 
-.editor-content.show-formatting-marks .page-break {
+/* Opt-in "formatting marks" mode: reveal a subtle, clearly non-content hint of
+   where the manual break sits. Still hidden on print. */
+:is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .page-break {
   height: auto;
   margin: 12px 0;
   border-top: 1px dashed #b8c4d0;
   position: relative;
 }
 
-.editor-content.show-formatting-marks .page-break::after {
+:is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .page-break::after {
   content: 'Podział strony';
   position: absolute;
   top: -0.7em;
@@ -727,16 +912,26 @@ body.image-moving * {
   letter-spacing: 0.02em;
 }
 
+/* Marker przerwy sekcji DOCX (div.docx-section-break z geometrią sekcji w data-*).
+   Niewidoczny nośnik danych: musi przetrwać edycję i wrócić w autosave do konwertera
+   HTML→DOCX, który odtwarza z niego w:sectPr (wiele sekcji, mieszane orientacje). */
 .editor-content .docx-section-break {
   display: none;
 }
 
+/* Pasmo kolumnowe strony PRZEJŚCIOWEJ (ciągła zmiana sekcji 1→N kolumn w środku strony):
+   zagnieżdżony kontener multicol tworzony przez paginację (column-count/gap/height inline).
+   Jak .editor-content: wypełniaj kolumny od góry (bez balansowania), przytnij nadmiar —
+   wysokość jest jawna, więc fragmentacja działa (ADR-0039). */
 .editor-content .docx-col-band {
   column-fill: auto;
   overflow: hidden;
   min-width: 0;
 }
 
+/* Podział kolumny DOCX (div.docx-column-break z w:br type=column). W kontenerze CSS columns
+   `break-before: column` przenosi ten węzeł i dalszą treść do następnej kolumny. Sam węzeł jest
+   pustym, zerowej wysokości znacznikiem — nie dodaje widocznej przerwy w treści (ADR-0039). */
 .editor-content .docx-column-break {
   break-before: column;
   height: 0;
@@ -745,24 +940,64 @@ body.image-moving * {
   line-height: 0;
 }
 
-.editor-content.show-formatting-marks .docx-column-break {
+:is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-column-break {
   height: auto;
   border-top: 1px dashed #4472c4;
 }
-.editor-content.show-formatting-marks .docx-column-break::after {
+:is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-column-break::after {
   content: 'Podział kolumny';
   font-size: 9px;
   color: #4472c4;
 }
 
+/* ===== „Pokaż wszystko" (¶, Ctrl+Shift+8) — pozostałe znaczniki formatowania =====
+   Wszystkie znaczniki to pseudo-elementy o ZEROWYM wpływie na układ: paginacja mierzy
+   bloki w kontenerze BEZ klasy show-formatting-marks, więc widoczne znaczniki nie mogą
+   zmieniać łamania linii ani wysokości bloków (inaczej treść wystawałaby poza stronę
+   i ginęła pod overflow:hidden). Pseudo-elementy nie istnieją w DOM → nie wchodzą do
+   getContent/autosave. Ograniczenie CSS-only: kropek spacji i strzałki ↵ (br) nie da
+   się narysować bez mutacji DOM — świadomie pomijamy. */
 
-.editor-content.show-formatting-marks :is(p, h1, h2, h3, h4, h5, h6, li)::after {
+/* Overlay znaków formatowania (spacje · / twarde spacje ° / taby → / br ↵) — warstwa
+   w .page POZA contenteditable, pozycjonowana pomiarami Range po każdej repaginacji
+   (tylko gdy tryb włączony). pointer-events:none = zero wpływu na klik/karetkę;
+   z-index 3 = nad warstwą główną (2), pod pasmem w edycji (15). */
+.fmt-marks-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  user-select: none;
+}
+
+.fmt-mark {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  /* Kolor per znacznik inline z overlay (kolor runu jak w Wordzie); fallback ciemny. */
+  color: #444444;
+  font-family: Calibri, 'Segoe UI', sans-serif;
+}
+
+/* ¤ końca wiersza/komórki i kotwica ⚓ — lekko mniejsze od tekstu (jak w Wordzie). */
+.fmt-mark.fmt-cell,
+.fmt-mark.fmt-anchor { font-size: 0.85em; }
+
+/* Kropka spacji siedzi u Worda w połowie wysokości x — lekko podnosimy glif środka. */
+.fmt-mark.fmt-space { align-items: center; }
+.fmt-mark.fmt-tab { justify-content: flex-start; }
+
+/* Znacznik końca akapitu ¶ — inline-block o szerokości 0 (glif „wystaje" za ostatni
+   znak przez overflow, bez wpływu na zawijanie). Dotyczy też nagłówków i punktów list,
+   jak w Wordzie. */
+:is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks :is(p, h1, h2, h3, h4, h5, h6, li)::after {
   content: '¶';
   display: inline-block;
   width: 0;
   overflow: visible;
-  color: #4472c4;
-  opacity: 0.6;
+  color: currentColor;
   font-family: Calibri, 'Segoe UI', sans-serif;
   font-weight: 400;
   font-style: normal;
@@ -771,18 +1006,22 @@ body.image-moving * {
   pointer-events: none;
 }
 
-.editor-content.show-formatting-marks .docx-tab-seg::before {
+/* Strzałka tabulatora → dla trzech nośników tabów z readera:
+   1) span.docx-tab-seg — segment pozycjonowany absolutnie na stopie; strzałka W LUCE
+      przed segmentem (right:100%), poza box-modelem — zero wpływu na układ; */
+:is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-tab-seg::before {
   content: '→';
   position: absolute;
   right: 100%;
   padding-right: 2px;
-  color: #4472c4;
-  opacity: 0.6;
+  color: currentColor;
   user-select: none;
   pointer-events: none;
 }
 
-.editor-content.show-formatting-marks .docx-tab-leader::before {
+/* 2) span.docx-tab-leader — luka flex z wypełniaczem (position:relative inline
+      z readera; kropki maluje ::after — ::before jest wolny); */
+:is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-tab-leader::before {
   content: '→';
   position: absolute;
   left: 0;
@@ -793,7 +1032,9 @@ body.image-moving * {
   pointer-events: none;
 }
 
-.editor-content.show-formatting-marks span[style*='min-width:2em']::before {
+/* 3) bezklasowy span z literalnym \t (reader: display:inline-block;min-width:2em;
+      white-space:pre) — glif o zerowej szerokości nakłada się na odstęp tabu. */
+:is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks span[style*='min-width:2em']::before {
   content: '→';
   display: inline-block;
   width: 0;
@@ -804,13 +1045,15 @@ body.image-moving * {
   pointer-events: none;
 }
 
-.editor-content.show-formatting-marks .docx-section-break {
+/* Podział sekcji: nośnik danych (poza trybem znaczników display:none — patrz niżej).
+   Pokazujemy linię i etykietę bez zajmowania miejsca (height:0 + absolute). */
+:is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-section-break {
   display: block;
   height: 0;
   position: relative;
   overflow: visible;
 }
-.editor-content.show-formatting-marks .docx-section-break::before {
+:is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-section-break::before {
   content: '';
   position: absolute;
   left: 0;
@@ -819,7 +1062,7 @@ body.image-moving * {
   border-top: 1px dashed #9aa7b4;
   pointer-events: none;
 }
-.editor-content.show-formatting-marks .docx-section-break::after {
+:is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-section-break::after {
   content: 'Podział sekcji';
   position: absolute;
   top: -0.75em;
@@ -835,6 +1078,11 @@ body.image-moving * {
   user-select: none;
 }
 
+/* Pole tekstowe Worda (div.docx-textbox). Obramowanie EDYCYJNE = outline (poza box-modelem,
+   zero wpływu na wymiary) — widoczne tylko przy hover / zaznaczeniu / fokusie w środku /
+   przeciąganiu. Obramowanie DOKUMENTOWE (a:ln z pliku) przychodzi jako inline `border:` z
+   readera i NIE jest tu ruszane — outline rysuje się obok niego, a stan nieaktywny go nie
+   ukrywa. */
 :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display) .docx-textbox {
   &:hover,
   &:focus-within {
@@ -848,6 +1096,8 @@ body.image-moving * {
     outline-offset: 0;
   }
 
+  /* Pas krawędzi pływającego pola — uchwyt przenoszenia (klasa nadawana z JS,
+     usuwana przy serializacji). */
   &.tb-edge {
     cursor: move;
   }
@@ -858,6 +1108,9 @@ body.image-moving * {
   }
 }
 
+/* Znacznik kotwicy (jak w Wordzie) — overlay w .page, przy akapicie-kotwicy zaznaczonego
+   elementu pływającego. Czysto informacyjny: nie łapie kliknięć ani fokusu, nie przesuwa
+   układu (position:absolute), skaluje się i scrolluje razem ze stroną. */
 .anchor-badge {
   position: absolute;
   width: 18px;
@@ -876,6 +1129,9 @@ body.image-moving * {
   }
 }
 
+/* Pola (numer strony / liczba stron / data) — dziedziczą rozmiar i krój z otoczenia (stopka/
+   nagłówek/akapit), nie dostają domyślnego rozmiaru edytora. Bez tego numer strony bywał większy
+   niż reszta stopki. */
 .field-page,
 .field-numpages,
 .field-date,
@@ -886,22 +1142,27 @@ body.image-moving * {
   vertical-align: baseline;
 }
 
+/* Selekcja */
 .editor-content ::selection {
   background: #b3d4fc;
 }
 
+/* Placeholder dla pustych paragrafów */
 .editor-content p:empty::before {
   content: '\00a0';
 }
 
+/* Marginesy strony - wizualne linie pomocnicze (jak w Word) */
 .wysiwyg-editor {
   position: relative;
 }
 
+/* Orientacja pozioma (landscape) */
 .wysiwyg-editor.landscape .editor-content {
-  min-height: 794px;
+  min-height: 794px; /* A4 landscape height at 96 DPI */
 }
 
+/* Drukowanie */
 @media print {
   .editor-content {
     padding: 0;
@@ -910,38 +1171,50 @@ body.image-moving * {
   }
   
   .editor-content .page-break,
-  .editor-content.show-formatting-marks .page-break {
+  :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .page-break {
     border: none;
     margin: 0;
     height: 0;
     page-break-after: always;
   }
 
-  .editor-content.show-formatting-marks .page-break::after {
+  :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .page-break::after {
     display: none;
   }
 
-  .editor-content.show-formatting-marks :is(p, h1, h2, h3, h4, h5, h6, li)::after,
-  .editor-content.show-formatting-marks .docx-tab-seg::before,
-  .editor-content.show-formatting-marks .docx-tab-leader::before,
-  .editor-content.show-formatting-marks span[style*='min-width:2em']::before,
-  .editor-content.show-formatting-marks .docx-section-break::before,
-  .editor-content.show-formatting-marks .docx-section-break::after,
-  .editor-content.show-formatting-marks .docx-column-break::after {
+  /* Znaczniki „Pokaż wszystko" są nie-drukowalne (jak w Wordzie). */
+  :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks :is(p, h1, h2, h3, h4, h5, h6, li)::after,
+  :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-tab-seg::before,
+  :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-tab-leader::before,
+  :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks span[style*='min-width:2em']::before,
+  :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-section-break::before,
+  :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-section-break::after,
+  :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-column-break::after {
     content: none;
   }
 
-  .editor-content.show-formatting-marks .docx-section-break {
+  :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-section-break {
     display: none;
   }
 
-  .editor-content.show-formatting-marks .docx-column-break {
+  :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display, .footnote-item-content).show-formatting-marks .docx-column-break {
     height: 0;
     border: none;
   }
 }
 
+/* ==================== */
+/* Nagłówek i Stopka    */
+/* ==================== */
 
+/* Model warstw Worda: CAŁA warstwa nagłówka/stopki leży POD warstwą główną dokumentu.
+   Pasmo (z-index:1) tworzy stacking context, więc jego zawartość — także textboxy/obrazy
+   wystające poza pasek w obszar treści — nigdy nie przykryje body. Odwrotnie: obiekty body
+   z ujemnym offsetem wchodzące w obszar pasma malują się NAD nim (jak w Wordzie), bo
+   .editor-content ma z-index:2. Paski nie nakładają się geometrycznie (flex-kolumna .page),
+   więc klik/hover wejścia w edycję pasma działa bez zmian. Poprzedni układ (pasmo z=5 nad
+   contentem z=0) przykrywał obiekty body niezależnie od ich z-index — dzieci są uwięzione
+   w stacking context rodzica, więc podbijanie im z-index nic nie dawało. */
 .page-header,
 .page-footer {
   flex-shrink: 0;
@@ -951,14 +1224,21 @@ body.image-moving * {
   z-index: 1;
   position: relative;
   box-sizing: border-box;
-  overflow: visible;
+  overflow: visible; /* Pozwala na wyświetlanie pasków narzędzi */
 }
 
+/* Warstwa główna dokumentu — ponad pasmami nagłówka/stopki (nadpisuje z-index:0
+   ze wspólnej reguły stacking-contextów wyżej). Tło musi być przezroczyste: kartkę maluje
+   .page (białe), a nieprzezroczyste tło contentu zasłoniłoby treść pasma całkowicie —
+   Word pokazuje treść nagłówka/stopki POD tekstem body (jak znak wodny), widoczną tam,
+   gdzie body nie ma tuszu. */
 .editor-content {
   z-index: 2;
   background: transparent;
 }
 
+/* Porządek WEWNĄTRZ warstwy głównej: kształty/textboxy body bez własnego (inline)
+   z-index stają nad tekstem, tak jak obrazy data-pos-mode="front" (z-index:10). */
 .editor-content .docx-shape[data-docx-xml],
 .editor-content .docx-textbox {
   z-index: 6;
@@ -972,6 +1252,7 @@ body.image-moving * {
   border-top: 1px dashed transparent;
 }
 
+/* Efekt hover - delikatne podświetlenie */
 .page-header:hover,
 .page-footer:hover {
   background-color: rgba(66, 133, 244, 0.05);
@@ -985,6 +1266,8 @@ body.image-moving * {
   border-top-color: #c0c0c0;
 }
 
+/* Tryb tylko do odczytu (bug 13677237): pasma nagłówka/stopki nie są klikalne,
+   więc hover nie może sugerować edycji — bez podświetlenia, ramki i kursora. */
 .wysiwyg-editor-wrapper.read-only .page-header,
 .wysiwyg-editor-wrapper.read-only .page-footer {
   cursor: default;
@@ -996,10 +1279,12 @@ body.image-moving * {
   border-color: transparent;
 }
 
+/* Stan edycji */
 .page-header.editing,
 .page-footer.editing {
   background-color: rgba(66, 133, 244, 0.06);
   z-index: 15;
+  /* WAŻNE: brak margin-bottom/top — żadnego skoku layoutu w trybie edycji */
 }
 
 .page-header.editing {
@@ -1010,6 +1295,7 @@ body.image-moving * {
   border-top: 1px dashed #4285f4;
 }
 
+/* Wyświetlanie zawartości nagłówka/stopki */
 .header-display,
 .footer-display {
   width: 100%;
@@ -1018,6 +1304,12 @@ body.image-moving * {
   overflow: visible;
 }
 
+/* Domyślny krój/rozmiar/kolor nagłówka i stopki = domyślne dokumentu (jak body
+ * .editor-content). Bez tego treść bez jawnego font-size dziedziczyłaby domyślny
+ * rozmiar przeglądarki (~16px), przez co tekst był „za duży". Kontener z backendu
+ * (.header-footer-content z font-size z docDefaults) ma wyższą specyficzność i
+ * nadpisuje te wartości, gdy DOCX je definiuje; inline color/size runów zawsze
+ * wygrywa. Czarny (#000) odpowiada wordowemu kolorowi „auto". */
 .header-display,
 .footer-display,
 .header-editor-content,
@@ -1044,6 +1336,7 @@ body.image-moving * {
   content: '';
 }
 
+/* Edytor nagłówka/stopki */
 .header-editor-content,
 .footer-editor-content {
   width: 100%;
@@ -1051,7 +1344,7 @@ body.image-moving * {
   outline: none;
   display: block;
   overflow: visible;
-  color: #202124;
+  color: #202124; /* domyślny czarny — przesłaniany przez inline color z execCommand */
 }
 
 .header-editor-content p,
@@ -1077,7 +1370,12 @@ body.image-moving * {
   outline: none;
 }
 
+/* Wskaźnik edycji nagłówka/stopki - ukryty gdy jest pasek narzędzi */
+/* Pasek toolbar jest teraz głównym wskaźnikiem edycji */
 
+/* ==================== */
+/* Pasek Nagłówka/Stopki - kompaktowy overlay (nie wpływa na layout) */
+/* ==================== */
 
 .header-toolbar,
 .footer-toolbar {
@@ -1096,12 +1394,15 @@ body.image-moving * {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   box-sizing: border-box;
   font-size: 12px;
+  /* Overlay — NIE w normalnym flow, nie przesuwa zawartości */
 }
 
+/* Pasek nagłówka — w prawym górnym rogu nagłówka, lekko unosi się nad nim */
 .header-toolbar {
   top: 4px;
 }
 
+/* Pasek stopki — w prawym dolnym rogu stopki */
 .footer-toolbar {
   bottom: 4px;
 }
@@ -1118,7 +1419,7 @@ body.image-moving * {
 
 .header-toolbar-spacer,
 .footer-toolbar-spacer {
-  display: none;
+  display: none; /* nie potrzebny w kompaktowym układzie */
 }
 
 .header-toolbar-checkbox,
@@ -1172,6 +1473,7 @@ body.image-moving * {
   background: rgba(26, 115, 232, 0.08);
 }
 
+// "Zamknij nagłówek i stopkę" — primary close action, mirrors Word's blue button.
 .header-toolbar-close,
 .footer-toolbar-close {
   margin-left: 8px;
@@ -1228,8 +1530,15 @@ body.image-moving * {
   background: #f1f3f4;
 }
 
+/* ==================== */
+/* Etykieta sekcji - ukryta żeby nie przesłaniać zawartości */
 
+/* ==================== */
+/* Przypisy dolne       */
+/* ==================== */
 
+/* Odwołanie w treści — semantyczny <sup> z numerem przypisu (aria-label z numerem).
+   Kolor DZIEDZICZONY z otaczającego tekstu (jak w MS Word) — bez własnego akcentu. */
 .editor-content sup.footnote-ref,
 .editor-content sup.endnote-ref {
   color: inherit;
@@ -1238,12 +1547,17 @@ body.image-moving * {
   padding: 0 1px;
 }
 
+/* Region przypisów dolnych — na DOLE strony (jak w MS Word), tuż nad stopką. Kotwica od dołu
+   (bottom z repaginacji = pasmo stopki + dystans stopki), rośnie w górę; w świetle marginesów
+   (left/right z bindingu). Rysowany NAD .editor-content (pusta część body), stąd z-index. */
 .footnotes-region {
   position: absolute;
   z-index: 3;
   color: #000;
 }
 
+/* Separator jak w Wordzie: krótka pozioma linia nad przypisami; na stronie kontynuacji —
+   na całą szerokość kolumny tekstu. */
 .footnotes-separator {
   width: 33%;
   height: 0;
@@ -1255,18 +1569,29 @@ body.image-moving * {
   width: 100%;
 }
 
+/* Wpis przypisu dolnego: bez linii-rozdzielaczy i z ciasnym paddingiem — jak w Wordzie.
+   Klasa na WPISIE (nie selektor potomka .footnotes-region), bo klony wpisów są mierzone
+   w measurerze paginacji bez kontenera regionu — style muszą być identyczne w obu miejscach. */
 .footnote-item.footnote-entry {
   border-top: none;
   padding: 1px 0;
 }
 
+/* ============================================================= */
+/* Przypisy końcowe — region WEWNĄTRZ strony (jak w MS Word)      */
+/* ============================================================= */
 
+/* Pozycjonowany absolutnie w .page (top z repaginacji = zaraz pod ostatnim blokiem
+   treści), w świetle marginesów strony (left/right z bindingu). Rysowany NAD
+   .editor-content (pusta część body pod tekstem), stąd z-index. */
 .endnotes-region {
   position: absolute;
   z-index: 3;
   color: #000;
 }
 
+/* Separator jak w Wordzie: krótka pozioma linia nad przypisami;
+   na stronie kontynuacji — linia na całą szerokość kolumny tekstu. */
 .endnotes-separator {
   width: 33%;
   height: 0;
@@ -1278,6 +1603,9 @@ body.image-moving * {
   width: 100%;
 }
 
+/* Wpis przypisu końcowego: bez linii-rozdzielaczy i z ciasnym paddingiem — jak w Wordzie.
+   Klasa na WPISIE (nie selektor potomka .endnotes-region), bo klony wpisów są mierzone
+   w measurerze paginacji bez kontenera regionu — style muszą być identyczne w obu miejscach. */
 .footnote-item.endnote-entry {
   border-top: none;
   padding: 1px 0;
@@ -1287,6 +1615,7 @@ body.image-moving * {
 .footnote-item {
   display: flex;
   align-items: flex-start;
+  /* Word oddziela znacznik od treści pojedynczą spacją, nie stałą kolumną. */
   gap: 0.3em;
   padding: 1px 0;
   border-top: 1px solid #f1f3f4;
@@ -1300,15 +1629,19 @@ body.image-moving * {
 
 .footnote-item-number {
   flex: 0 0 auto;
+  /* Word: znacznik wpisu = indeks górny bez pogrubienia. `vertical-align:super`
+     nie działa na flex item — podniesienie robi relative/top, rozmiar jak <sup>. */
   font-weight: normal;
   color: #000;
   font-size: 0.65em;
   position: relative;
   top: -0.35em;
+  /* Klik w numer wraca do odwołania w treści (scrollToNoteReference). */
   cursor: pointer;
   user-select: none;
 }
 
+/* Chwilowe podświetlenie wpisu po skoku z odwołania w treści (jak wyróżnienie w Wordzie). */
 @keyframes note-item-flash {
   0% { background: rgba(155, 31, 168, 0.16); }
   100% { background: transparent; }
@@ -1321,8 +1654,16 @@ body.image-moving * {
 .footnote-item-content {
   flex: 1 1 auto;
   min-height: 1.4em;
+  min-width: 0;
   outline: none;
+  /* Jak body i pasma (ADR-0077): bez pre-wrap Chrome przy pisaniu w contenteditable wstawia
+     &nbsp; zamiast zwykłych spacji (żeby nie skolapsowały) — twarde spacje szły do w:t
+     i Word nie łamał wierszy przypisu (tekst wychodził poza prawy margines strony). */
   white-space: pre-wrap;
+  /* Wpis NIE może wyjechać poza prawy margines regionu: treść bez punktu złamania
+     (twarde spacje sprzed ADR-0083, długie tokeny) łamie się w dowolnym miejscu.
+     Measurer paginacji klonuje wpisy z tą samą klasą — wysokości spójne. */
+  overflow-wrap: anywhere;
 
   &:focus {
     background: #f8f9ff;
@@ -1335,10 +1676,14 @@ body.image-moving * {
   }
 }
 
+/* Nośnik tabulatora w przypisie — jak w body: pod pre-wrap literalny \t skakałby do stopu. */
 .footnote-item-content span[style*='min-width:2em'] {
   white-space: normal;
 }
 
+/* Pole daty AUTO-aktualizowane (ADR-0084): atomowy inline (contenteditable=false z readera/
+   wstawki). Szare tło przy najechaniu = cieniowanie pól Worda („to pole, nie zwykły tekst").
+   Tylko hover — na wydruku/eksporcie pola i tak nie mają tła. */
 :is(.editor-content, .page-overflow-content, .header-editor-content, .footer-editor-content,
     .header-display, .footer-display) span.field-date {
   cursor: default;

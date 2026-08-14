@@ -71,9 +71,17 @@ import {
   readWordLineMultiple,
 } from '../../core/utils/word-line-spacing.util';
 
+/**
+ * Jeden komunikat dla dokumentu oznaczonego jako tylko do odczytu w pliku źródłowym
+ * (Word „Ogranicz edycję" / hasło zapisu / „Oznacz jako ostateczny"). Wyświetlany zamiast
+ * komunikatu sukcesu — nie sugerujemy, że dokument otwarto w standardowym trybie edycji.
+ */
 const READ_ONLY_PROTECTED_MESSAGE =
   'Ten dokument jest oznaczony jako tylko do odczytu i nie może być edytowany w DOC2 Editor.';
 
+/**
+ * Główny komponent edytora dokumentów Word Online
+ */
 @Component({
   selector: 'd2-document-editor',
   standalone: true,
@@ -111,53 +119,128 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   private readonly msal = inject(MsalService);
   private readonly fontProvider = inject(FontProviderService);
 
+  /** Pełna nazwa zalogowanego użytkownika (MSAL active account). Pusta w trybie bez auth
+   *  (dev bypass) → powitanie ukrywane w szablonie. */
   readonly currentUserName = signal<string>('');
+  /** Imię do powitania „Witaj, <imię>!" — nawias z `name` („… (Imię)"), potem `given_name`, fallback. */
   readonly firstName = signal<string>('');
+  /** Inicjały — fallback awatara, gdy brak zdjęcia z Graph. */
   readonly initials = signal<string>('');
+  /** URL awatara z Microsoft Graph (object URL). Null → pokazujemy inicjały. */
   readonly avatarUrl = signal<string | null>(null);
+  /** Object URL awatara do zwolnienia przy destroy (uniknięcie wycieku pamięci). */
   private avatarObjectUrl: string | null = null;
 
+  // Stan dokumentu
   documentContent = signal<string>('<p></p>');
   documentMasterId = signal<string | null>(null);
+  /** GUID wersji edytowalnej (v2) — obecny tylko w trybie edycji (?versionId=...). Cel auto-save. */
   documentVersionId = signal<string | null>(null);
+  /** Tryb tylko-do-odczytu (Krok 2): brak versionId → ładujemy wersję bazową i blokujemy edycję. */
   readOnly = signal<boolean>(false);
 
+  /**
+   * Dokument jest aktualnie edytowany przez kogoś innego (status `Editing` na liście).
+   * HOOK: podłączyć pod backendowy `DocumentStatus`, gdy dotrze do edytora — wtedy ustawić
+   * `true`, by ukryć narzędzia edycyjne tak samo jak w trybie tylko-do-odczytu.
+   */
   lockedByOther = signal<boolean>(false);
 
+  /**
+   * Dokument źródłowy jest chroniony przed edycją (Word: „Ogranicz edycję" / hasło zapisu;
+   * settings.xml: wymuszone w:documentProtection lub w:writeProtection). Ustawiane z flagi
+   * `isReadOnlyProtected` konwersji przy KAŻDYM załadowaniu treści — resetuje się samo
+   * przy otwarciu kolejnego, niechronionego dokumentu.
+   */
   documentEditProtected = signal<boolean>(false);
 
+  /**
+   * Edycja zablokowana: tryb tylko-do-odczytu, dokument zajęty przez kogoś innego
+   * LUB dokument chroniony przed edycją w pliku źródłowym.
+   * Steruje ukrywaniem edycyjnych funkcji w toolbarze i menu.
+   */
   editingDisabled = computed(() => this.readOnly() || this.lockedByOther() || this.documentEditProtected());
 
+  // Auto-save (nadpisuje wersję edytowalną w miejscu)
   autoSaveEnabled = signal<boolean>(environment.autoSave?.enabled ?? true);
+  /** Status ostatniego auto-save dla wskaźnika w UI. */
   autoSaveStatus = signal<'idle' | 'saving' | 'saved' | 'error'>('idle');
   lastAutoSaveAt = signal<Date | null>(null);
   private autoSaveSub?: Subscription;
   private isAutoSaving = false;
 
+  // Klasyfikacja dokumentu z metadanych (prezentacyjna; C1..C4 lub wartość spoza słownika)
   documentClassification = signal<string | null>(null);
 
+  // Zakończ i wyślij: synchroniczna pierwsza próba wysyłki na returnUrl. Sukces → „Wysłano";
+  // błąd → wybór „Przerwij" / „Kontynuuj wysyłkę w tle" (worker dokańcza z retry/backoff).
   isFinishing = signal<boolean>(false);
   deliveryStatus = signal<DeliveryStatus | null>(null);
   deliveryId = signal<string | null>(null);
+  /** Modal „Trwa wysyłanie dokumentu ..." — widoczny w trakcie pierwszej próby wysyłki. */
   showSendingModal = signal<boolean>(false);
+  /**
+   * Modal „Wystąpiły problemy z dostarczeniem dokumentu" — pokazywany po nieudanej pierwszej
+   * próbie. Daje wybór: „Przerwij" (powrót do edytora) lub „Kontynuuj wysyłkę w tle".
+   */
   showSendErrorModal = signal<boolean>(false);
+  /**
+   * Użytkownik przerwał trwającą wysyłkę („Przerwij wysyłkę"). To anulowanie, NIE błąd —
+   * po przerwaniu requestu jego ewentualny błąd nie może wyskoczyć jako modal/komunikat błędu.
+   */
   private sendCancelled = signal<boolean>(false);
+  /**
+   * Użytkownik zamknął okno trwającej wysyłki („Zamknij"). Wysyłka biegnie dalej (inline/worker),
+   * a UI jest odpięte — spóźniony wynik lub błąd requestu nie pokazuje już żadnego modalu.
+   */
   private sendDetachedFromUi = signal<boolean>(false);
+  /**
+   * Praca nad dokumentem zakończona (po „Zamknij"/odliczaniu). Gdy przeglądarka nie pozwoli
+   * zamknąć karty (window.close() działa tylko dla okien otwartych skryptem), wyświetlamy
+   * blokujący ekran końcowy — użytkownik NIE może dalej edytować zakończonego dokumentu.
+   */
   workFinished = signal<boolean>(false);
+  /**
+   * Próba `window.close()` nie zamknęła karty (Chrome blokuje zamykanie kart nieotwartych skryptem)
+   * → pokazujemy wskazówkę o ręcznym zamknięciu (Ctrl/⌘+W).
+   */
   tabCloseBlocked = signal<boolean>(false);
   private tabCloseHintTimer?: ReturnType<typeof setTimeout>;
+  /** Link zwrotny z metadanych dokumentu (źródło prawdy dla widoczności „Zakończ"). */
   returnUrl = signal<string | null>(null);
+  /** „Zakończ" ma sens tylko, gdy istnieje poprawny link do zwrócenia pliku po edycji. */
   readonly canFinish = computed(() => isValidReturnUrl(this.returnUrl()));
 
+  /**
+   * Mirror of documents.metadata.userDownload (default false). Drives the visibility
+   * of the "Pobierz dokument" menu item — backend additionally enforces on the
+   * /user-download endpoint, so flipping the signal in DevTools doesn't bypass the rule.
+   */
   userDownload = signal<boolean>(false);
   readonly canUserDownload = computed(() => this.userDownload());
 
+  /**
+   * True when the current document was opened from the local disk ("Plik → Otwórz").
+   * Together with userDownload it drives the "Pobierz oryginał dokumentu" menu item.
+   */
   loadedFromDisk = signal<boolean>(false);
+  /** Original file kept in memory for disk-loaded documents, so we can hand back the untouched original. */
   private diskOriginalFile: File | null = null;
 
+  /**
+   * "Pobierz oryginał dokumentu" is available when the file was loaded from disk OR the source
+   * app explicitly allowed downloads (userDownload === true). Always returns the original (v1),
+   * never the edited working copy.
+   */
   readonly canDownloadOriginal = computed(() => this.loadedFromDisk() || this.userDownload());
 
+  /**
+   * Mirror of documents.metadata.showSaveState (inverse-default true). When false, the
+   * source app asked to hide the editor's save-state UI: the autosave switch + footer
+   * status AND the manual "Zapisz" button. Missing metadata ⇒ true (unchanged behavior).
+   */
   showSaveState = signal<boolean>(true);
+  /** Subskrypcja łańcucha save→finishAndSend — anulowana przy destroy, by nie pisać po zniszczeniu. */
   private finishSendSub?: Subscription;
   documentMetadata = signal<DocumentMetadata>({
     title: 'Nowy dokument',
@@ -167,11 +250,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   documentStyles = signal<DocumentStyle[]>([]);
   originalFileName = signal<string>('');
   
+  // Nagłówek i stopka
   headerContent = signal<HeaderFooterContent>({ html: '', height: 1.25 });
   footerContent = signal<HeaderFooterContent>({ html: '', height: 1.25 });
   
+  // Stan edytora
   editorState = signal<EditorState | null>(null);
   
+  // Stan UI
   isLoading = signal(false);
   showMenu = signal(false);
   showEditMenu = signal(false);
@@ -183,27 +269,48 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   showBarcodeDialog = signal(false);
   errorMessage = signal<string | null>(null);
   successMessage = signal<string | null>(null);
+  /** Komunikat INFORMACYJNY (np. dokument tylko do odczytu) — stan, nie błąd (13865553). */
   infoMessage = signal<string | null>(null);
   documentNotFound = signal(false);
 
+  // Menu kontekstowe
   showContextMenu = signal(false);
   contextMenuX = signal(0);
   contextMenuY = signal(0);
   contextSubmenu = signal<string | null>(null);
   contextMenuTargetCell = signal<HTMLElement | null>(null);
   contextMenuTargetImage = signal<HTMLImageElement | null>(null);
+  /**
+   * Widoczność „rozszerzonych" pozycji menu kontekstowego (wyrównanie/interlinia/wcięcia,
+   * sekcje Tabela i Grafika). Na życzenie menu pokazuje tylko podstawowe operacje:
+   * Cofnij, Ponów, Wytnij, Kopiuj, Wklej, Wklej bez formatowania, Zaznacz wszystko.
+   * Markup pozostaje w szablonie (ukryty, nie usunięty) — wystarczy ustawić `true`, aby przywrócić.
+   */
   contextMenuExtrasVisible = signal(false);
 
+  // Mini toolbar nad zaznaczeniem
   showMiniToolbar = signal(false);
   miniToolbarX = signal(0);
   miniToolbarY = signal(0);
 
+  /** Shared font list — identical to the main toolbar, incl. corporate font (item 7). */
   readonly commonFonts = this.fontProvider.displayNames;
 
+  /** Font shown in the mini-toolbar — normalised via the shared provider so it
+   *  matches exactly what the main toolbar shows for the same selection. */
   readonly miniToolbarFontFamily = computed(() =>
     this.fontProvider.normalize(this.editorState()?.currentStyle?.fontFamily),
   );
 
+  /**
+   * Options for the mini-toolbar font `<select>`. A native `<select>` cannot
+   * display a value that has no matching `<option>`, so it silently falls back
+   * to the first option (Calibri) whenever the selection uses a font outside the
+   * shared list — e.g. a corporate/document font like "Qutas Me". The main toolbar
+   * avoids this by using an `<input list=…>`; here we keep the `<select>` but make
+   * the current font always selectable, so the control reflects the real
+   * selection instead of misreporting Calibri.
+   */
   readonly miniToolbarFontOptions = computed<readonly string[]>(() => {
     const current = this.miniToolbarFontFamily();
     const fonts = this.commonFonts();
@@ -213,8 +320,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return fonts;
   });
 
+  // Menu Narzędzia
   showToolsMenu = signal(false);
 
+  // Dialog Akapit
   showParagraphDialog = signal(false);
   paragraphDialogTab = signal<'indents' | 'breaks'>('indents');
   paragraphData = {
@@ -236,6 +345,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     pageBreakBefore: false
   };
 
+  /**
+   * Domyślne ustawienia akapitu zapisane przez „Ustaw jako domyślne".
+   * Model: default jest per-sesja edytora (resetuje się po odświeżeniu) — przechowuje
+   * snapshot ustawień, którym seedujemy dialog, gdy nie ma aktywnej selekcji.
+   * Inicjowane wartościami bazowymi (te same co startowe `paragraphData`).
+   */
   private _paragraphDefaults: typeof DocumentEditorComponent.prototype.paragraphData = {
     alignment: 'left',
     outlineLevel: 'body',
@@ -255,6 +370,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     pageBreakBefore: false
   };
 
+  // Dialog Wstawianie tabeli
   showInsertTableDialog = signal(false);
   tableDialogData = {
     columns: 5,
@@ -265,57 +381,105 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   };
   private savedTableDimensions: { columns: number; rows: number } | null = null;
   
+  // Szablony
   templates = signal<DocumentTemplate[]>([]);
 
+  // Zoom
   zoomLevel = signal(100);
   zoomLevels = [50, 75, 100, 125, 150, 200];
 
+  // Toolbar tabeli
   isInTable = signal(false);
   activeTableCell = signal<HTMLTableCellElement | null>(null);
   activeTable = signal<HTMLTableElement | null>(null);
 
+  /**
+   * Boczny panel konfiguracji tabeli (dokowany po lewej, jak panel „Wyszukiwanie").
+   * Otwiera się automatycznie po wejściu karetki w tabelę — chyba że użytkownik
+   * zamknął go ręcznie (`tablePanelManuallyClosed`). Dok ma jeden aktywny tryb na
+   * raz: ponowne zaznaczenie tabeli wypiera otwarte wyszukiwanie (zamyka je) i
+   * pokazuje formatowanie tabeli — patrz `syncTablePanel`.
+   */
   showTablePanel = signal(false);
   private tablePanelManuallyClosed = false;
 
+  // Obramowania tabeli: bieżące ustawienia „pióra" (rodzaj/grubość/kolor),
+  // cel zastosowania i ostatnio użyty zakres — do podświetlenia stanu w panelu.
   tableBorderColor = signal(DEFAULT_TABLE_BORDER.color);
   tableBorderWidth = signal(DEFAULT_TABLE_BORDER.width);
   tableBorderStyle = signal<TableBorderLineStyle>(DEFAULT_TABLE_BORDER.style);
   lastBorderScope = signal<TableBorderScope | null>(null);
 
+  /**
+   * Auto-zakres: opis celu wywnioskowany z bieżącego zaznaczenia (do podpisu
+   * „Zastosowanie: …" w panelu). Zależy od `selectedCells`/`activeTableCell`,
+   * więc aktualizuje się wraz ze zmianą zaznaczenia.
+   */
   borderTargetInfo = computed(() => {
     const table = this.activeTable();
     if (!table) return null;
     return classifyBorderTarget(table, this.resolveAutoTargetCells(table));
   });
 
+  // Zaznaczanie komórek tabeli (custom cell selection)
   selectedCells = signal<Set<HTMLTableCellElement>>(new Set());
   private cellSelectionStartCell: HTMLTableCellElement | null = null;
   private isCellSelecting = false;
 
+  // Cieniowanie (shading) dropdown w toolbarze tabeli
   showShadingDropdown = signal(false);
 
+  // Strony
   currentPage = signal(1);
   totalPages = signal(1);
   
+  // Tooltip ze stronami przy scrollowaniu
   showPageIndicator = signal(false);
   private pageIndicatorTimeout?: ReturnType<typeof setTimeout>;
 
+  // Ustawienia strony
   showPageSetup = signal(false);
+  // Domyślnie ukryte — użytkownik może je pokazać przez menu Widok lub dialog Ustawienia strony.
   showMarginGuides = signal(false);
   showRuler = signal(true);
 
+  /**
+   * Wcięcie paragrafu/bloku dla aktualnie zaznaczonego fragmentu (cm względem marginesu strony).
+   * Wczytywane przy każdej zmianie zaznaczenia z `margin-left`/`margin-right` bieżącego bloku
+   * (P/H/UL/OL/LI/TABLE/FIGURE/IMG-wrapper). Używane przez poziomą linijkę — dragowanie
+   * uchwytu modyfikuje TYLKO ten blok, jak w MS Word, a nie marginesy całego dokumentu.
+   */
   currentBlockIndent = signal<{ start: number; end: number }>({ start: 0, end: 0 });
 
+  /**
+   * Geometria kolumn sekcji, w której stoi kursor — dla poziomej linijki (jak w MS Word:
+   * linijka pokazuje obszar per kolumna, a uchwyty wcięć działają w kolumnie z kursorem).
+   * Wyliczana z DOM przy każdej zmianie zaznaczenia: kontenerem multicol jest
+   * `.editor-content` (kolumny całej strony) lub `.docx-col-band` (pasmo continuous
+   * w środku strony). Null = układ jednokolumnowy.
+   */
   currentColumnRuler = signal<{ segments: RulerColumnSegment[]; activeIndex: number } | null>(null);
 
+  /**
+   * Stan linii prowadzącej linijki (jak w MS Word). Renderowana nad kartką podczas
+   * przeciągania uchwytu — w samej linijce (overflow:hidden, 22px) byłaby przycięta.
+   * `offsetPx` to NIEZSKALOWANA odległość od krawędzi strony (lewej/górnej).
+   */
   rulerGuide = signal<{ active: boolean; axis: 'horizontal' | 'vertical'; offsetPx: number }>({
     active: false,
     axis: 'horizontal',
     offsetPx: 0
   });
 
+  /** Aktualnie edytowana sekcja (treść / nagłówek / stopka) — z d2-wysiwyg-editor. */
   editingSection = signal<'header' | 'footer' | 'body'>('body');
 
+  /**
+   * Header/footer side panel — replaces the old floating toolbar over the page.
+   * Mutually exclusive with the Find / Table panels (single docked mode); when
+   * Find or the Table panel is open it takes precedence and HF stays hidden but
+   * the underlying edit mode keeps running so re-closing them brings it back.
+   */
   showHeaderFooterPanel = computed(() =>
     this.editingSection() !== 'body'
     && !this.showFindReplace()
@@ -323,9 +487,18 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     && !this.showImagePanel()
   );
 
+  /**
+   * Snapshot of the currently selected image (or null). Owned by the editor template
+   * because the panel that consumes it lives in this component's view.
+   */
   selectedImage = signal<ImageSelectionState | null>(null);
   imageLockAspect = signal<boolean>(true);
 
+  /**
+   * Image properties panel — single-mode dock. Shown when an image is selected and no
+   * higher-priority panel is open. The header/footer panel yields to it so the user can
+   * resize a logo while still in header-edit mode.
+   */
   showImagePanel = computed(() =>
     this.selectedImage() !== null
     && !this.showFindReplace()
@@ -336,29 +509,58 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.selectedImage.set(state);
   }
 
+  /**
+   * ZMIERZONA geometria edytowanego pasma nagłówka/stopki (cm od górnej krawędzi strony),
+   * z d2-wysiwyg-editor. Pasmo rośnie z treścią (min-height + obraz), więc położenie na
+   * pionowej linijce musi pochodzić z pomiaru DOM, nie z marginesów cm.
+   */
   sectionGeometry = signal<{ section: 'header' | 'footer'; topCm: number; bottomCm: number } | null>(null);
 
+  /**
+   * Marginesy dla PIONOWEJ linijki. Gdy edytowany jest nagłówek/stopka, biały (aktywny)
+   * obszar linijki odzwierciedla FAKTYCZNE pasmo nagłówka/stopki (z pomiaru DOM) — jak
+   * w MS Word — zamiast globalnego marginesu treści.
+   */
   verticalRulerMargins = computed<PageMargins>(() => {
     const m = this.pageSettings().margins;
     const pageH = this.pageSettings().orientation === 'portrait' ? 29.7 : 21;
     const section = this.editingSection();
     const geo = this.sectionGeometry();
     if ((section === 'header' || section === 'footer') && geo && geo.section === section) {
+      // białe pasmo linijki = [topCm … bottomCm], reszta = szary margines
       return { ...m, top: Math.max(0, geo.topCm), bottom: Math.max(0, pageH - geo.bottomCm) };
     }
     return m;
   });
 
+  /**
+   * Lista indeksów stron — do renderowania OSOBNEJ pionowej linijki dla każdej strony,
+   * żeby przy przewijaniu linijka restartowała się na granicy kartek (zamiast jednej
+   * „zamrożonej"). Pasek linijki scrolluje 1:1 ze scroll-containerem, a segmenty mają tę
+   * samą geometrię co kartki (wysokość strony + separator), więc idealnie się pokrywają.
+   */
   pageList = computed(() => Array.from({ length: this.totalPages() }, (_, i) => i));
 
+  /** Wysokość segmentu pionowej linijki = wysokość kartki (px @100%) * zoom (fallback). */
   vRulerSegmentHeightPx = computed(() =>
     (this.pageSettings().orientation === 'portrait' ? 1122 : 794) * (this.zoomLevel() / 100)
   );
 
+  /** Odstęp między segmentami = wysokość separatora stron (8px) * zoom (fallback). */
   vRulerGapPx = computed(() => 8 * (this.zoomLevel() / 100));
 
+  /**
+   * Zmierzony z DOM układ stron (top + wysokość, w px ze skalą, względem zawartości scrolla).
+   * Strony z wysokim nagłówkiem rosną ponad 1122px — pozycjonowanie absolutne wg zmierzonego
+   * `top` eliminuje kumulację błędów i daje wierne wyrównanie pionowej linijki per strona.
+   */
   vRulerSegments = signal<{ top: number; height: number }[]>([]);
 
+  /**
+   * Segmenty do renderu: zmierzone jeśli dostępne, inaczej fallback ze stałych.
+   * `axisCm` = wysokość kartki w cm (niezależna od zoomu), by linijka wypełniła podziałką
+   * całą stronę (strona z wysokim nagłówkiem bywa wyższa niż A4).
+   */
   vRulerSegmentsView = computed(() => {
     const scale = this.zoomLevel() / 100;
     const toCm = (px: number) => px / (DocumentEditorComponent.CM_TO_PX * scale);
@@ -373,13 +575,20 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return this.pageList().map((_, i) => ({ top: pad + i * (h + g), height: h, axisCm: fallbackAxis }));
   });
 
+  /** Łączna wysokość zawartości paska pionowej linijki (do scrolla 1:1). */
   vRulerInnerHeight = computed(() => {
     const segs = this.vRulerSegmentsView();
     return segs.length ? segs[segs.length - 1].top + segs[segs.length - 1].height : 0;
   });
 
+  /** Obserwator zmian rozmiaru zawartości — re-mierzy układ stron dla pionowej linijki. */
   private vRulerResizeObserver?: ResizeObserver;
 
+  /**
+   * Mierzy realny układ stron (top + wysokość każdej kartki) i aktualizuje segmenty linijki.
+   * Wołane w `requestAnimationFrame` (po layoutcie), z guardem równości. Reaguje na faktyczne
+   * zmiany (ładowanie obrazów, edycja) przez ResizeObserver, więc nie zgaduje momentu pomiaru.
+   */
   private measureVRuler(): void {
     requestAnimationFrame(() => {
       const next = this.editor?.getPageLayout() ?? [];
@@ -390,6 +599,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Podpina ResizeObserver na zawartości dokumentu (editor-wrapper), by linijka była zawsze aktualna. */
   private ensureVRulerObserver(): void {
     if (this.vRulerResizeObserver) return;
     const wrapper = this.editorScrollContainer?.nativeElement?.querySelector('.editor-wrapper') as HTMLElement | null;
@@ -398,8 +608,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.vRulerResizeObserver.observe(wrapper);
   }
 
+  /** Konwersja cm ↔ px (96 DPI). */
   private static readonly CM_TO_PX = CSS_PX_PER_CM;
 
+  // Menu Widok
   showViewMenu = signal(false);
   showHelpMenu = signal(false);
   pageSettings = signal<PageSettings>({
@@ -407,14 +619,20 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     orientation: 'portrait',
     paperSize: 'a4'
   });
+  /** Page size/orientation (cm) from the imported DOCX; round-tripped verbatim on save. */
   documentPageSize = signal<PageSize | undefined>(undefined);
+  /** Własne nagłówki/stopki sekcji ≥ 1 z importu (dokumenty wielosekcyjne, ADR-0023). */
   sectionHeadersFooters = signal<SectionHeaderFooter[] | null>(null);
+  /** Przypisy dolne z importu (jedno źródło prawdy treści; round-trip przez zapis). */
   footnotes = signal<Footnote[] | null>(null);
+  /** Przypisy końcowe z importu (osobny model; round-trip przez zapis). */
   endnotes = signal<Endnote[] | null>(null);
+  /** Format numeracji przypisów z dokumentu (w:numFmt) — tylko wyświetlanie; null = domyślna Worda. */
   footnoteNumberFormat = signal<string | null>(null);
   endnoteNumberFormat = signal<string | null>(null);
   marginPresets = MARGIN_PRESETS;
 
+  // Dialog nagłówka i stopki
   showHeaderFooterDialog = signal(false);
   headerFooterDialogData = signal<{
     headerMargin: number;
@@ -428,9 +646,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     differentOddEven: false
   });
 
+  // Dialog Właściwości dokumentu
   showPropertiesDialog = signal(false);
   propertiesData = signal<DocumentMetadata>({});
 
+  // Dialog Podpisów cyfrowych
   showSignatureDialog = signal(false);
   signatureDialogTab = signal<'list' | 'sign'>('list');
   signatureData = {
@@ -443,17 +663,23 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     certificateFileName: '' as string
   };
 
+  // Baner podpisów
   documentSignatures = signal<DigitalSignatureInfo[]>([]);
 
+  // Dialog opuszczania edytora
   showLeaveDialog = signal(false);
 
+  // Math dla template
   protected readonly Math = Math;
 
   constructor() {
+    // Załaduj szablony
     this.loadTemplates();
   }
 
   ngOnInit(): void {
+    // Czytamy masterId i versionId RAZEM: versionId decyduje o trybie (edycja vs read-only),
+    // więc musi być znany zanim zdecydujemy, którą wersję załadować.
     this.route.queryParams.pipe(
       map(params => ({
         masterId: params['masterId'] as string | undefined,
@@ -467,10 +693,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       this.loadFromStorage(masterId!, versionId ?? null);
     });
 
+    // Zalogowany użytkownik z MSAL (konto aktywne ustawiane w App po zakończeniu interakcji).
     const account = this.msal.instance.getActiveAccount() ?? this.msal.instance.getAllAccounts()[0] ?? null;
     const fullName = account?.name?.trim() || account?.username || '';
     this.currentUserName.set(fullName);
 
+    // Imię ustalamy tak samo jak na Dashboardzie: `name` ma format „Nazwisko, X. (Imię)" —
+    // najpierw bierzemy tekst z nawiasów; gdy go brak, claim `given_name`; w ostateczności fallback
+    // z pełnej nazwy (Qutasator `given_name` bywa samym inicjałem, dlatego nawias ma priorytet).
     const parenthesized = fullName.match(/\(([^)]+)\)/)?.[1]?.trim();
     const givenName = (account?.idTokenClaims as Record<string, unknown> | undefined)?.['given_name'];
     const first = parenthesized
@@ -481,6 +711,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.firstName.set(first);
     this.initials.set(this.deriveInitials(fullName || first));
 
+    // Awatar z Microsoft Graph — best-effort: brak zgody/zdjęcia → zostają inicjały.
     if (account) {
       void this.loadAvatar(account);
     }
@@ -499,6 +730,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Pobiera awatar użytkownika z Microsoft Graph (`/me/photo/$value`). Świadomie OMIJA
+   * Angular HttpClient (acquireTokenSilent + fetch), żeby nie odpalać `httpErrorInterceptor`
+   * (toast/redirect) przy 404 „brak zdjęcia" lub braku zgody na Graph. Każdy błąd → cicho
+   * zostają inicjały. Nie wymusza interakcji (brak popupu logowania dla samego awatara).
+   */
   private async loadAvatar(account: AccountInfo): Promise<void> {
     try {
       const result = await this.msal.instance.acquireTokenSilent({ scopes: ['User.Read'], account });
@@ -510,9 +747,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       this.avatarObjectUrl = URL.createObjectURL(blob);
       this.avatarUrl.set(this.avatarObjectUrl);
     } catch {
+      // interaction_required / brak zgody / sieć → zostają inicjały
     }
   }
 
+  /** Imię z pełnej nazwy: obsługuje „Nazwisko, Imię" i „Imię Nazwisko"; fallback z e-maila. */
   private deriveFirstName(fullName: string): string {
     if (!fullName) return '';
     if (fullName.includes(',')) {
@@ -524,6 +763,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return fullName.split(/\s+/)[0];
   }
 
+  /** Inicjały (max 2 znaki) do awatara zastępczego. */
   private deriveInitials(name: string): string {
     const parts = name.replace(',', ' ').split(/\s+/).filter(Boolean);
     if (parts.length === 0) return '?';
@@ -531,6 +771,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 
+  /**
+   * Uruchamia cykliczny auto-save. Interwał z konfiguracji (environment.autoSave.intervalSeconds).
+   * Każdy tick nadpisuje wersję edytowalną tylko gdy: auto-save włączony, jest versionId (tryb edycji)
+   * oraz w edytorze są niezapisane zmiany.
+   */
   private startAutoSave(): void {
     this.stopAutoSave();
     const intervalMs = (environment.autoSave?.intervalSeconds ?? 30) * 1000;
@@ -549,12 +794,18 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.autoSaveSub = undefined;
   }
 
+  /**
+   * Przełącza auto-save (switch w UI). Wyłączenie zatrzymuje cykliczne zapisy.
+   */
   toggleAutoSave(): void {
     const next = !this.autoSaveEnabled();
     this.autoSaveEnabled.set(next);
     this.autoSaveStatus.set('idle');
   }
 
+  /**
+   * Buduje request zapisu z bieżącego stanu edytora (HTML + metadane + nagłówek/stopka + marginesy).
+   */
   private buildSaveRequest() {
     const html = this.editor?.getContent() || this.documentContent();
     const fileName = this.originalFileName() || `${this.documentMetadata().title || 'dokument'}.docx`;
@@ -569,12 +820,20 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       sectionHeadersFooters: this.sectionHeadersFooters() ?? undefined,
       footnotes: this.footnotes() ?? undefined,
       endnotes: this.endnotes() ?? undefined,
+      // Pass-through: backend zachowa style tabel/motyw/numerację oryginału (definicje,
+      // nie tylko formatowanie bezpośrednie). Brak masterId (np. nowy dokument) → regeneracja.
       masterId: this.documentMasterId() ?? undefined,
+      // Efektywny format POKAZYWANY w edytorze (defaulty jak _formatNoteLabel wysiwyg:
+      // dolne = cyfry, końcowe = małe rzymskie) — zapisany plik ma wyglądać jak ekran.
       footnoteNumberFormat: this.footnoteNumberFormat() ?? 'decimal',
       endnoteNumberFormat: this.endnoteNumberFormat() ?? 'lowerRoman'
     };
   }
 
+  /**
+   * Serializuje zawartość do DOCX i utrwala przez API.
+   * PUT (nadpisanie wersji edytowalnej v2 w miejscu) gdy jest versionId, inaczej POST (nowa wersja).
+   */
   private persistDocument(): Observable<unknown> {
     const masterId = this.documentMasterId()!;
     const versionId = this.documentVersionId();
@@ -587,6 +846,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     );
   }
 
+  /**
+   * Auto-save: nadpisuje wersję edytowalną w tle (ta sama ścieżka co ręczny „Zapisz").
+   */
   private performAutoSave(): void {
     this.isAutoSaving = true;
     this.autoSaveStatus.set('saving');
@@ -605,6 +867,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Loguje RAZ, przy otwarciu dokumentu, ten sam zestaw danych diagnostycznych co akcja „Zgłoś
+   * problem" (id-ki dokumentu, wersja/build, przeglądarka, viewport, ostatni błąd HTTP itd.). Dzięki
+   * temu w logach aplikacji (konsola przeglądarki — wsparcie zgrywa je z devtools / raportu
+   * użytkownika) jest ślad kontekstu sesji edycji, bez zalewania logów przy każdym autozapisie.
+   * Reużywa `collectDiagnosticRows()` — jedno źródło prawdy dla danych zgłoszenia.
+   */
   private logOpenDiagnostics(): void {
     const block = this.formatDiagnostics(this.collectDiagnosticRows());
     console.info(`[open] ${new Date().toISOString()} — otwarto dokument\n${block}`);
@@ -614,6 +883,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   private static readonly DOC_MIME = 'application/msword';
   private static readonly PDF_MIME = 'application/pdf';
 
+  /**
+   * Ładuje dokument z bazy.
+   * - Tryb edycji (versionId): ładuje WSKAZANĄ wersję edytowalną (Krok 3).
+   * - Tryb read-only (brak versionId): ładuje wersję BAZOWĄ — oryginał (Krok 2, bardzo ważne!).
+   * PDF nie jest obsługiwany w edytorze DOCX → przekierowanie do /viewer.
+   */
   private loadFromStorage(masterId: string, versionId: string | null): void {
     this.isLoading.set(true);
     this.errorMessage.set(null);
@@ -621,6 +896,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.returnUrl.set(null);
     this.userDownload.set(false);
     this.showSaveState.set(true);
+    // Loaded from storage (external app / dashboard), not from local disk.
     this.loadedFromDisk.set(false);
     this.diskOriginalFile = null;
 
@@ -628,16 +904,22 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       switchMap(meta => {
         const mime = (meta.mimeType || '').toLowerCase();
 
+        // Presentational classification from external metadata (does not gate access).
         this.documentClassification.set(meta.classification ?? null);
+        // Source of truth for the "Zakończ" button visibility (Krok 4 return link).
         this.returnUrl.set(meta.returnUrl ?? null);
+        // Drives "Pobierz dokument" menu visibility — backend also enforces.
         this.userDownload.set(meta.userDownload === true);
+        // Inverse-default: hide save-state UI only when the source app sent explicit false.
         this.showSaveState.set(meta.showSaveState !== false);
 
+        // PDF: edytor DOCX nie renderuje PDF — kieruj do PDFViewer (tryb podglądu).
         if (mime === DocumentEditorComponent.PDF_MIME) {
           this.router.navigate(['/viewer'], { queryParams: { masterId } });
           return from(Promise.reject({ handled: true } as const));
         }
 
+        // Bajty: edycja → wskazana wersja; read-only → wersja bazowa (oryginał).
         const bytes$ = versionId
           ? this.documentStorageService.downloadVersion(masterId, versionId)
           : this.documentStorageService.downloadBaseVersion(masterId);
@@ -654,10 +936,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       })
     ).subscribe({
       next: ({ file, fileName }) => {
+        // Konwersja przez /open (z dekrypcją/detekcją .doc). Plik z hasłem → dialog hasła
+        // pojawia się też w tej ścieżce (otwarcie z dashboardu / odświeżenie edytora).
         this._convertAndLoad(file, fileName);
       },
       error: (err) => {
         if (err?.handled) {
+          // przekierowanie do /viewer — nic nie pokazujemy
           return;
         }
         if (err.status === 404) {
@@ -670,11 +955,17 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Aktualizuje tytuł dokumentu
+   */
   updateTitle(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.documentMetadata.update(m => ({ ...m, title: input.value }));
   }
 
+  /**
+   * Ładuje dostępne szablony
+   */
   private loadTemplates(): void {
     this.documentService.getTemplates().subscribe({
       next: (templates) => this.templates.set(templates),
@@ -682,6 +973,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Wraca do dashboardu — pokazuje ładny dialog jeśli jest otwarty dokument lub niezapisane zmiany
+   */
   goToDashboard(): void {
     const hasDocument = !!this.documentMasterId();
     const hasChanges = !!this.editorState()?.isModified;
@@ -702,6 +996,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showLeaveDialog.set(false);
   }
 
+  /**
+   * Tworzy nowy dokument — zapisuje pusty dokument do bazy, nawiguje do edytora z nowym masterId
+   */
   newDocument(): void {
     if (this.editorState()?.isModified) {
       if (!confirm('Masz niezapisane zmiany. Czy na pewno chcesz utworzyć nowy dokument?')) {
@@ -724,6 +1021,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
                   mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                   content: base64
                 }).pipe(
+                  // Nowy dokument = zamiar edycji → twórz wersję edytowalną (v2).
                   switchMap(result =>
                     this.documentStorageService.saveDocumentVersion(result.masterId, { content: base64 }).pipe(
                       map(saved => ({ masterId: result.masterId, versionId: saved.versionId }))
@@ -746,9 +1044,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Otwiera dokument z pliku — DOCX: upload do bazy, nawiguje z nowym masterId; PDF: upload i podgląd (/viewer)
+   */
   openDocument(): void {
     const input = document.createElement('input');
     input.type = 'file';
+    // .doc dozwolone — backend wykrywa po zawartości: zwykły/zaszyfrowany DOCX oraz .doc będący
+    // w istocie DOCX są otwierane; binarny .doc zwraca kontrolowany komunikat o konwersji.
     input.accept = '.docx,.doc,.pdf';
 
     input.onchange = (e) => {
@@ -762,12 +1065,18 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         return;
       }
 
+      // Wczytanie przez /open (normalizer): obsługa DOCX, DOCX z hasłem (prompt) oraz detekcja .doc.
+      // Treść trafia bezpośrednio do edytora (HTML).
       this.loadDocument(file);
     };
 
     input.click();
   }
 
+  /**
+   * PDF wybrany w „Plik → Otwórz": upload do bazy i przejście do podglądu (/viewer) —
+   * ta sama ścieżka co na stronie startowej.
+   */
   private async openPdfInViewer(file: File): Promise<void> {
     this.isLoading.set(true);
     this.errorMessage.set(null);
@@ -802,12 +1111,20 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Ładuje dokument z pliku z dysku ("Plik → Otwórz"). */
   private loadDocument(file: File, password?: string): void {
+    // Keep the untouched original so "Pobierz oryginał dokumentu" can hand it back verbatim.
     this.diskOriginalFile = file;
     this.loadedFromDisk.set(true);
     this._convertAndLoad(file, file.name, password, true);
   }
 
+  /**
+   * Konwertuje plik (DOCX / .doc-jako-DOCX / odszyfrowany) przez /open i ładuje treść do edytora.
+   * WSPÓLNE dla otwierania z dysku oraz ładowania wersji z bazy (loadFromStorage) — dzięki temu
+   * dialog hasła pojawia się w OBU ścieżkach (wcześniej tylko przy otwieraniu z dysku).
+   * Plik zabezpieczony hasłem → dialog + ponowienie z tym samym plikiem i hasłem.
+   */
   private _convertAndLoad(file: File, fileName: string, password?: string, announce = false): void {
     this.isLoading.set(true);
     this.errorMessage.set(null);
@@ -815,8 +1132,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.documentService.openDocument(file, password).subscribe({
       next: (content) => {
         this._applyLoadedContent(content, fileName);
+        // Jeden snapshot diagnostyczny na otwarcie dokumentu (te same dane co „Zgłoś problem":
+        // id-ki, wersja/build, przeglądarka…) — kontekst sesji w logach, bez zalewania ich przy
+        // każdym autozapisie. WSPÓLNE dla otwierania z dysku i wczytywania wersji z bazy.
         this.logOpenDiagnostics();
+        // Jeden autorytatywny komunikat wyniku otwarcia — read-only wyklucza „sukces".
+        // Dokument chroniony NIGDY nie jest prezentowany jako otwarty w trybie edycji.
         if (content.isReadOnlyProtected === true) {
+          // INFORMACJA, nie błąd (13865553): dokument OTWORZYŁ się poprawnie, tylko bez
+          // możliwości edycji — czerwony toast sugerował nieudaną operację przy każdym
+          // (także ponownym) wczytaniu tego samego pliku.
           this.showInfo(READ_ONLY_PROTECTED_MESSAGE);
         } else if (announce) {
           this.showSuccess(`Otwarto dokument: ${fileName}`);
@@ -827,17 +1152,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         this.isLoading.set(false);
         const code = err instanceof OpenDocumentError ? err.code : undefined;
 
+        // Plik zabezpieczony hasłem — pokaż dialog i ponów (z tym samym plikiem + hasłem).
         if (code === 'PASSWORD_REQUIRED' || code === 'WRONG_PASSWORD') {
           this.openPasswordDialog(pwd => this._convertAndLoad(file, fileName, pwd, announce), code === 'WRONG_PASSWORD');
           return;
         }
 
+        // Znany defekt pliku (pusty / zły format / uszkodzony — bug 13625398) — jednolity
+        // komunikat, ten sam co na stronie startowej; nie surowa treść backendu.
         const defect = documentDefectMessage(err);
         if (defect) {
           this.showError(defect);
           return;
         }
 
+        // Binarny .doc / inny błąd — komunikat z backendu wskazuje, co zrobić.
         if (err?.status === 404) {
           this.documentNotFound.set(true);
         } else {
@@ -847,12 +1176,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Ustawia treść/metadane/nagłówki/stopki/marginesy/podpisy z DocumentContent w edytorze. */
   private _applyLoadedContent(content: DocumentContent, fileName: string): void {
+    // Ochrona przed edycją z pliku źródłowego (Word „Ogranicz edycję" / hasło zapisu /
+    // „Oznacz jako ostateczny") — blokuje edycję niezależnie od trybu (versionId). Samo
+    // USTAWIENIE stanu; komunikat emituje _convertAndLoad jako jeden wynik otwarcia, żeby
+    // nie nakładał się na toast sukcesu (badge w nagłówku prezentuje stan trwale).
     this.documentEditProtected.set(content.isReadOnlyProtected === true);
     this.documentContent.set(content.html);
     this.documentMetadata.set(content.metadata);
     this.documentStyles.set(content.styles || []);
     this.originalFileName.set(fileName);
+    // Nagłówek/stopka: KAŻDE pole wariantu podawane JAWNIE (spread nie wystarcza — brak pola
+    // w nowym dokumencie zostawiał w edytorze wariant z POPRZEDNIEGO: setter wysiwyg-editora
+    // aktualizuje sygnał tylko dla pól `!== undefined`, więc dokument bez nagłówka/stopki
+    // pokazywał first-page/even z wcześniej wczytanego pliku). Reset = „wczytaj od zera".
     this.headerContent.set({
       html: content.header?.html || '',
       height: content.header?.height || 1.25,
@@ -878,9 +1216,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       this.documentPageSize.set(content.pageSize);
       this.pageSettings.update(s => ({ ...s, orientation: content.pageSize!.orientation }));
     }
+    // Własne nagłówki/stopki sekcji ≥ 1 (dokumenty wielosekcyjne) — round-trip przez zapis.
     this.sectionHeadersFooters.set(content.sectionHeadersFooters ?? null);
+    // Przypisy dolne — treść przekazywana do edytora i z powrotem w zapisie (jedno źródło prawdy).
     this.footnotes.set(content.footnotes ?? null);
     this.endnotes.set(content.endnotes ?? null);
+    // Format numeracji przypisów z dokumentu (w:numFmt) — do wyświetlania etykiet w edytorze.
     this.footnoteNumberFormat.set(content.footnoteNumberFormat ?? null);
     this.endnoteNumberFormat.set(content.endnoteNumberFormat ?? null);
     if (this.editor) {
@@ -889,19 +1230,24 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.documentSignatures.set(content.metadata.signatures || []);
   }
 
+  // ── Dialog hasła do zaszyfrowanego dokumentu ─────────────────────────────────
   showPasswordDialog = signal(false);
   passwordDialogValue = '';
   passwordDialogError = signal<string | null>(null);
+  /** Callback ponawiający otwarcie z podanym hasłem (różny dla pliku z dysku vs wersji z bazy). */
   private _passwordRetry: ((password: string) => void) | null = null;
 
+  /** Otwiera dialog hasła. `retry(pwd)` ponawia otwarcie; `wrong` = poprzednia próba miała błędne hasło. */
   private openPasswordDialog(retry: (password: string) => void, wrong: boolean): void {
     this._passwordRetry = retry;
     this.passwordDialogValue = '';
     this.passwordDialogError.set(wrong ? 'Nieprawidłowe hasło. Spróbuj ponownie.' : null);
     this.showPasswordDialog.set(true);
+    // Po wyrenderowaniu @if ustaw fokus w polu hasła.
     setTimeout(() => (document.querySelector('.password-dialog input') as HTMLInputElement | null)?.focus(), 50);
   }
 
+  /** Zatwierdza hasło → ponawia otwarcie dokumentu z podanym hasłem. */
   confirmPasswordDialog(): void {
     const pwd = this.passwordDialogValue;
     if (!pwd) {
@@ -915,6 +1261,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     retry?.(pwd);
   }
 
+  /**
+   * Anuluje wprowadzanie hasła. Nie wolno zostawić użytkownika z pustym dokumentem (Problem 1):
+   * - bez `returnUrl` (otwarcie z dashboardu / dysku) → powrót na dashboard,
+   * - z `returnUrl` (link z aplikacji zewnętrznej) → przepływ powrotu jak po „Zakończ"
+   *   (best-effort zamknięcie karty otwartej przez aplikację zewnętrzną).
+   */
   cancelPasswordDialog(): void {
     this.showPasswordDialog.set(false);
     this.passwordDialogValue = '';
@@ -928,8 +1280,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Zapisuje dokument przez API (ujednolicony zapis — ta sama ścieżka co auto-save).
+   * Nadpisuje wersję edytowalną (v2) w miejscu gdy jest versionId; w przeciwnym razie tworzy nową wersję.
+   */
   saveDocument(): void {
     if (this.editingDisabled()) {
+      // Tryb podglądu (Krok 2), dokument zajęty albo chroniony przed edycją — zapis przez API zablokowany.
       this.showError(this.documentEditProtected()
         ? 'Dokument jest chroniony przed edycją — zapis jest zablokowany.'
         : 'Tryb podglądu — dokument jest tylko do odczytu. Użyj „Pobierz dokument", aby zapisać kopię lokalnie.');
@@ -939,6 +1296,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
 
     const masterId = this.documentMasterId();
     if (!masterId) {
+      // Brak mastera (np. dokument z szablonu, jeszcze nie utrwalony) — pozwól pobrać plik zamiast cichego nic.
       this.showError('Dokument nie jest powiązany z bazą — użyj „Pobierz dokument".');
       this.showMenu.set(false);
       return;
@@ -964,9 +1322,15 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Pobiera dokument jako plik DOCX do przeglądarki (dawne „Zapisz").
+   * Nie utrwala w bazie — to lokalna kopia dla użytkownika.
+   */
   downloadDocument(): void {
     const masterId = this.documentMasterId();
     if (!masterId || !this.canUserDownload()) {
+      // Defensive: the menu item is hidden when canUserDownload() is false, but
+      // anyone calling the method directly still hits the same gate the backend uses.
       this.showError('Pobieranie pliku na komputer nie jest dostępne dla tego dokumentu.');
       return;
     }
@@ -974,6 +1338,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const request = this.buildSaveRequest();
     const fileName = request.originalFileName;
 
+    // === DIAGNOSTYKA (do debugowania zgubionych stylów / formatowania) ===
     try {
       const html = request.html;
       const tmp = document.createElement('div');
@@ -1020,6 +1385,8 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isLoading.set(false);
+        // 403 from the gate → keep the document-level signal in sync with the backend
+        // verdict (covers the race where metadata changed since load).
         if (err?.status === 403) {
           this.userDownload.set(false);
           this.showError('Pobieranie pliku na komputer nie jest dostępne dla tego dokumentu.');
@@ -1030,14 +1397,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * "Pobierz oryginał dokumentu": zawsze zwraca nietknięty oryginał (v1), nigdy edytowanej
+   * kopii roboczej. Dokument z dysku → plik wczytany lokalnie; dokument z aplikacji zewnętrznej
+   * → wersja bazowa (v1) ze storage. Widoczność pozycji menu steruje `canDownloadOriginal()`.
+   */
   downloadOriginalDocument(): void {
     this.showMenu.set(false);
 
     if (!this.canDownloadOriginal()) {
+      // Defensive: the menu item is hidden when canDownloadOriginal() is false.
       this.showError('Pobieranie oryginału nie jest dostępne dla tego dokumentu.');
       return;
     }
 
+    // Wczytany z dysku — oddaj dokładnie ten plik, który użytkownik otworzył.
     if (this.loadedFromDisk() && this.diskOriginalFile) {
       this.saveBlobToDisk(this.diskOriginalFile, this.diskOriginalFile.name);
       this.showSuccess('Pobrano oryginał dokumentu');
@@ -1065,6 +1439,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** Zapisuje Blob jako plik na dysku użytkownika (wspólne dla „Pobierz dokument"/„Pobierz oryginał"). */
   private saveBlobToDisk(blob: Blob, fileName: string): void {
     const objectUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1076,6 +1451,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     window.URL.revokeObjectURL(objectUrl);
   }
 
+  /**
+   * Otwiera szablon
+   */
   openTemplate(templateId: string): void {
     this.isLoading.set(true);
     this.showTemplates.set(false);
@@ -1099,31 +1477,53 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Obsługa komendy z toolbara
+   */
   onCommand(event: { command: EditorCommand; value?: string }): void {
     this.editor?.executeCommand(event.command, event.value);
   }
 
+  /**
+   * Obsługa zmiany rozmiaru czcionki
+   */
   onFontSizeChange(size: number): void {
     this.editor?.setFontSize(size);
   }
 
+  /**
+   * Obsługa zmiany rodziny czcionki
+   */
   onFontFamilyChange(family: string): void {
     this.editor?.setFontFamily(family);
   }
 
+  /**
+   * Obsługa zmiany koloru tekstu
+   */
   onTextColorChange(color: string): void {
     this.editor?.setTextColor(color);
   }
 
+  /**
+   * Obsługa zmiany koloru tła
+   */
   onBackgroundColorChange(color: string): void {
     this.editor?.setBackgroundColor(color);
   }
 
+  /**
+   * Wstawia link
+   */
   onInsertLink(event: { url: string; text?: string }): void {
     this.editor?.insertLink(event.url, event.text);
   }
 
+  /**
+   * Wstawia obraz
+   */
   onInsertImage(): void {
+    // Zapisz selekcję edytora przed otwarciem dialogu pliku (który zabiera focus)
     this.editor?.saveSelection();
 
     const input = document.createElement('input');
@@ -1140,11 +1540,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     input.click();
   }
 
+  /**
+   * Wgrywa i wstawia obraz
+   */
   private uploadAndInsertImage(file: File): void {
+    // Konwertuj lokalnie do base64 (bez wysyłania na serwer)
     const reader = new FileReader();
     reader.onload = (e) => {
       const base64 = e.target?.result as string;
       if (base64 && this.editor) {
+        // Przywróć fokus i selekcję w edytorze przed wstawieniem
         this.editor.focus();
         this.editor.restoreSelection();
         this.editor.insertImage(base64, file.name);
@@ -1153,6 +1558,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     reader.readAsDataURL(file);
   }
 
+  /**
+   * Wstawia tabelę (szybkie wstawianie z podmenu)
+   */
   onInsertTable(config: string): void {
     if (this.editor) {
       this.editor.insertTable(config);
@@ -1160,34 +1568,50 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Wstawia przypis dolny w pozycji kursora (odwołanie + wpis w modelu przypisów). */
   onInsertFootnote(): void {
     this.editor?.addFootnoteAtCursor();
   }
 
+  /** Wstawia przypis końcowy w pozycji kursora. */
   onInsertEndnote(): void {
     this.editor?.addEndnoteAtCursor();
   }
 
+  /**
+   * Obsługa zmiany stylu dokumentu
+   */
   onStyleChange(style: DocumentStyle): void {
+    // Zastosuj pełny styl do zaznaczenia
     if (this.editor) {
       this.editor.applyDocumentStyle(style);
     }
   }
 
+  // Przechowywane formatowanie do kopiowania
   private copiedFormat: any = null;
 
+  /**
+   * Kopiuje formatowanie z bieżącego zaznaczenia
+   */
   onCopyFormat(): void {
     if (this.editor) {
       this.copiedFormat = this.editor.getCurrentFormatting();
     }
   }
 
+  /**
+   * Aplikuje skopiowane formatowanie do zaznaczenia
+   */
   onPasteFormat(): void {
     if (this.editor && this.copiedFormat) {
       this.editor.applyFormatting(this.copiedFormat);
     }
   }
 
+  /**
+   * Wyszukiwanie tekstu w dokumencie
+   */
   private lastSearchText = '';
 
   onSearchInDocument(event: { text: string; direction: 'next' | 'previous' }): void {
@@ -1196,9 +1620,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     let result: { count: number; currentIndex: number };
 
     if (event.text !== this.lastSearchText) {
+      // Nowe wyszukiwanie
       this.lastSearchText = event.text;
       result = this.editor.searchText(event.text, event.direction);
     } else {
+      // Nawigacja po istniejących wynikach
       result = event.direction === 'next' ? this.editor.findNext() : this.editor.findPrevious();
     }
 
@@ -1230,6 +1656,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.lastSearchText = '';
   }
 
+  /**
+   * Obsługa zmiany zawartości
+   */
   onContentChange(html: string): void {
     this.documentContent.set(html);
     this.documentMetadata.update(m => ({
@@ -1238,6 +1667,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  /**
+   * Obsługa zmiany nagłówka
+   */
   onHeaderChange(header: HeaderFooterContent): void {
     this.headerContent.set(header);
     this.documentMetadata.update(m => ({
@@ -1246,6 +1678,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  /**
+   * Obsługa zmiany stopki
+   */
   onFooterChange(footer: HeaderFooterContent): void {
     this.footerContent.set(footer);
     this.documentMetadata.update(m => ({
@@ -1254,31 +1689,50 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  /**
+   * Obsługa zmiany stanu edytora
+   */
   onStateChange(state: EditorState): void {
     this.editorState.set(state);
     this.detectTableContext();
   }
 
+  /**
+   * Wykrywa czy kursor jest wewnątrz tabeli
+   */
   private detectTableContext(): void {
     const selection = window.getSelection();
     const editorEl = this.editor?.editorContent?.nativeElement;
     const ctx = resolveTableContext(selection?.anchorNode, editorEl);
 
+    // Selekcja poza treścią edytora = interakcja z UI (panel boczny / toolbar).
+    // Zachowujemy ostatni znany kontekst tabeli, żeby kliknięcia w panelu (np.
+    // obramowania) nadal dotyczyły aktywnej tabeli i nie przełączały panelu na
+    // „Wybierz tabelę". Czyszczenie tylko, gdy karetka jest realnie poza tabelą.
     if (ctx.placement === 'outside-editor') return;
 
     this.isInTable.set(ctx.placement === 'in-table');
     this.activeTableCell.set(ctx.cell);
     this.activeTable.set(ctx.table);
     if (ctx.placement === 'outside-table') {
+      // Karetka w treści poza tabelą — wyczyść wizualne zaznaczenie komórek, żeby
+      // tabela nie wyglądała na nadal zaznaczoną (spójność stanu z widokiem).
       this.clearCellSelection();
     }
     this.syncTablePanel();
   }
 
+  /** Reaguje na zmianę selekcji w edytorze (ruch karetki/klik), nie tylko na zmianę treści. */
   onEditorSelectionChange(): void {
     this.detectTableContext();
   }
 
+  /**
+   * Steruje widocznością bocznego panelu tabeli na podstawie kontekstu karetki.
+   * Reguły: panel pojawia się gdy karetka jest w tabeli (zastępuje dawny pasek
+   * tabeli pojawiający się przy `isInTable`), znika po opuszczeniu tabeli, nie
+   * wypiera panelu wyszukiwania i respektuje ręczne zamknięcie przez użytkownika.
+   */
   private syncTablePanel(): void {
     if (!this.isInTable() || this.editingDisabled()) {
       this.showTablePanel.set(false);
@@ -1288,22 +1742,37 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     if (this.tablePanelManuallyClosed) {
       return;
     }
+    // Re-selecting a table takes over the docked area: the user's context is now
+    // the table, so close search (if open) and show table formatting. The dock has
+    // a single active mode at a time — table selection wins over an open search panel.
     if (this.showFindReplace()) {
       this.closeFindReplace();
     }
     this.showTablePanel.set(true);
   }
 
+  /** Ręczne zamknięcie panelu tabeli (przycisk ×) — nie otwieraj ponownie póki w tej tabeli. */
   closeTablePanel(): void {
     this.showTablePanel.set(false);
     this.tablePanelManuallyClosed = true;
   }
 
+  /**
+   * ESC zamyka aktywny boczny panel (Wyszukiwanie / właściwości tabeli) — przez tę
+   * samą logikę co przycisk × (`closeFindReplace` / `closeTablePanel`). Reguły:
+   *  - jeśli bardziej szczegółowy handler już obsłużył ESC (np. deselekcja obrazu
+   *    w edytorze woła `preventDefault`) — nie ruszamy panelu (`defaultPrevented`),
+   *  - otwarte dialogi/modale i menu kontekstowe mają pierwszeństwo (własne zamykanie),
+   *  - gdy żaden panel nie jest otwarty, ESC nie robi nic (brak skutków ubocznych).
+   * Listener jest na `document`, bo panel może nie mieć focusu (karetka w edytorze).
+   */
   @HostListener('document:keydown.escape', ['$event'])
   onEscapeKeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented) return;
     if (this.isAnyDialogOpen() || this.showContextMenu()) return;
 
+    // Header/footer edit mode takes precedence over side panels — it's the most
+    // recently entered context and the spec lists ESC as a way to leave it.
     if (this.editingSection() !== 'body') {
       event.preventDefault();
       this.editor?.stopEditingHeaderFooter();
@@ -1316,6 +1785,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeActiveSidePanel();
   }
 
+  /**
+   * Zamyka aktualnie otwarty boczny panel tą samą drogą co przycisk ×.
+   * Jeśli focus był wewnątrz panelu (np. pole wyszukiwania), przywraca go do
+   * edytora — sensowne miejsce, bez tworzenia osobnego systemu focus-trap.
+   */
   closeActiveSidePanel(): void {
     const focusInPanel = !!(document.activeElement as HTMLElement | null)
       ?.closest('.search-panel, d2-table-properties-panel');
@@ -1331,6 +1805,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Czy otwarty jest jakikolwiek modal/dialog edytora. Mają one własne zamykanie
+   * (przycisk ×) i pierwszeństwo nad regułą ESC dla bocznego panelu — inaczej ESC
+   * przy otwartym dialogu zamykałby panel w tle zamiast (przyszłościowo) dialog.
+   */
   private isAnyDialogOpen(): boolean {
     return this.showTemplates()
       || this.showPageSetup()
@@ -1343,11 +1822,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       || this.showLeaveDialog();
   }
 
+  /**
+   * Zmienia zoom
+   */
   setZoom(level: number): void {
     this.zoomLevel.set(level);
     this.measureVRuler();
   }
 
+  /**
+   * Obsługuje scroll aby aktualizować bieżącą stronę
+   */
+  /**
+   * Kółko myszy nad pionową linijką nie ma jej przewijać samodzielnie (desync od dokumentu)
+   * — przekierowujemy scroll na obszar dokumentu, który następnie zsynchronizuje linijkę.
+   */
   onRulerWheel(e: WheelEvent): void {
     const container = this.editorScrollContainer?.nativeElement;
     if (!container) return;
@@ -1361,31 +1850,40 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const scrollTop = container.scrollTop;
     const scale = this.zoomLevel() / 100;
 
+    // Synchronizuj pionową linijkę ze scrollem (pionowym)
     if (this.verticalRulerBar?.nativeElement) {
       this.verticalRulerBar.nativeElement.scrollTop = scrollTop;
     }
 
+    // Synchronizuj poziomą linijkę ze scrollem (poziomym) — przesuwamy ją razem z kartką,
+    // żeby podziałka pokrywała się z dokumentem także przy przewijaniu w bok / dużym zoomie.
     if (this.horizontalRulerInner?.nativeElement) {
       this.horizontalRulerInner.nativeElement.style.transform = `translateX(${-container.scrollLeft}px)`;
     }
     
+    // Wysokość strony A4 w pikselach + margines
     const PAGE_HEIGHT = 1122;
     const PAGE_GAP = 40; // gap między stronami + separator
     const PADDING_TOP = 20; // padding containera
     
+    // Oblicz wysokość strony z uwzględnieniem skali
     const scaledPageHeight = PAGE_HEIGHT * scale;
     const scaledGap = PAGE_GAP * scale;
     
+    // Oblicz pozycję środka widocznego obszaru
     const viewportCenter = scrollTop + (container.clientHeight / 2) - (PADDING_TOP * scale);
     
+    // Oblicz bieżącą stronę
     const currentPageNum = Math.floor(viewportCenter / (scaledPageHeight + scaledGap)) + 1;
     const maxPages = this.totalPages();
     
     this.currentPage.set(Math.min(Math.max(1, currentPageNum), maxPages));
     
+    // Pokaż wskaźnik stron przy scrollowaniu (jeśli jest więcej niż 1 strona)
     if (maxPages > 1) {
       this.showPageIndicator.set(true);
       
+      // Ukryj wskaźnik po 1.5 sekundy bez scrollowania
       if (this.pageIndicatorTimeout) {
         clearTimeout(this.pageIndicatorTimeout);
       }
@@ -1395,27 +1893,44 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Obsługuje zmianę liczby stron
+   */
   onPagesChange(pageCount: number): void {
     this.totalPages.set(pageCount);
+    // Upewnij się, że currentPage nie jest większa niż totalPages
     if (this.currentPage() > pageCount) {
       this.currentPage.set(pageCount);
     }
+    // Zmierz realny układ stron dla pionowej linijki + podepnij obserwator zmian rozmiaru.
     this.ensureVRulerObserver();
     this.measureVRuler();
   }
 
+  /**
+   * Drukuje dokument
+   */
   printDocument(): void {
     window.print();
     this.showMenu.set(false);
   }
 
+  /**
+   * Pokazuje komunikat sukcesu
+   */
   private showSuccess(message: string): void {
+    // Sukces i błąd są wzajemnie wykluczające się — nigdy nie pokazujemy obu banerów naraz
+    // (chroniony dokument nie może jednocześnie „otworzyć się poprawnie" i być read-only).
     this.errorMessage.set(null);
     this.infoMessage.set(null);
     this.successMessage.set(message);
     setTimeout(() => this.successMessage.set(null), 3000);
   }
 
+  /**
+   * Komunikat INFORMACYJNY (13865553): stan dokumentu (np. tylko do odczytu) to nie błąd —
+   * czerwony toast błędu sugerował, że operacja się nie powiodła, choć dokument otwarto.
+   */
   private showInfo(message: string): void {
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -1423,6 +1938,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     setTimeout(() => this.infoMessage.set(null), 5000);
   }
 
+  /**
+   * Pokazuje komunikat błędu
+   */
   private showError(message: string): void {
     this.successMessage.set(null);
     this.infoMessage.set(null);
@@ -1430,44 +1948,65 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     setTimeout(() => this.errorMessage.set(null), 5000);
   }
 
+  /**
+   * Toggle menu
+   */
   toggleMenu(): void {
     const wasOpen = this.showMenu();
     this.closeAllMenus();
     this.showMenu.set(!wasOpen);
   }
 
+  /**
+   * Toggle menu Edytuj
+   */
   toggleEditMenu(): void {
     const wasOpen = this.showEditMenu();
     this.closeAllMenus();
     this.showEditMenu.set(!wasOpen);
   }
 
+  /**
+   * Toggle menu Format
+   */
   toggleFormatMenu(): void {
     const wasOpen = this.showFormatMenu();
     this.closeAllMenus();
     this.showFormatMenu.set(!wasOpen);
   }
 
+  /**
+   * Toggle menu Wstaw
+   */
   toggleInsertMenu(): void {
     const wasOpen = this.showInsertMenu();
     this.closeAllMenus();
     this.showInsertMenu.set(!wasOpen);
   }
 
+  /**
+   * Zamyka menu po kliknięciu poza obszarem menu
+   */
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
+    // Sprawdź czy kliknięto w obszarze menu
     const isMenuArea = target.closest('.menu-bar') || 
                        target.closest('.dropdown-menu');
     const isShadingArea = target.closest('.shading-dropdown') || target.closest('.table-toolbar-btn-shading');
+    // Jeśli kliknięto poza menu i poza cieniowaniem - zamknij
     if (!isMenuArea && !isShadingArea) {
       this.closeAllMenus();
     }
+    // Zamknij dropdown cieniowania jeśli kliknięto poza nim
     if (!isShadingArea) {
       this.showShadingDropdown.set(false);
     }
   }
 
+  // =====================
+  // ZAZNACZANIE KOMÓREK TABELI (MULTI-CELL SELECTION)
+  // =====================
 
   @HostListener('mousedown', ['$event'])
   onCellMouseDown(event: MouseEvent): void {
@@ -1479,6 +2018,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     if (cell && editorEl.contains(cell)) {
       this.cellSelectionStartCell = cell;
       this.isCellSelecting = false;
+      // Wyczyść zaznaczenie jeśli nie trzymamy Shift
       if (!event.shiftKey) {
         this.clearCellSelection();
       }
@@ -1497,11 +2037,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const editorEl = this.editor?.editorContent?.nativeElement;
 
     if (cell && editorEl && editorEl.contains(cell) && cell !== this.cellSelectionStartCell) {
+      // Sprawdź czy obie komórki są w tej samej tabeli
       const startTable = this.cellSelectionStartCell.closest('table');
       const endTable = cell.closest('table');
       if (startTable && startTable === endTable) {
         this.isCellSelecting = true;
         event.preventDefault();
+        // Wyczyść selekcję tekstową przeglądarki
         window.getSelection()?.removeAllRanges();
         this.selectCellRange(this.cellSelectionStartCell, cell);
       }
@@ -1512,11 +2054,15 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   onCellMouseUp(event: MouseEvent): void {
     if (this.isCellSelecting) {
       this.isCellSelecting = false;
+      // Wyczyść selekcję tekstową przeglądarki - zostawiamy custom cell selection
       window.getSelection()?.removeAllRanges();
     }
     this.cellSelectionStartCell = null;
   }
 
+  /**
+   * Zaznacza prostokątny zakres komórek od start do end
+   */
   private selectCellRange(start: HTMLTableCellElement, end: HTMLTableCellElement): void {
     const table = start.closest('table') as HTMLTableElement;
     if (!table) return;
@@ -1543,22 +2089,34 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.applyCellSelection(newSelection);
   }
 
+  /**
+   * Stosuje wizualne zaznaczenie na podanych komórkach
+   */
   private applyCellSelection(cells: Set<HTMLTableCellElement>): void {
+    // Usuń stare zaznaczenie
     const prev = this.selectedCells();
     prev.forEach(c => c.classList.remove('table-cell-selected'));
+    // Zaznacz nowe
     cells.forEach(c => c.classList.add('table-cell-selected'));
     this.selectedCells.set(cells);
   }
 
+  /**
+   * Czyści zaznaczenie komórek
+   */
   clearCellSelection(): void {
     const prev = this.selectedCells();
     prev.forEach(c => c.classList.remove('table-cell-selected'));
     this.selectedCells.set(new Set());
   }
 
+  /**
+   * Obsługuje prawy przycisk myszy - menu kontekstowe
+   */
   @HostListener('contextmenu', ['$event'])
   onContextMenu(event: MouseEvent): void {
     const target = event.target as HTMLElement;
+    // Pokaż menu kontekstowe tylko w obszarze edytora
     const isEditorArea = target.closest('.editor-main') || 
                          target.closest('d2-wysiwyg-editor') ||
                          target.closest('.paper-container');
@@ -1567,12 +2125,18 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       this.closeAllMenus();
       this.contextSubmenu.set(null);
 
+      // Wykryj czy kliknięto w komórkę tabeli
       const cellTarget = target.closest('td, th') as HTMLElement | null;
       this.contextMenuTargetCell.set(cellTarget);
 
+      // Wykryj czy kliknięto w obraz
       const imgTarget = (target.tagName === 'IMG' ? target : target.closest('img')) as HTMLImageElement | null;
       this.contextMenuTargetImage.set(imgTarget);
 
+      // Oblicz pozycję — menu zawsze w granicach viewportu (nie zasłania toolbara ani nie
+      // wychodzi poza prawą/dolną krawędź). `Math.max(8, …)` jest kluczowe: bez dolnego
+      // ograniczenia clamp dolnej krawędzi na niskim oknie dawał ujemne `y` i menu wjeżdżało
+      // NAD viewport, zasłaniając toolbar (Issue: menu kontekstowe zasłania UI).
       const margin = 8;
       const menuWidth = 260;
       const menuHeight = 420;
@@ -1587,6 +2151,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Zamyka wszystkie menu
+   */
   closeAllMenus(): void {
     this.showMenu.set(false);
     this.showEditMenu.set(false);
@@ -1602,6 +2169,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showShadingDropdown.set(false);
   }
 
+  /**
+   * "Zakończ": utrwala stan edytora i wykonuje SYNCHRONICZNĄ pierwszą próbę wysyłki na returnUrl,
+   * pokazując komunikat „Trwa wysyłanie dokumentu ...". Sukces → status „Wysłano" + standardowe
+   * zakończenie (zamknięcie karty). Błąd → modal „Wystąpiły problemy z dostarczeniem dokumentu"
+   * z wyborem „Przerwij" / „Kontynuuj wysyłkę w tle". Guard `isFinishing` chroni przed dublami.
+   */
   finishDocument(): void {
     this.showMenu.set(false);
 
@@ -1634,27 +2207,34 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       switchMap(base64 => this.documentStorageService.finishAndSend(masterId, versionId, { content: base64 }))
     ).subscribe({
       next: result => {
+        // Okno zamknięte przez użytkownika — wysyłka leci w tle, nie dotykamy już UI.
         if (this.sendDetachedFromUi()) return;
 
         this.deliveryId.set(result.deliveryId);
         this.deliveryStatus.set(result.status);
 
         if (result.delivered) {
+          // „Wysłano" — kończymy jak dotychczas (zamknięcie karty / ekran końcowy).
           this.showSendingModal.set(false);
           this.enterFinishedAndCloseTab();
           return;
         }
 
         if (result.status === 'Sending') {
+          // Wysyłka wciąż trwa (np. równoległa próba w toku) — poprawny stan PRZEJŚCIOWY, nie błąd.
+          // Zostawiamy okno informacyjne; użytkownik może je zamknąć lub przerwać wysyłkę.
           return;
         }
 
+        // Rzeczywisty błąd dostarczenia — poproś użytkownika o decyzję (Przerwij / Kontynuuj w tle).
         this.showSendingModal.set(false);
         this.showSendErrorModal.set(true);
       },
       error: () => {
+        // Request przerwany przez użytkownika („Przerwij") albo okno zamknięte — to nie jest błąd.
         if (this.sendCancelled() || this.sendDetachedFromUi()) return;
 
+        // Pierwsza próba nie powiodła się (sieć / błąd serwera) — ta sama ścieżka co błąd wysyłki.
         this.showSendingModal.set(false);
         this.deliveryStatus.set('RetryScheduled');
         this.showSendErrorModal.set(true);
@@ -1662,6 +2242,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * „Przerwij wysyłkę" w trakcie trwającej wysyłki: przerywa request w locie (HttpClient anuluje XHR
+   * przy unsubscribe) i zgłasza anulowanie do backendu. Anulowanie NIE jest błędem — przechodzimy
+   * w neutralny stan „anulowano" i wracamy do edytora. Działa także, gdy próba już trwa.
+   */
   cancelSend(): void {
     this.sendCancelled.set(true);
     this.finishSendSub?.unsubscribe(); // anuluje request w locie — next/error się nie wywoła
@@ -1675,10 +2260,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
 
     this.documentStorageService.abortSend(masterId).subscribe({
       next: () => this.afterSendCancelled(),
+      // Backend mógł nie móc anulować (np. zadanie przejęte przez workera) — dla użytkownika to nadal
+      // anulowanie własnej wysyłki, a nie błąd techniczny. Pokazujemy neutralny stan anulowania.
       error: () => this.afterSendCancelled()
     });
   }
 
+  /** Wspólne domknięcie anulowania: neutralny stan „anulowano", powrót do edytora (bez błędu). */
   private afterSendCancelled(): void {
     this.isFinishing.set(false);
     this.sendCancelled.set(false);
@@ -1686,12 +2274,22 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showSuccess('Wysyłka anulowana. Możesz dalej edytować dokument.');
   }
 
+  /**
+   * „Zamknij" okno trwającej wysyłki: zamknięcie NIE jest błędem ani anulowaniem. Wysyłka biegnie
+   * dalej (inline kończy się po stronie serwera / dokańcza worker), a UI przechodzi w neutralny stan
+   * końcowy. `sendDetachedFromUi` pilnuje, by spóźniony wynik/błąd requestu nie wyskoczył jako modal.
+   */
   closeSendingModal(): void {
     this.sendDetachedFromUi.set(true);
     this.showSendingModal.set(false);
     this.enterFinishedAndCloseTab();
   }
 
+  /**
+   * „Przerwij" (po nieudanej pierwszej próbie): anuluje zadanie wysyłki (status ANULOWANY),
+   * ustawia dokument na „UzytkownikPrzerwałWysyłkę" i COFA użytkownika do edytora. Nie zamyka
+   * karty i nie kontynuuje wysyłki w tle.
+   */
   abortSend(): void {
     const masterId = this.documentMasterId();
     if (!masterId) return;
@@ -1708,6 +2306,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * „Kontynuuj wysyłkę w tle" (po nieudanej pierwszej próbie): przekazuje zadanie do workera
+   * (status „Zlecono do wysyłki"), zamyka kartę jak dotychczasowe zakończenie i NIE cofa do edytora.
+   */
   continueSendInBackground(): void {
     const masterId = this.documentMasterId();
     if (!masterId) return;
@@ -1724,6 +2326,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Wspólne zakończenie pracy (sukces wysyłki / kontynuacja w tle): zatrzymuje auto-save, wchodzi
+   * w blokujący stan końcowy (żeby nie wrócić do edycji zakończonego dokumentu) i próbuje zamknąć
+   * kartę. Gdy przeglądarka odmówi (karta nieotwarta skryptem) — pokazujemy ekran z instrukcją.
+   */
   private enterFinishedAndCloseTab(): void {
     this.isFinishing.set(false);
     this.stopAutoSave();
@@ -1733,13 +2340,25 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.tryCloseBrowserTab();
   }
 
+  /**
+   * Best-effort zamknięcie karty. `window.close()` działa niezawodnie tylko dla okien
+   * otwartych skryptem — gdy przeglądarka odmówi, NIE jest to błąd krytyczny: modal jest już
+   * zamknięty, edytor zostaje w neutralnym stanie. Owijamy w try/catch, by nie wywrócić apki.
+   */
   private tryCloseBrowserTab(): void {
     try {
       window.close();
     } catch {
+      // Neutralny stan końcowy — brak dalszych akcji.
     }
   }
 
+  /**
+   * Ponowna próba zamknięcia karty z ekranu końcowego (przycisk „Zamknij kartę").
+   * `window.close()` działa tylko dla kart otwartych skryptem (window.open) — gdy karta została
+   * otwarta ręcznie/linkiem, Chrome odmawia. Jeśli po próbie strona nadal żyje, pokazujemy
+   * wskazówkę o ręcznym zamknięciu (skrótem klawiaturowym).
+   */
   closeFinishedTab(): void {
     this.tryCloseBrowserTab();
     clearTimeout(this.tabCloseHintTimer);
@@ -1747,6 +2366,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   }
 
   openReportEmail(): void {
+    // Triggered from the Pomoc dropdown — close it like the other menu actions do.
     this.closeAllMenus();
 
     const subject = encodeURIComponent('[Qutas Editor] Zgłoszenie');
@@ -1757,10 +2377,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       this.buildDiagnosticsBlock()
     );
 
+    // Odbiorca z konfiguracji środowiska (pusty → klient poczty poprosi o adres).
     const to = environment.supportEmail ?? '';
     window.open(`mailto:${to}?subject=${subject}&body=${body}`, '_self');
   }
 
+  /**
+   * Kopiuje blok informacji diagnostycznych do schowka — siatka bezpieczeństwa, gdy
+   * `mailto:` nie zadziała (brak skonfigurowanego klienta poczty, ucięcie długiej treści
+   * przez przeglądarkę). Użytkownik może wkleić dane w dowolny kanał zgłoszenia.
+   */
   copyDiagnostics(): void {
     this.closeAllMenus();
     const text = this.formatDiagnostics(this.collectDiagnosticRows());
@@ -1769,8 +2395,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       .catch(() => this.notification.error('Nie udało się skopiować informacji diagnostycznych'));
   }
 
+  /**
+   * Zbiera pary „etykieta : wartość" z danymi diagnostycznymi zgłoszenia.
+   * Metody `buildInfo.*` czytane defensywnie (`?.()`) — część stubów testowych ich nie dostarcza.
+   */
   private collectDiagnosticRows(): Array<[string, string]> {
     const masterId = this.documentMasterId() ?? '—';
+    // VersionId aktualnie otwartej wersji edytowalnej (sygnał ustawiany z query param `versionId`).
+    // Fallback „—" TYLKO gdy faktycznie brak wersji (tryb podglądu read-only bez versionId).
     const versionId = this.documentVersionId() ?? '—';
 
     const rows: Array<[string, string]> = [
@@ -1790,6 +2422,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       ['Ekran',            `${window.screen.width}×${window.screen.height}`],
     ];
 
+    // Ostatni błąd HTTP — najcenniejsza informacja diagnostyczna, gdy istnieje.
     const err = this.lastHttpError.lastError();
     if (err) {
       rows.push(['Ostatni błąd',  `HTTP ${err.status} ${err.method} ${err.url}`]);
@@ -1800,11 +2433,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return rows;
   }
 
+  /** Formatuje pary diagnostyczne w wyrównaną kolumnę „etykieta : wartość". */
   private formatDiagnostics(rows: Array<[string, string]>): string {
     const labelWidth = Math.max(...rows.map(([k]) => k.length));
     return rows.map(([k, v]) => `  ${k.padEnd(labelWidth)} : ${v}`).join('\n');
   }
 
+  /** Otoczony ramką blok diagnostyczny wklejany do treści maila. */
   private buildDiagnosticsBlock(): string {
     const separator = '────────────────────────────────────────────';
     return (
@@ -1816,32 +2451,55 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     );
   }
 
+  /**
+   * Ustawia aktywne podmenu
+   */
   setActiveSubmenu(submenu: string | null): void {
     this.activeSubmenu.set(submenu);
   }
 
+  // =====================
+  // MENU EDYTUJ
+  // =====================
 
+  /**
+   * Cofnij
+   */
   undo(): void {
     this.editor?.executeCommand('undo');
     this.closeAllMenus();
   }
 
+  /**
+   * Ponów
+   */
   redo(): void {
     this.editor?.executeCommand('redo');
     this.closeAllMenus();
   }
 
+  /**
+   * Wytnij
+   */
   cut(): void {
     document.execCommand('cut');
     this.closeAllMenus();
   }
 
+  /**
+   * Kopiuj
+   */
   copy(): void {
     document.execCommand('copy');
     this.closeAllMenus();
   }
 
+  /**
+   * Wklej
+   */
   paste(): void {
+    // Capture the target selection synchronously, before the async clipboard read
+    // and the menu teardown move it (see pasteWithoutFormatting for the details).
     const target = this.editor?.captureSelectionBookmark() ?? null;
     this.closeAllMenus();
     navigator.clipboard.readText()
@@ -1849,7 +2507,15 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       .catch(() => { document.execCommand('paste'); });
   }
 
+  /**
+   * Wklej bez formatowania
+   */
   pasteWithoutFormatting(): void {
+    // Snapshot the target selection synchronously — BEFORE closing the menu and the
+    // async clipboard read. Otherwise the paste lands at whatever selection is live
+    // after the await (historically the source range), which also made the text keep
+    // the source formatting. readText() yields text/plain only, so formatting is
+    // dropped by construction. On denied clipboard we fail quietly (Ctrl+Shift+V works).
     const target = this.editor?.captureSelectionBookmark() ?? null;
     this.closeAllMenus();
     navigator.clipboard.readText()
@@ -1857,18 +2523,34 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       .catch(() => { /* brak dostępu do schowka */ });
   }
 
+  /**
+   * Zaznacz wszystko
+   */
   selectAll(): void {
     this.editor?.executeCommand('selectAll');
     this.closeAllMenus();
   }
 
+  /**
+   * Usuń zaznaczenie
+   */
   deleteSelection(): void {
     document.execCommand('delete');
     this.closeAllMenus();
   }
 
+  /**
+   * Globalne skróty klawiszowe edycji: Ctrl/Cmd+F → Znajdź (oba tryby, w read-only bez
+   * zamiany), Ctrl/Cmd+H → Znajdź i zamień, Ctrl/Cmd+A → zaznacz treść dokumentu oraz
+   * Ctrl/Cmd+Z/Y/X/C/V → cofnij/ponów/wytnij/kopiuj/wklej. Skróty edycyjne działają tylko
+   * poza polami formularzy i contenteditable: wewnątrz stron edytora Ctrl+Z/Y obsługuje
+   * keydown wysiwyg-editora, a X/C/V natywny mechanizm przeglądarki (zdarzenia cut/copy/
+   * paste, w tym handlePaste); tu domykamy przypadek fokusu poza kartką (toolbar, tło).
+   */
   @HostListener('document:keydown', ['$event'])
   onGlobalKeydown(e: KeyboardEvent): void {
+    // e.altKey odfiltrowuje AltGr (Ctrl+Alt na Windows) — polskie znaki ż/ź/ć nie mogą
+    // wyzwalać skrótów.
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     const key = e.key.toLowerCase();
     if (key === 'f') {
@@ -1882,6 +2564,8 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       return;
     }
     if (key === 'a') {
+      // Ctrl+A → zaznacz tylko treść dokumentu (nie całe body z menu/paskami).
+      // Pomijamy pola formularzy, by nie psuć natywnego zaznaczania w inputach.
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       e.preventDefault();
@@ -1889,6 +2573,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Pozostałe skróty nie mogą przechwytywać natywnej edycji w polach formularzy ani
+    // w contenteditable (strony dokumentu, edytory nagłówka/stopki). Obok
+    // isContentEditable sprawdzamy atrybut przez closest — jsdom (testy) nie
+    // implementuje isContentEditable.
     const target = e.target as HTMLElement | null;
     const tag = target?.tagName;
     const inContentEditable = !!target && (target.isContentEditable
@@ -1929,49 +2617,80 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Otwiera dialog Znajdź i zamień
+   */
   openFindReplace(): void {
     this.showFindReplace.set(true);
+    // Wyszukiwanie (jawnie wywołane) przejmuje dokowany obszar po lewej.
     this.showTablePanel.set(false);
     this.closeAllMenus();
   }
 
+  // =====================
+  // MENU FORMATUJ
+  // =====================
 
+  /**
+   * Pogrubienie
+   */
   toggleBold(): void {
     this.editor?.executeCommand('bold');
     this.closeAllMenus();
   }
 
+  /**
+   * Kursywa
+   */
   toggleItalic(): void {
     this.editor?.executeCommand('italic');
     this.closeAllMenus();
   }
 
+  /**
+   * Podkreślenie
+   */
   toggleUnderline(): void {
     this.editor?.executeCommand('underline');
     this.closeAllMenus();
   }
 
+  /**
+   * Przekreślenie
+   */
   toggleStrikethrough(): void {
     this.editor?.executeCommand('strikethrough');
     this.closeAllMenus();
   }
 
+  /**
+   * Indeks górny
+   */
   toggleSuperscript(): void {
     this.editor?.executeCommand('superscript');
     this.closeAllMenus();
   }
 
+  /**
+   * Indeks dolny
+   */
   toggleSubscript(): void {
     this.editor?.executeCommand('subscript');
     this.closeAllMenus();
   }
 
+  /**
+   * Zwiększ rozmiar czcionki
+   */
   increaseFontSize(): void {
     const currentSize = this.editorState()?.currentStyle?.fontSize || 11;
     this.editor?.setFontSize(currentSize + 1);
     this.closeAllMenus();
   }
 
+  /**
+   * Zmniejsz rozmiar czcionki
+   */
   decreaseFontSize(): void {
     const currentSize = this.editorState()?.currentStyle?.fontSize || 11;
     if (currentSize > 1) {
@@ -1980,6 +2699,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  /**
+   * Zmień na wielkie litery
+   */
   toUpperCase(): void {
     const selection = window.getSelection();
     if (selection && selection.toString()) {
@@ -1989,6 +2711,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  /**
+   * Zmień na małe litery
+   */
   toLowerCase(): void {
     const selection = window.getSelection();
     if (selection && selection.toString()) {
@@ -1998,6 +2723,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  /**
+   * Zmień na Kapitaliki (każde słowo z wielkiej litery)
+   */
   toTitleCase(): void {
     const selection = window.getSelection();
     if (selection && selection.toString()) {
@@ -2007,52 +2735,87 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  /**
+   * Wyrównaj do lewej
+   */
   alignLeft(): void {
     this.editor?.executeCommand('justifyLeft');
     this.closeAllMenus();
   }
 
+  /**
+   * Wyrównaj do środka
+   */
   alignCenter(): void {
     this.editor?.executeCommand('justifyCenter');
     this.closeAllMenus();
   }
 
+  /**
+   * Wyrównaj do prawej
+   */
   alignRight(): void {
     this.editor?.executeCommand('justifyRight');
     this.closeAllMenus();
   }
 
+  /**
+   * Wyjustuj
+   */
   alignJustify(): void {
     this.editor?.executeCommand('justifyFull');
     this.closeAllMenus();
   }
 
+  /**
+   * Zwiększ wcięcie
+   */
   increaseIndent(): void {
     this.editor?.executeCommand('indent');
     this.closeAllMenus();
   }
 
+  /**
+   * Zmniejsz wcięcie
+   */
   decreaseIndent(): void {
     this.editor?.executeCommand('outdent');
     this.closeAllMenus();
   }
 
+  /**
+   * Interlinia pojedyncza
+   */
   setLineSpacingSingle(): void {
     this.setLineSpacing(1);
   }
 
+  /**
+   * Interlinia 1.15
+   */
   setLineSpacing115(): void {
     this.setLineSpacing(1.15);
   }
 
+  /**
+   * Interlinia 1.5
+   */
   setLineSpacing15(): void {
     this.setLineSpacing(1.5);
   }
 
+  /**
+   * Interlinia podwójna
+   */
   setLineSpacingDouble(): void {
     this.setLineSpacing(2);
   }
 
+  /**
+   * Ustawia interlinię (mnożnik Worda). Wartość renderowa jest kalibrowana metrykami
+   * fontu + marker --w-line-tw dla round-tripu (PG-09) — ta sama semantyka co reader,
+   * dzięki czemu wygląd nie zmienia się po zapisie i ponownym otwarciu.
+   */
   private setLineSpacing(value: number): void {
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0) {
@@ -2061,33 +2824,51 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       if (block.nodeType === Node.TEXT_NODE) {
         block = block.parentNode!;
       }
+      // Znajdź blok
       while (block && !['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI'].includes((block as HTMLElement).tagName)) {
         block = block.parentNode!;
       }
       if (block) {
         applyWordLineSpacing(block as HTMLElement, value);
+        // Zmiana interlinii zmienia układ i musi trafić do zapisu (persist + repaginacja).
         this.notifyEditorChange();
       }
     }
     this.closeAllMenus();
   }
 
+  /**
+   * Dodaj odstęp przed akapitem
+   */
   addSpaceBefore(): void {
     this.setBlockSpacing('marginTop', '12pt');
   }
 
+  /**
+   * Usuń odstęp przed akapitem
+   */
   removeSpaceBefore(): void {
     this.setBlockSpacing('marginTop', '0');
   }
 
+  /**
+   * Dodaj odstęp po akapicie
+   */
   addSpaceAfter(): void {
     this.setBlockSpacing('paddingBottom', '12pt');
   }
 
+  /**
+   * Usuń odstęp po akapicie
+   */
   removeSpaceAfter(): void {
     this.setBlockSpacing('paddingBottom', '0');
   }
 
+  /**
+   * Ustawia odstęp bloku. Odstęp PO akapicie = padding-bottom (ADR-0053: sumuje się
+   * z margin-top następnego jak w Wordzie; marginesy CSS kolapsują do max).
+   */
   private setBlockSpacing(property: 'marginTop' | 'paddingBottom', value: string): void {
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0) {
@@ -2101,6 +2882,8 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       }
       if (block) {
         (block as HTMLElement).style[property] = value;
+        // Odstęp „po" mógł dotąd siedzieć w margin-bottom (treść sprzed ADR-0053,
+        // akapity z tłem) — czyścimy, żeby się nie dublował z padding-bottom.
         if (property === 'paddingBottom') {
           (block as HTMLElement).style.marginBottom = '';
         }
@@ -2109,29 +2892,46 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  /**
+   * Lista punktowana
+   */
   insertBulletList(): void {
     this.editor?.executeCommand('insertUnorderedList');
     this.closeAllMenus();
   }
 
+  /**
+   * Lista numerowana
+   */
   insertNumberedList(): void {
     this.editor?.executeCommand('insertOrderedList');
     this.closeAllMenus();
   }
 
+  /**
+   * Wyczyść formatowanie
+   */
   clearFormatting(): void {
     this.editor?.executeCommand('removeFormat');
     this.closeAllMenus();
   }
 
+  /**
+   * Otwiera dialog wstawiania kodu kreskowego / QR
+   */
   openBarcodeDialog(): void {
+    // Zapisz selekcję przed otwarciem dialogu - dialog zabierze fokus z edytora
     this.editor?.saveSelection();
     this.showBarcodeDialog.set(true);
     this.closeAllMenus();
   }
 
+  /**
+   * Wstawia kod kreskowy / QR do edytora
+   */
   onInsertBarcode(event: { base64Image: string; content: string; showValueBelow: boolean }): void {
     if (this.editor) {
+      // Przywróć fokus i selekcję w edytorze przed wstawieniem
       this.editor.focus();
       this.editor.restoreSelection();
       if (event.showValueBelow) {
@@ -2143,54 +2943,86 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showBarcodeDialog.set(false);
   }
 
+  /**
+   * Zamyka dialog kodu kreskowego
+   */
   closeBarcodeDialog(): void {
     this.showBarcodeDialog.set(false);
   }
 
+  /**
+   * Wstawia linię poziomą
+   */
   insertHorizontalLine(): void {
     this.editor?.insertHorizontalRule();
     this.closeAllMenus();
   }
 
+  /**
+   * Wstawia podział strony
+   */
   insertPageBreak(): void {
     this.editor?.insertPageBreak();
     this.closeAllMenus();
   }
 
+  /**
+   * Ustawia liczbę kolumn układu dokumentu (sekcja bazowa). 1 = jedna kolumna (ADR-0039).
+   */
   setColumns(count: number): void {
     this.editor?.setBaseColumns(count);
     this.closeAllMenus();
   }
 
+  /** Aktualna liczba kolumn sekcji bazowej — do podświetlenia wyboru w menu. */
   currentColumnCount(): number {
     return this.editor?.getBaseColumnCount() ?? 1;
   }
 
+  /**
+   * Wstawia podział kolumny w pozycji kursora (dalsza treść → następna kolumna).
+   */
   insertColumnBreak(): void {
     this.editor?.insertColumnBreak();
     this.closeAllMenus();
   }
 
+  /**
+   * Rozpoczyna edycję nagłówka
+   */
   editHeader(): void {
     this.editor?.startEditingHeader();
   }
 
+  /**
+   * Rozpoczyna edycję stopki
+   */
   editFooter(): void {
     this.editor?.startEditingFooter();
   }
 
+  // =====================
+  // ZNAJDŹ I ZAMIEŃ
+  // =====================
   findText = signal('');
   replaceText = signal('');
+  /** Liczba trafień i indeks bieżącego (do wyświetlenia „x z y" w panelu). */
   findResultCount = signal(0);
   findCurrentIndex = signal(-1);
+  /** Lista wyników do panelu „Wyszukiwanie" — fragmenty tekstu z kontekstem wokół trafienia. */
   searchResults = signal<{ before: string; match: string; after: string }[]>([]);
 
+  /** Odświeża licznik + listę wyników na podstawie aktualnych podświetleń edytora. */
   private refreshSearchResults(result: { count: number; currentIndex: number }): void {
     this.findResultCount.set(result.count);
     this.findCurrentIndex.set(result.currentIndex);
     this.searchResults.set(this.editor?.getSearchSnippets() ?? []);
   }
 
+  /**
+   * Wyszukiwanie na żywo podczas wpisywania — podświetla wszystkie trafienia i przewija
+   * do pierwszego (przez prawdziwe API edytora, nie ułomne `window.find`).
+   */
   onFindInput(value: string): void {
     this.findText.set(value);
     if (!value || !this.editor) {
@@ -2205,6 +3037,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.refreshSearchResults(this.editor.searchText(value, 'next'));
   }
 
+  /** Następne trafienie (pierwsze wyszukanie, jeśli tekst się zmienił). */
   findNext(): void {
     const text = this.findText();
     if (!text || !this.editor) return;
@@ -2214,6 +3047,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.refreshSearchResults(result);
   }
 
+  /** Poprzednie trafienie. */
   findPrev(): void {
     const text = this.findText();
     if (!text || !this.editor) return;
@@ -2223,11 +3057,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.refreshSearchResults(result);
   }
 
+  /** Klik na wyniku w panelu — skok do trafienia (podświetlenie + przewinięcie). */
   goToResult(index: number): void {
     const result = this.editor?.goToMatch(index);
     if (result) this.findCurrentIndex.set(result.currentIndex);
   }
 
+  /** Zamknij panel wyszukiwania i wyczyść podświetlenia. */
   closeFindReplace(): void {
     this.showFindReplace.set(false);
     this.editor?.clearSearchHighlights();
@@ -2235,9 +3071,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.findResultCount.set(0);
     this.findCurrentIndex.set(-1);
     this.searchResults.set([]);
+    // Jeśli karetka nadal jest w tabeli, przywróć panel tabeli w zwolnionym doku.
     this.syncTablePanel();
   }
 
+  /**
+   * Zamienia bieżące trafienie (tylko gdy edycja dozwolona).
+   */
   replaceOne(): void {
     if (this.editingDisabled() || !this.editor || !this.findText()) return;
     if (this.findText() !== this.lastSearchText) {
@@ -2249,6 +3089,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.findCurrentIndex.set(result.currentIndex);
   }
 
+  /**
+   * Zamienia wszystkie trafienia (tylko gdy edycja dozwolona).
+   */
   replaceAll(): void {
     if (this.editingDisabled() || !this.editor || !this.findText()) return;
     if (this.findText() !== this.lastSearchText) {
@@ -2261,16 +3104,25 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showSuccess(`Zamieniono wszystkie wystąpienia "${this.findText()}"`);
   }
 
+  /**
+   * Zamyka menu po kliknięciu poza
+   */
   closeMenuOnOutsideClick(event: MouseEvent): void {
     this.showMenu.set(false);
     this.showTemplates.set(false);
   }
 
+  /**
+   * Otwiera dialog ustawień strony
+   */
   openPageSetup(): void {
     this.showPageSetup.set(true);
     this.showMenu.set(false);
   }
 
+  /**
+   * Ustawia preset marginesów
+   */
   applyMarginPreset(preset: { name: string; margins: PageMargins }): void {
     this.pageSettings.update(s => ({
       ...s,
@@ -2278,6 +3130,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  /**
+   * Aktualizuje pojedynczy margines
+   */
   updateMargin(side: keyof PageMargins, value: number): void {
     this.pageSettings.update(s => ({
       ...s,
@@ -2285,6 +3140,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  /**
+   * Pobiera style marginesów w pikselach
+   */
   getMarginStyles(): { [key: string]: string } {
     const m = this.pageSettings().margins;
     const cmToPx = CSS_PX_PER_CM;
@@ -2296,10 +3154,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     };
   }
 
+  /**
+   * Zmienia orientację strony
+   */
   setOrientation(orientation: 'portrait' | 'landscape'): void {
     this.pageSettings.update(s => ({ ...s, orientation }));
   }
 
+  /**
+   * Sprawdza czy preset marginesów jest aktywny
+   */
   isPresetActive(preset: { name: string; margins: PageMargins }): boolean {
     const current = this.pageSettings().margins;
     return current.top === preset.margins.top &&
@@ -2308,6 +3172,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
            current.right === preset.margins.right;
   }
 
+  /**
+   * Pobiera style dla podglądu presetu
+   */
   getPresetPreviewStyle(preset: { name: string; margins: PageMargins }): { [key: string]: string } {
     const m = preset.margins;
     const scale = 2; // Skala dla miniaturki
@@ -2316,6 +3183,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     };
   }
 
+  /**
+   * Pobiera style dla podglądu strony
+   */
   getPreviewStyle(): { [key: string]: string } {
     const settings = this.pageSettings();
     const isLandscape = settings.orientation === 'landscape';
@@ -2326,6 +3196,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     };
   }
 
+  /**
+   * Pobiera style dla obszaru zawartości w podglądzie
+   */
   getContentPreviewStyle(): { [key: string]: string } {
     const m = this.pageSettings().margins;
     const scale = 4; // Skala dla podglądu
@@ -2337,12 +3210,22 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     };
   }
 
+  /**
+   * Aplikuje ustawienia strony do edytora
+   */
   applyPageSettings(): void {
+    // Marginesy zostaną przekazane do edytora przez style
     this.showPageSetup.set(false);
     this.showSuccess('Zastosowano ustawienia strony');
   }
 
+  // ================================
+  // Dialog Nagłówka i Stopki
+  // ================================
 
+  /**
+   * Otwiera dialog nagłówka i stopki
+   */
   onOpenHeaderFooterSettings(data: {
     headerMargin: number;
     footerMargin: number;
@@ -2353,10 +3236,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showHeaderFooterDialog.set(true);
   }
 
+  /**
+   * Zamyka dialog nagłówka i stopki
+   */
   closeHeaderFooterDialog(): void {
     this.showHeaderFooterDialog.set(false);
   }
 
+  /**
+   * Aktualizuje dane dialogu
+   */
   updateHeaderFooterDialogData(field: string, value: number | boolean): void {
     this.headerFooterDialogData.update(data => ({
       ...data,
@@ -2364,14 +3253,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  /**
+   * Zatwierdza ustawienia nagłówka i stopki
+   */
   applyHeaderFooterSettings(): void {
     const data = this.headerFooterDialogData();
     this.editor?.applyHeaderFooterSettings(data);
     this.closeHeaderFooterDialog();
   }
 
+  // =====================
+  // MINI TOOLBAR
+  // =====================
 
   onEditorMouseUp(event: MouseEvent): void {
+    // Nie pokazuj jeśli otwarte jest menu kontekstowe
     if (this.showContextMenu()) return;
 
     setTimeout(() => {
@@ -2394,7 +3290,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       let x = rect.left + rect.width / 2 - toolbarWidth / 2;
       let y = rect.top - toolbarHeight - margin;
 
+      // Nie wychodź poza lewą/prawą krawędź ekranu
       x = Math.max(margin, Math.min(x, window.innerWidth - toolbarWidth - margin));
+      // Jeśli nie mieści się nad — pokaż pod
       if (y < margin) {
         y = rect.bottom + margin;
       }
@@ -2412,21 +3310,31 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Zapobiega utracie selekcji w edytorze przy klikaniu w mini-toolbar,
+   *  ale pozwala INPUT i SELECT na normalne działanie.
+   *  Dla INPUT/SELECT selekcja jest zapisywana PRZED przeniesieniem focusu
+   *  przez przeglądarkę (mousedown odpala się przed blur edytora). */
   onMiniToolbarMouseDown(event: MouseEvent): void {
     const target = event.target as HTMLElement;
     if (target.tagName === 'INPUT' || target.tagName === 'SELECT') {
+      // Zapisz selekcję zanim focus przejdzie do kontrolki i edytor ją wyczyści
       this.editor?.saveSelection();
     } else {
       event.preventDefault();
     }
   }
 
+  /**
+   * Stan przycisków wyrównania (mini-toolbar / menu kontekstowe) — jak w Wordzie
+   * dokładnie jeden aktywny; brak jawnego text-align = „do lewej".
+   */
   alignmentActive(align: 'left' | 'center' | 'right' | 'justify'): boolean {
     return (this.editorState()?.currentFormatting?.alignment ?? 'left') === align;
   }
 
   miniToolbarCommand(command: string): void {
     this.editor?.executeCommand(command as any);
+    // Nie zamykaj — użytkownik może kliknąć kolejny przycisk
     setTimeout(() => {
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed) {
@@ -2487,6 +3395,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.editor?.executeCommand('outdent');
   }
 
+  // =====================
+  // MENU KONTEKSTOWE
+  // =====================
 
   closeContextMenu(): void {
     this.showContextMenu.set(false);
@@ -2543,7 +3454,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeContextMenu();
   }
 
+  /**
+   * Ustawia kolor tła komórki tabeli (context menu + toolbar)
+   */
   setCellColor(color: string): void {
+    // Użyj custom zaznaczenia lub aktywnej/target komórki
     const customSelected = this.selectedCells();
     if (customSelected.size > 0) {
       customSelected.forEach(c => (c as HTMLElement).style.backgroundColor = color);
@@ -2558,6 +3473,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /**
+   * Czyści kolor tła komórki tabeli
+   */
   clearCellColor(): void {
     const customSelected = this.selectedCells();
     if (customSelected.size > 0) {
@@ -2573,11 +3491,19 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  // =====================
+  // TABELA – MENU KONTEKSTOWE
+  // =====================
 
   private getContextCell(): HTMLElement | null {
     return this.contextMenuTargetCell() || this.activeTableCell();
   }
 
+  /**
+   * Nowa komórka przejmuje inline style komórki-wzorca (padding/border z DOCX) —
+   * goły <td> spadał na domyślne CSS edytora i wiersz miał inne wcięcia niż reszta
+   * tabeli w edytorze oraz inne tcMar po zapisie.
+   */
   private createCellLike(reference: HTMLTableCellElement | undefined): HTMLTableCellElement {
     const td = document.createElement('td');
     const style = reference?.getAttribute('style');
@@ -2680,6 +3606,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeContextMenu();
   }
 
+  // =====================
+  // GRAFIKA – MENU KONTEKSTOWE
+  // =====================
 
   contextMenuAlignImageLeft(): void {
     const img = this.contextMenuTargetImage();
@@ -2717,16 +3646,24 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeContextMenu();
   }
 
+  /**
+   * Pobiera zaznaczone komórki tabeli (z custom cell selection)
+   */
   private getSelectedCells(selection: Selection, editor: HTMLElement): HTMLElement[] {
+    // Użyj custom zaznaczenia komórek
     const customSelected = this.selectedCells();
     if (customSelected.size > 0) {
       return Array.from(customSelected);
     }
 
+    // Fallback: aktywna komórka
     const cell = this.activeTableCell();
     return cell ? [cell] : [];
   }
 
+  // =====================
+  // MENU NARZĘDZIA
+  // =====================
 
   toggleToolsMenu(): void {
     const wasOpen = this.showToolsMenu();
@@ -2734,6 +3671,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showToolsMenu.set(!wasOpen);
   }
 
+  // =====================
+  // MENU WIDOK
+  // =====================
 
   toggleViewMenu(): void {
     const wasOpen = this.showViewMenu();
@@ -2757,6 +3697,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  /**
+   * Obsługuje zmianę marginesów z linijki (drag & drop)
+   */
   onRulerMarginsChange(margins: PageMargins): void {
     this.pageSettings.update(s => ({
       ...s,
@@ -2764,10 +3707,17 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  /**
+   * Aktualizuje stan linii prowadzącej linijki (kreska nad kartką podczas drag).
+   */
   onRulerDragGuide(e: { active: boolean; axis: 'horizontal' | 'vertical'; offsetPx: number }): void {
     this.rulerGuide.set({ ...e });
   }
 
+  /**
+   * Reaguje na zmianę edytowanej sekcji (treść / nagłówek / stopka) — przełącza
+   * obrazowanie pionowej linijki na pasmo nagłówka/stopki.
+   */
   onEditingSectionChange(section: 'header' | 'footer' | 'body'): void {
     this.editingSection.set(section);
     if (section === 'body') {
@@ -2775,10 +3725,19 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Przyjmuje zmierzoną geometrię pasma nagłówka/stopki do obrazowania pionowej linijki. */
   onSectionGeometryChange(geo: { section: 'header' | 'footer'; topCm: number; bottomCm: number }): void {
     this.sectionGeometry.set(geo);
   }
 
+  /**
+   * Zmiana z PIONOWEJ linijki.
+   * - tryb `body`: zwykła zmiana górnego/dolnego marginesu strony.
+   * - tryb `header`: dolny uchwyt = dolna krawędź pasma → nowa wysokość nagłówka.
+   * - tryb `footer`: górny uchwyt = górna krawędź pasma → nowa wysokość stopki.
+   * (jak „header/footer from edge" w MS Word). Wysokość spinamy przez setHeaderHeight/
+   * setFooterHeight, co emituje headerChange/footerChange i odświeża pasmo + linijkę.
+   */
   onVerticalRulerMarginsChange(margins: PageMargins): void {
     const section = this.editingSection();
     if (section === 'body') {
@@ -2800,6 +3759,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Obsługuje zmianę wcięcia paragrafu z poziomej linijki (drag & drop).
+   * Zachowuje się jak w MS Word: zmiana dotyczy TYLKO zaznaczonych bloków
+   * (paragraf, lista, tabela, obraz/figura), a NIE marginesów ca\u0142ego dokumentu.
+   */
   onRulerBlockIndentChange(indent: { start?: number; end?: number }): void {
     const blocks = this.getSelectedBlocks();
     if (blocks.length === 0) return;
@@ -2823,19 +3787,30 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       }
     }
 
+    // Zaktualizuj sygna\u0142 wci\u0119cia (uchwyty linijki natychmiast podskakuj\u0105 do nowej pozycji)
     this.currentBlockIndent.update(prev => ({
       start: indent.start !== undefined ? indent.start : prev.start,
       end: indent.end !== undefined ? indent.end : prev.end
     }));
 
+    // Powiadom edytor o modyfikacji (auto-save / dirty flag)
     this.editor?.triggerContentChange();
   }
 
+  /**
+   * Nas\u0142uchuje zmian zaznaczenia, \u017ceby zaktualizowa\u0107 odczyt wci\u0119cia paragrafu
+   * dla poziomej linijki.
+   */
   @HostListener('document:selectionchange')
   onDocumentSelectionChange(): void {
     this.updateCurrentBlockIndent();
   }
 
+  /**
+   * Znajduje wszystkie unikalne bloki nadrz\u0119dne zawarte w aktualnym zaznaczeniu.
+   * Blokiem jest: P, H1\u2013H6, UL, OL, LI, TABLE, FIGURE, BLOCKQUOTE, DIV (poza wrapperami).
+   * Je\u015bli zaznaczona jest grafika \u2014 zwracamy paragraf w kt\u00f3rym jest osadzona (lub IMG).
+   */
   private getSelectedBlocks(): HTMLElement[] {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return [];
@@ -2861,6 +3836,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       const b = findBlock(range.startContainer);
       if (b) blocks.push(b);
     } else {
+      // Iteruj po w\u0119z\u0142ach mi\u0119dzy startem a ko\u0144cem
       const walker = document.createTreeWalker(
         range.commonAncestorContainer,
         NodeFilter.SHOW_ELEMENT,
@@ -2872,11 +3848,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
           }
         }
       );
+      // Dodaj rodzic\u00f3w start/end na wypadek gdyby walker pomin\u0105\u0142
       const startBlock = findBlock(range.startContainer);
       if (startBlock) blocks.push(startBlock);
       let node = walker.nextNode();
       while (node) {
         const el = node as HTMLElement;
+        // Pomi\u0144 LI je\u015bli ma rodzica UL/OL w blocks (bo wci\u0119cie aplikujemy do listy)
         blocks.push(el);
         node = walker.nextNode();
       }
@@ -2884,12 +3862,15 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       if (endBlock) blocks.push(endBlock);
     }
 
+    // Deduplikacja + filtracja: je\u015bli mamy UL/OL i jego LI \u2014 zostaw UL/OL.
+    // Je\u015bli mamy IMG i jego paragraf \u2014 zostaw paragraf (CSS margin na P dzia\u0142a lepiej).
     const result: HTMLElement[] = [];
     for (const b of blocks) {
       if (seen.has(b)) continue;
       seen.add(b);
       result.push(b);
     }
+    // Usu\u0144 LI je\u015bli rodzic UL/OL te\u017c jest w secie
     const filtered = result.filter(el => {
       if (el.tagName === 'LI') {
         const parent = el.parentElement;
@@ -2898,6 +3879,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         }
       }
       if (el.tagName === 'IMG') {
+        // Zamie\u0144 na rodzica paragrafu
         let p = el.parentElement;
         while (p && !['P', 'DIV', 'FIGURE'].includes(p.tagName)) p = p.parentElement;
         if (p) {
@@ -2914,6 +3896,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return filtered;
   }
 
+  /**
+   * Odczytuje wci\u0119cie (margin-left/right) z pierwszego bloku w zaznaczeniu
+   * i zapisuje do `currentBlockIndent`. Warto\u015bci w cm (px / CSS_PX_PER_CM).
+   */
   private updateCurrentBlockIndent(): void {
     const blocks = this.getSelectedBlocks();
     if (blocks.length === 0) {
@@ -2934,6 +3920,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.updateColumnRulerContext(block);
   }
 
+  /**
+   * Wylicza dla poziomej linijki geometrię kolumn sekcji, w której stoi kursor.
+   * Szerokości i pozycje bierzemy z computed style (px layoutu — transform zoomu ich
+   * nie zmienia); recty służą tylko do wyznaczenia offsetu pasma i aktywnej kolumny,
+   * dlatego dzielimy je przez faktyczną skalę (rect.width / offsetWidth).
+   */
   private updateColumnRulerContext(block: HTMLElement): void {
     const band = block.closest<HTMLElement>('.docx-col-band');
     const editorContent = block.closest<HTMLElement>('.editor-content');
@@ -2958,6 +3950,8 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const pageRect = editorContent.getBoundingClientRect();
     const scale = editorContent.offsetWidth > 0 ? pageRect.width / editorContent.offsetWidth : 1;
     const containerRect = container.getBoundingClientRect();
+    // Lewa krawędź obszaru kolumn względem lewej krawędzi kartki (px layoutu):
+    // .editor-content zaczyna się na krawędzi kartki (padding = margines strony)
     const contentLeftViewportPx = containerRect.left + padLeftPx * scale;
     const baseStartPx = (contentLeftViewportPx - pageRect.left) / scale;
 
@@ -2968,6 +3962,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       widthCm: round2(colWidthPx * cmPerPx)
     }));
 
+    // Aktywna kolumna z pozycji X punktu skupienia zaznaczenia (fallback: rect bloku)
     const focusX = this.getSelectionFocusX() ?? block.getBoundingClientRect().left;
     const relPx = (focusX - contentLeftViewportPx) / scale;
     const activeIndex = Math.max(0, Math.min(count - 1, Math.floor(relPx / (colWidthPx + gapPx))));
@@ -2975,6 +3970,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.setColumnRuler({ segments, activeIndex });
   }
 
+  /** Pozycja X (viewport px) punktu skupienia zaznaczenia; null gdy nie da się wyznaczyć. */
   private getSelectionFocusX(): number | null {
     const sel = window.getSelection();
     if (!sel || !sel.focusNode) return null;
@@ -2984,6 +3980,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       r.collapse(true);
       const rect = r.getClientRects()[0];
       if (rect) return rect.left;
+      // Pusty akapit / pozycja bez rectów — rect najbliższego elementu
       const el = sel.focusNode.nodeType === Node.ELEMENT_NODE
         ? sel.focusNode as HTMLElement
         : sel.focusNode.parentElement;
@@ -2993,6 +3990,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Ustawia sygnał geometrii kolumn tylko przy faktycznej zmianie (selectionchange strzela często). */
   private setColumnRuler(next: { segments: RulerColumnSegment[]; activeIndex: number } | null): void {
     const prev = this.currentColumnRuler();
     if (prev === null && next === null) return;
@@ -3007,6 +4005,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.currentColumnRuler.set(next);
   }
 
+  // =====================
+  // DIALOG AKAPIT
+  // =====================
 
   openParagraphDialog(): void {
     this.closeAllMenus();
@@ -3019,9 +4020,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showParagraphDialog.set(false);
   }
 
+  /**
+   * Odczytuje bieżące ustawienia akapitu z zaznaczenia
+   */
   private readCurrentParagraphSettings(): void {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
+      // Brak karetki w treści → seeduj formularz zapisanym defaultem, nie zostawiaj
+      // poprzednich (mylących) wartości w polach.
       this.paragraphData = { ...this._paragraphDefaults };
       return;
     }
@@ -3039,16 +4045,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       const el = block as HTMLElement;
       const style = window.getComputedStyle(el);
 
+      // Wyrównanie
       const textAlign = style.textAlign;
       if (textAlign === 'center') this.paragraphData.alignment = 'center';
       else if (textAlign === 'right' || textAlign === 'end') this.paragraphData.alignment = 'right';
       else if (textAlign === 'justify') this.paragraphData.alignment = 'justify';
       else this.paragraphData.alignment = 'left';
 
+      // Indents (px -> cm), rounded to 0.1 cm. KONTRAKT = margin-left/right (gap-analysis
+      // pkt 2): reader emituje w:ind jako margin-*, writer czyta margin-* — dialog czytał
+      // padding-left, więc wcięcia z Worda pokazywały się jako 0.
       const pxToCm = (px: number) => Math.round((px / CSS_PX_PER_CM) * 10) / 10;
       this.paragraphData.indentLeft = pxToCm(parseFloat(style.marginLeft) || 0);
       this.paragraphData.indentRight = pxToCm(parseFloat(style.marginRight) || 0);
 
+      // Text-indent (wcięcie specjalne)
       const textIndent = parseFloat(style.textIndent) || 0;
       if (textIndent > 0) {
         this.paragraphData.specialIndent = 'firstLine';
@@ -3060,13 +4071,25 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         this.paragraphData.specialIndent = 'none';
       }
 
-      const pxToPt = (px: number) => Math.round(px / 1.333);
+      // Odstępy (px -> pt, 1pt ≈ 1.333px). Odstęp „po" = padding-bottom (ADR-0053:
+      // sumuje się z margin-top następnego jak w Wordzie); margin-bottom doliczamy
+      // dla akapitów z tłem/obramowaniem i treści sprzed zmiany (jedno z dwóch = 0).
+      // Dokładna relacja CSS: 1pt = 96/72 px (drift gap-analysis pkt 5 — 1.333 gubił ułamki).
+      const pxToPt = (px: number) => Math.round((px * 72) / 96);
       this.paragraphData.spaceBefore = pxToPt(parseFloat(style.marginTop) || 0);
       this.paragraphData.spaceAfter = pxToPt(
         (parseFloat(style.marginBottom) || 0) + (parseFloat(style.paddingBottom) || 0));
 
+      // Interlinia — mnożnik Worda z markera --w-line-tw (własnego lub odziedziczonego
+      // z domyślnych dokumentu), nie ze skalibrowanej wartości renderowej (PG-09);
+      // inline w pt = atLeast/exactly (rozróżnienie markerem --w-line-rule).
       const inlineLineHeight = el.style.lineHeight;
-      if (inlineLineHeight.endsWith('pt')) {
+      const atLeastMax = /^max\(\s*([\d.]+)pt/.exec(inlineLineHeight);
+      if (atLeastMax) {
+        // Kontrakt PG-10: atLeast = max(Xpt, single) — wartość dialogu to pt z wnętrza max().
+        this.paragraphData.lineSpacingType = 'atLeast';
+        this.paragraphData.lineSpacingValue = parseFloat(atLeastMax[1]) || 12;
+      } else if (inlineLineHeight.endsWith('pt')) {
         this.paragraphData.lineSpacingType =
           el.style.getPropertyValue('--w-line-rule').trim() === 'atLeast' ? 'atLeast' : 'exactly';
         this.paragraphData.lineSpacingValue = parseFloat(inlineLineHeight) || 12;
@@ -3081,11 +4104,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         }
       }
 
+      // Podział strony przed — z inline stylu bloku (reader emituje `page-break-before:always`
+      // dla w:pageBreakBefore; checkbox odzwierciedla stan jak dialog Worda).
       this.paragraphData.pageBreakBefore =
         /always|page/i.test(el.style.pageBreakBefore || el.style.breakBefore || '');
     }
   }
 
+  /**
+   * Stosuje ustawienia akapitu
+   */
   applyParagraphSettings(): void {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
@@ -3106,13 +4134,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       const el = block as HTMLElement;
       const cmToPx = (cm: number) => cm * CSS_PX_PER_CM;
 
+      // Wyrównanie
       el.style.textAlign = this.paragraphData.alignment;
 
+      // Wcięcia — KONTRAKT writera (gap-analysis pkt 2): margin-left/right → w:ind left/right,
+      // ujemny text-indent → w:ind hanging (semantyka Worda: „Z lewej" = pozycja tekstu,
+      // pierwsza linia wysunięta o `hanging` W LEWO od niej). Dialog pisał padding-left,
+      // którego writer nie czyta — wcięcia z dialogu nie trafiały do DOCX.
       el.style.marginLeft = cmToPx(this.paragraphData.indentLeft) + 'px';
       el.style.marginRight = cmToPx(this.paragraphData.indentRight) + 'px';
+      // Sprzątanie po starym kontrakcie (padding-* z poprzednich wersji dialogu) — inaczej
+      // wcięcie liczyłoby się podwójnie wizualnie.
       el.style.removeProperty('padding-left');
       el.style.removeProperty('padding-right');
 
+      // Wcięcie specjalne
       if (this.paragraphData.specialIndent === 'firstLine') {
         el.style.textIndent = cmToPx(this.paragraphData.specialIndentBy) + 'px';
       } else if (this.paragraphData.specialIndent === 'hanging') {
@@ -3121,11 +4157,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         el.style.textIndent = '0';
       }
 
-      const ptToPx = (pt: number) => pt * 1.333;
+      // Odstępy — „po" idzie w padding-bottom (ADR-0053), ewentualny stary
+      // margin-bottom czyścimy, żeby wartości się nie sumowały podwójnie.
+      const ptToPx = (pt: number) => (pt * 96) / 72;
       el.style.marginTop = ptToPx(this.paragraphData.spaceBefore) + 'px';
       el.style.paddingBottom = ptToPx(this.paragraphData.spaceAfter) + 'px';
       el.style.marginBottom = '';
 
+      // Interlinia — mnożniki w semantyce Worda (kalibracja + marker, PG-09);
+      // atLeast dostaje marker reguły, bez którego writer zapisywał exact
+      // (a exact przycina w Wordzie tekst wyższy niż linia).
       switch (this.paragraphData.lineSpacingType) {
         case 'single':
           applyWordLineSpacing(el, 1);
@@ -3147,23 +4188,46 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
           break;
       }
 
+      // Podział strony przed — właściwość Worda (w:pageBreakBefore): paginacja łamie stronę
+      // przed blokiem, writer odtwarza właściwość w pPr (nie ręczny w:br). Jawne `auto`
+      // ustawiamy tylko przy ODZNACZANIU aktywnego podziału — writer mapuje je na
+      // w:pageBreakBefore val=false, co nadpisuje ewentualny podział ze STYLU Worda.
       if (this.paragraphData.pageBreakBefore) {
         el.style.pageBreakBefore = 'always';
       } else if (/always|page/i.test(el.style.pageBreakBefore || el.style.breakBefore || '')) {
         el.style.pageBreakBefore = 'auto';
       }
 
+      // Zmiany stylu akapitu (interlinia/odstępy/podział strony) zmieniają układ i muszą
+      // trafić do zapisu — dispatch `input` jak operacje tabelowe (persist + repaginacja).
       this.notifyEditorChange();
     }
 
     this.closeParagraphDialog();
   }
 
+  /**
+   * „Ustaw jako domyślne" — zapisuje BIEŻĄCE ustawienia akapitu z dialogu jako domyślne
+   * (per-sesja edytora) i od razu stosuje je do aktywnego akapitu.
+   *
+   * Wcześniej ten przycisk wołał reset do wartości bazowych (Qutas-PAR-007: „ustaw jako
+   * domyślne resetuje zamiast zapisywać"). Teraz zachowuje się zgodnie z nazwą:
+   *  1. zapamiętuje snapshot ustawień jako default sesji (`_paragraphDefaults`),
+   *  2. stosuje ustawienia do bieżącego akapitu (jak OK) — nowe akapity tworzone Enterem
+   *     dziedziczą styl po bieżącym bloku (contenteditable klonuje blok), więc default
+   *     propaguje się naturalnie na kolejne akapity.
+   *
+   * Model trwałości: default jest per-sesja edytora (resetuje się po odświeżeniu strony).
+   * Nie wprowadzamy localStorage (brak takiego wzorca w aplikacji) ani zmiany kontraktu API.
+   */
   setParagraphAsDefault(): void {
     this._paragraphDefaults = { ...this.paragraphData };
     this.applyParagraphSettings();
   }
 
+  /**
+   * Jednostka interlinii
+   */
   getLineSpacingUnit(): string {
     switch (this.paragraphData.lineSpacingType) {
       case 'atLeast':
@@ -3176,6 +4240,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * Interlinia dla podglądu
+   */
   getPreviewLineHeight(): string {
     switch (this.paragraphData.lineSpacingType) {
       case 'single': return '1';
@@ -3186,6 +4253,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  // =====================
+  // DIALOG WSTAWIANIE TABELI
+  // =====================
 
   openInsertTableDialog(): void {
     this.closeAllMenus();
@@ -3205,6 +4275,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showInsertTableDialog.set(false);
   }
 
+  // ===== Walidacja rozmiaru tabeli =====
+  // type="number" + min/max nie blokuje wpisania ręcznie —0", „-5" czy 9999
+  // — atrybuty te wpływają tylko na spinner i :invalid. Dlatego trzymamy
+  // jawne sprawdzenie + clamp on blur + disabled na przycisku „Wstaw".
   private static readonly TABLE_MIN_COLS = 1;
   private static readonly TABLE_MAX_COLS = 63;   // limit Worda
   private static readonly TABLE_MIN_ROWS = 1;
@@ -3268,6 +4342,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   }
 
   applyInsertTable(): void {
+    // Twarda bramka — nawet jeśli ktoś ominie disabled (np. enter), nic nie wstawimy.
     if (this.insertTableValidationError()) {
       return;
     }
@@ -3288,7 +4363,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeInsertTableDialog();
   }
 
+  // =====================
+  // TOOLBAR TABELI - OPERACJE
+  // =====================
 
+  /**
+   * Powiadamia edytor o zmianach w DOM (wywołuje contentChange)
+   */
   private notifyEditorChange(): void {
     const el = this.editor?.editorContent?.nativeElement;
     if (el) {
@@ -3296,6 +4377,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Pobiera indeks wiersza i kolumny aktywnej komórki */
   private getCellPosition(cell: HTMLTableCellElement): { rowIndex: number; colIndex: number } | null {
     const row = cell.parentElement as HTMLTableRowElement;
     if (!row) return null;
@@ -3307,6 +4389,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return { rowIndex, colIndex };
   }
 
+  /** Wstaw wiersz powyżej */
   tableInsertRowAbove(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3323,6 +4406,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Wstaw wiersz poniżej */
   tableInsertRowBelow(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3340,6 +4424,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Wstaw kolumnę z lewej */
   tableInsertColLeft(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3355,6 +4440,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Wstaw kolumnę z prawej */
   tableInsertColRight(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3371,6 +4457,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Usuń wiersz */
   tableDeleteRow(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3385,6 +4472,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Usuń kolumnę */
   tableDeleteCol(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3404,6 +4492,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Usuń tabelę */
   tableDeleteTable(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3416,6 +4505,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  // =====================
+  // OBRAMOWANIA / LINIE TABELI (rodzaj, grubość, kolor, miejsce, cel)
+  // =====================
 
   setTableBorderStyle(style: TableBorderLineStyle): void {
     this.tableBorderStyle.set(style);
@@ -3429,12 +4521,17 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     if (width >= 1 && width <= 12) this.tableBorderWidth.set(width);
   }
 
+  /** Resetuje ustawienia „pióra" (rodzaj/grubość/kolor) do wartości domyślnych. */
   resetTableBorderSettings(): void {
     this.tableBorderColor.set(DEFAULT_TABLE_BORDER.color);
     this.tableBorderWidth.set(DEFAULT_TABLE_BORDER.width);
     this.tableBorderStyle.set(DEFAULT_TABLE_BORDER.style);
   }
 
+  /**
+   * Stosuje linię w wybranym miejscu do **auto-wykrytego** celu (zaznaczenie /
+   * aktywna komórka). Nie usuwa treści — zmienia tylko style obramowań.
+   */
   applyTableBorderScope(scope: TableBorderScope): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3445,10 +4542,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Usuwa wszystkie obramowania w bieżącym celu. */
   clearTableBorders(): void {
     this.applyTableBorderScope('none');
   }
 
+  /** Przywraca domyślną pełną siatkę 1px na całej tabeli i resetuje ustawienia pióra. */
   restoreDefaultTableBorders(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3458,6 +4557,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /**
+   * Auto-wykrycie celu obramowania z bieżącego zaznaczenia:
+   * zaznaczone komórki → ten zbiór (geometria wiersz/kolumna/zakres/tabela liczona
+   * przez `applyBorderToCells`/`classifyBorderTarget`); brak zaznaczenia → aktywna
+   * komórka (najbezpieczniejszy, intuicyjny domyślny zakres — jak karetka w Word).
+   */
   private resolveAutoTargetCells(table: HTMLTableElement): HTMLTableCellElement[] {
     const selected = Array.from(this.selectedCells());
     if (selected.length > 0) return selected;
@@ -3474,6 +4579,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     };
   }
 
+  /** Scal zaznaczone komórki */
   tableMergeCells(): void {
     const customSelected = this.selectedCells();
     const cells = customSelected.size > 0
@@ -3485,6 +4591,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         })();
     if (cells.length < 2) return;
 
+    // Zbierz treść i usuń komórki oprócz pierwszej
     const firstCell = cells[0] as HTMLTableCellElement;
     let mergedContent = '';
     let minRow = Infinity, maxRow = -1, minCol = Infinity, maxCol = -1;
@@ -3501,6 +4608,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       maxCol = Math.max(maxCol, ci + (td.colSpan || 1) - 1);
     });
 
+    // Zbierz treści
     cells.forEach(c => {
       const txt = c.innerHTML.trim();
       if (txt && txt !== '&nbsp;' && txt !== '<br>') {
@@ -3508,12 +4616,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       }
     });
 
+    // Ustaw colspan/rowspan na pierwszej komórce
     const colSpan = maxCol - minCol + 1;
     const rowSpan = maxRow - minRow + 1;
     firstCell.colSpan = colSpan;
     firstCell.rowSpan = rowSpan;
     firstCell.innerHTML = mergedContent || '<br>';
 
+    // Usuń nadmiarowe komórki
     const table = this.activeTable();
     if (!table) return;
     for (let r = minRow; r <= maxRow; r++) {
@@ -3530,6 +4640,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Podziel komórkę */
   tableSplitCell(): void {
     const cell = this.activeTableCell();
     if (!cell) return;
@@ -3540,6 +4651,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const rs = cell.rowSpan || 1;
 
     if (cs <= 1 && rs <= 1) {
+      // Komórka nie jest scalona - podziel na 2 kolumny
       const pos = this.getCellPosition(cell);
       if (!pos) return;
       cell.colSpan = 1;
@@ -3555,16 +4667,19 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         }
       });
     } else {
+      // Komórka jest scalona - cofnij scalenie
       const pos = this.getCellPosition(cell);
       if (!pos) return;
       cell.colSpan = 1;
       cell.rowSpan = 1;
+      // Dodaj brakujące komórki w bieżącym wierszu
       const row = cell.parentElement as HTMLTableRowElement;
       for (let c = 1; c < cs; c++) {
         const newTd = row.insertCell(Array.from(row.cells).indexOf(cell) + 1);
         newTd.innerHTML = '<br>';
         newTd.style.cssText = 'border:1px solid #ccc;padding:8px;min-width:30px;';
       }
+      // Dodaj brakujące komórki w kolejnych wierszach
       for (let r = 1; r < rs; r++) {
         const targetRow = table.rows[pos.rowIndex + r];
         if (!targetRow) continue;
@@ -3579,6 +4694,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Podziel tabelę (dzieli nad bieżącym wierszem) */
   tableSplitTable(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3586,11 +4702,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const pos = this.getCellPosition(cell);
     if (!pos || pos.rowIndex === 0) return;
 
+    // Utwórz nową tabelę z wierszami od bieżącego w dół
     const newTable = document.createElement('table');
     newTable.style.cssText = table.style.cssText;
     const rowsToMove = Array.from(table.rows).slice(pos.rowIndex);
     rowsToMove.forEach(row => newTable.appendChild(row));
 
+    // Wstaw paragraf separator i nową tabelę po starej
     const separator = document.createElement('p');
     separator.innerHTML = '&nbsp;';
     table.parentNode?.insertBefore(separator, table.nextSibling);
@@ -3598,6 +4716,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Autodopasowanie - do zawartości */
   tableAutoFitContents(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3609,6 +4728,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Autodopasowanie - do okna */
   tableAutoFitWindow(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3620,6 +4740,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Stała szerokość kolumn */
   tableFixedWidth(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3628,6 +4749,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Rozłóż wiersze równomiernie */
   tableDistributeRows(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3640,6 +4762,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Rozłóż kolumny równomiernie */
   tableDistributeCols(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3653,6 +4776,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  /** Wyświetl/ukryj linie siatki */
   showTableGridLines = signal(true);
   tableToggleGridLines(): void {
     this.showTableGridLines.update(v => !v);
@@ -3669,9 +4793,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Pozycja dropdown cieniowania */
   shadingDropdownX = signal(0);
   shadingDropdownY = signal(0);
 
+  /** Toggle dropdown cieniowania w toolbarze tabeli */
   toggleShadingDropdown(event: MouseEvent): void {
     const btn = (event.target as HTMLElement).closest('.table-toolbar-btn-shading') as HTMLElement;
     if (btn) {
@@ -3682,6 +4808,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showShadingDropdown.update(v => !v);
   }
 
+  /** Kolory do palety cieniowania */
   shadingColors = [
     '#FFFFFF', '#F2F2F2', '#D9D9D9', '#BFBFBF', '#A6A6A6', '#808080', '#595959', '#404040', '#262626', '#000000',
     '#FFF2CC', '#FFE599', '#FFD966', '#FFC000', '#BF9000', '#806000', '#FCE4D6', '#F8CBAD', '#F4B084', '#ED7D31',
@@ -3690,6 +4817,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     '#E6D5F5', '#D0B8E8', '#B490D0', '#7030A0', '#5B259A', '#3B1770'
   ];
 
+  /**
+   * Stosuje autodopasowanie do ostatnio wstawionej tabeli
+   */
   private applyTableAutoFit(behavior: string, fixedWidth: number): void {
     setTimeout(() => {
       const editorEl = this.editor?.editorContent?.nativeElement;
@@ -3723,13 +4853,20 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }, 50);
   }
 
+  // ===== WŁAŚCIWOŚCI DOKUMENTU =====
 
+  /**
+   * Otwiera dialog właściwości dokumentu
+   */
   openPropertiesDialog(): void {
     this.propertiesData.set({ ...this.documentMetadata() });
     this.showPropertiesDialog.set(true);
     this.closeAllMenus();
   }
 
+  /**
+   * Zapisuje właściwości dokumentu
+   */
   saveProperties(): void {
     const props = this.propertiesData();
     this.documentMetadata.update(m => ({
@@ -3752,15 +4889,25 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showSuccess('Właściwości dokumentu zostały zaktualizowane');
   }
 
+  /**
+   * Zamyka dialog właściwości
+   */
   closePropertiesDialog(): void {
     this.showPropertiesDialog.set(false);
   }
 
+  /**
+   * Aktualizuje pojedynczą właściwość w propertiesData
+   */
   updateProperty(key: string, value: string): void {
     this.propertiesData.update(p => ({ ...p, [key]: value }));
   }
 
+  // ===== PODPISY CYFROWE =====
 
+  /**
+   * Otwiera dialog podpisów cyfrowych
+   */
   openSignatureDialog(): void {
     this.signatureDialogTab.set(
       this.documentSignatures().length > 0 ? 'list' : 'sign'
@@ -3776,10 +4923,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  /**
+   * Zamyka dialog podpisów
+   */
   closeSignatureDialog(): void {
     this.showSignatureDialog.set(false);
   }
 
+  /**
+   * Obsługuje wybranie pliku certyfikatu PFX
+   */
   onCertificateFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -3798,6 +4951,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     reader.readAsArrayBuffer(file);
   }
 
+  /**
+   * Podpisuje dokument
+   */
   signDocument(): void {
     if (!this.signatureData.certificateBase64) {
       this.showError('Wybierz plik certyfikatu (.pfx/.p12)');
@@ -3853,6 +5009,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  /**
+   * Wstawia wizualny blok podpisu do dokumentu
+   */
   insertSignatureLine(): void {
     const name = this.signatureData.signerName || '________________________';
     const title = this.signatureData.signerTitle || '';
