@@ -7,12 +7,6 @@ using NUnit.Framework;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services;
 
-/// <summary>
-/// Rozmiar numeru/punktatora listy (zgłoszenie: „wielkość punktatorów inna niż tekstu").
-/// Word skaluje znacznik rPr-em poziomu (w:lvl/w:rPr/w:sz) lub rPr-em znaku końca akapitu;
-/// my dziedziczyliśmy rozmiar kontenera (default dokumentu). Kontrakt jak dla koloru
-/// (14104878): var --marker-font-size + data-marker-size / data-mark-size (round-trip).
-/// </summary>
 [TestFixture]
 public class ListMarkerSizeFidelityTests
 {
@@ -88,8 +82,7 @@ public class ListMarkerSizeFidelityTests
     [Test]
     public void FirstRunSize_FallbackIsDisplayOnly()
     {
-        // Brak sz w poziomie i na znaku akapitu — marker skaluje się z tekstem (var),
-        // ale NIC nie round-tripuje (wartość pochodna, nie źródłowa).
+        
         var html = _reader.Convert(BuildListDocx(null, null, "32")).Html;
 
         html.Should().Contain("--marker-font-size:16pt");

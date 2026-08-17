@@ -21,10 +21,6 @@ using WpEndnote = DocumentFormat.OpenXml.Wordprocessing.Endnote;
 
 namespace D2ViewerEditor.Infrastructure.Services;
 
-/// <summary>
-/// Serwis do konwersji HTML na dokument DOCX
-/// Własna implementacja generatora OpenXML z wysoką dokładnością odwzorowania stylów
-/// </summary>
 public class HtmlToDocxConverter : IHtmlToDocxConverter
 {
     private MainDocumentPart? _mainPart;
@@ -32,43 +28,26 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
     private int _imageCounter = 0;
     private int _numberingId = 1;
     private NumberingDefinitionsPart? _numberingPart;
-    private readonly Dictionary<int, int> _abstractNumIds = new(); // track list numbering
-    // HTML data-num-id (tożsamość listy z readera) → numId w generowanym pakiecie. Fragmenty listy
-    // rozdzielone akapitem, ale należące do tej samej listy logicznej Worda, współdzielą jedną
-    // NumberingInstance — Word kontynuuje wtedy numerację. Różne data-num-id → osobne instancje.
+    private readonly Dictionary<int, int> _abstractNumIds = new(); 
+    
     private readonly Dictionary<string, int> _numIdByHtmlList = new();
-    // HTML data-abstract-num-id (tożsamość DEFINICJI z readera) → abstractNumId w generowanym
-    // pakiecie. Listy współdzielące abstrakt w oryginale (np. „Rozpocznij od nowa" = nowy w:num
-    // ze startOverride na TEN SAM abstrakt) współdzielą go też po zapisie — bez tego restart
-    // degradował się do niezależnej listy z przepisanym w:start.
+    
     private readonly Dictionary<string, int> _abstractIdByHtmlAbstract = new();
-    // Poziomy z WYEKSPORTOWANYM punktatorem graficznym (w:lvlPicBulletId) per abstrakt/numId —
-    // dla nich marker <span class="list-marker"><img/></span> NIE jest bake'owany w treść runu.
+    
     private readonly Dictionary<int, HashSet<int>> _picBulletLevelsByAbstract = new();
     private readonly Dictionary<int, HashSet<int>> _picBulletLevelsByNum = new();
-    // Poziomy abstraktu zbudowane z jawnych data-* (nie z drabinki domyślnej) — późniejszy
-    // fragment współdzielący abstrakt może dosłać definicje brakujących poziomów
-    // (UpgradeSharedAbstractLevels), ale nigdy nie podmienia już zdefiniowanych.
+    
     private readonly Dictionary<int, HashSet<int>> _specLevelsByAbstract = new();
-    // Deduplikacja obrazów punktatorów: data URI → numPicBulletId (jeden w:numPicBullet
-    // dla wielu poziomów/list używających tego samego obrazu).
+    
     private readonly Dictionary<string, int> _picBulletIdByDataUri = new();
     private int _picBulletId = 1;
 
-    // Przypisy dolne. Identyfikatory OOXML są przydzielane DETERMINISTYCZNIE po kolejności listy
-    // przekazanej do Convert (htmlId → 1..N); technicznym separatorom rezerwujemy -1 i 0, więc
-    // przypisy użytkownika nigdy z nimi nie kolidują. _referencedFootnoteHtmlIds notuje, które
-    // przypisy faktycznie mają odwołanie w treści (walidacja: brak osieroconych odwołań/treści).
     private readonly Dictionary<string, long> _footnoteOoxmlIdByHtmlId = new();
     private readonly HashSet<string> _referencedFootnoteHtmlIds = new();
 
-    // Przypisy końcowe — osobny słownik id/rejestr odwołań (endnotes.xml jest oddzielną częścią;
-    // numeracja OOXML endnotes jest niezależna od footnotes).
     private readonly Dictionary<string, long> _endnoteOoxmlIdByHtmlId = new();
     private readonly HashSet<string> _referencedEndnoteHtmlIds = new();
 
-    // Domyślne ustawienia dokumentu (firmowa czcionka itp.). Wstrzykiwane przez DI;
-    // dla benchmarków / testów konstruktor bezparametrowy używa wartości domyślnych.
     private readonly DocumentDefaultsOptions _defaults;
 
     public HtmlToDocxConverter()
@@ -81,31 +60,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         _defaults = defaults?.Value ?? new DocumentDefaultsOptions();
     }
 
-
-    /// <summary>
-    /// Część (Part) do której mają być dodawane obrazki w bieżącym kontekście:
-    /// MainDocumentPart dla body, HeaderPart / FooterPart dla nagłówka/stopki.
-    /// Obrazki muszą być powiązane z częścią w której są używane (relationship),
-    /// inaczej Word ich nie wyświetli.
-    /// </summary>
     private OpenXmlPart? _currentImageContainer;
 
-    /// <summary>
-    /// Czy aktualnie konwertujemy header/footer (wpływa na limit szerokości obrazka).
-    /// </summary>
     private bool _inHeaderFooter = false;
 
-    /// <summary>
-    /// Domyślny StyleId dla paragrafów w bieżącej sekcji (Header / Footer).
-    /// Aplikowany na paragrafy, które nie mają własnego <c>data-style-id</c>.
-    /// W body pozostaje <c>null</c> → Word użyje stylu Normal.
-    /// </summary>
     private string? _currentSectionStyleId = null;
 
-    /// <summary>
-    /// Geometria jednej sekcji strony (cm). Wartości null = dziedziczone/domyślne.
-    /// <c>BreakType</c> opisuje, jak sekcja się ZACZYNA (w:sectPr/w:type następnej sekcji).
-    /// </summary>
     private sealed class SectionGeometry
     {
         public Domain.Models.PageSize? PageSize { get; set; }
@@ -113,55 +73,34 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         public double? HeaderDistanceCm { get; set; }
         public double? FooterDistanceCm { get; set; }
         public string? BreakType { get; set; }
-        /// <summary>Układ kolumn sekcji (w:cols). Null = jednokolumnowa (ADR-0039).</summary>
+        
         public ColumnLayout? Columns { get; set; }
     }
 
-    /// <summary>
-    /// Geometria AKTUALNIE otwartej sekcji podczas konwersji body. Start = argumenty
-    /// Convert (pierwsza sekcja); każdy marker <c>div.docx-section-break</c> zamyka
-    /// bieżącą sekcję (w:p/pPr/sectPr z tą geometrią) i otwiera następną z data-*.
-    /// Na końcu trzyma geometrię OSTATNIEJ sekcji → trafia do body-level sectPr.
-    /// </summary>
     private SectionGeometry _currentSection = new();
 
-    /// <summary>Pierwszy sectPr w kolejności dokumentu — tu wpinamy referencje
-    /// nagłówka/stopki i titlePg (kolejne sekcje dziedziczą je w Wordzie).</summary>
     private SectionProperties? _firstSectionProps;
 
-    /// <summary>Paragraph-level sectPr w kolejności emisji: element [k] zamyka sekcję o
-    /// indeksie k (0-based) — cel dla własnych nagłówków/stopek sekcji (SectionHeaderFooter).</summary>
     private readonly List<SectionProperties> _emittedSectionProps = new();
 
-    /// <summary>Czy body zawierało markery sekcji (dokument wielosekcyjny).</summary>
     private bool _hasSectionMarkers;
 
-    /// <summary>Wysokości pasm nagłówka/stopki (cm) do wyliczenia w:header/w:footer
-    /// distance dla sectPr sekcji pośrednich (te same, co dla body-level sectPr).</summary>
     private double? _headerBandCm;
     private double? _footerBandCm;
 
-    // Domyślne wartości dokumentu z kontenera .document-content (reader emituje inline
-    // font-family/font-size + data-default-*). Odtwarzane w docDefaults/Normal generowanego
-    // pakietu; brak kontenera → dotychczasowe wartości z konfiguracji (zero regresji).
     private string? _docDefaultFontFamily;
     private double? _docDefaultFontSizePt;
     private string? _docDefaultSpacingBeforeTw;
     private string? _docDefaultSpacingAfterTw;
     private string? _docDefaultSpacingLine;
     private string? _docDefaultSpacingLineRule;
-    // Układ kolumn sekcji bazowej (0) z data-col-* kontenera .document-content (ADR-0039).
+    
     private ColumnLayout? _docDefaultColumns;
-    // Licznik pól złożonych otwartych markerem docx-fld-marker (TOC/PAGEREF) — End emitowany
-    // tylko przy dodatnim liczniku (osierocony End uszkadza dokument), brakujące End domykane
-    // po konwersji body.
+    
     private int _openFieldMarkerCount;
-    // Unikalne w:id zakładek odtwarzanych z markerów docx-bookmark (cele PAGEREF/TOC).
+    
     private int _nextBookmarkId = 1;
 
-    /// <summary>
-    /// Konwertuje HTML na plik DOCX
-    /// </summary>
     public byte[] Convert(string html, DocumentMetadata? metadata = null, HeaderFooterContent? header = null, HeaderFooterContent? footer = null, PageMargins? margins = null, Domain.Models.PageSize? pageSize = null, IReadOnlyList<SectionHeaderFooter>? sectionHeadersFooters = null, IReadOnlyList<DomainFootnote>? footnotes = null, IReadOnlyList<DomainEndnote>? endnotes = null, string? footnoteNumberFormat = null, string? endnoteNumberFormat = null)
     {
         using var memoryStream = new MemoryStream();
@@ -170,8 +109,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             _mainPart = document.AddMainDocumentPart();
             _mainPart.Document = new Document();
 
-            // Stan sekcji per konwersja: pierwsza sekcja = geometria z argumentów;
-            // markery w HTML nadpisują ją dla kolejnych sekcji.
             _currentSection = new SectionGeometry { PageSize = pageSize, Margins = margins };
             _firstSectionProps = null;
             _emittedSectionProps.Clear();
@@ -183,7 +120,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             _picBulletIdByDataUri.Clear();
             _picBulletId = 1;
             _numberingId = 1;
-            _numberingPart = null; // część należy do POPRZEDNIEGO pakietu — EnsureNumberingPart utworzy nową
+            _numberingPart = null; 
             _pendingTextBoxDrawings.Clear();
             _footnoteOoxmlIdByHtmlId.Clear();
             _referencedFootnoteHtmlIds.Clear();
@@ -205,27 +142,16 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             var body = new Body();
             _mainPart.Document.Body = body;
 
-            // Parsuj HTML PRZED stylami — kontener .document-content niesie domyślny font
-            // (inline style) i odstępy akapitowe dokumentu (data-default-*), które muszą
-            // trafić do docDefaults generowanego pakietu. Wcześniej każdy zapis podmieniał
-            // je na hardkodowane 11pt / after=160 / line=259 (tekst malał, wiersze tabel
-            // ze stylem Worda puchły, bo styl tabeli nie istnieje w regenerowanym pakiecie).
             var htmlDoc = new HtmlDocument();
             htmlDoc.LoadHtml(html);
             CaptureDocumentDefaults(htmlDoc);
-            // Kolumny sekcji bazowej (0) z kontenera → geometria pierwszej sekcji. W dokumencie
-            // wielosekcyjnym pierwszy marker zamknie tę sekcję z jej kolumnami; sekcje ≥1 niosą
-            // własne kolumny w markerach (ADR-0039).
+            
             _currentSection.Columns = _docDefaultColumns;
 
-            // Dodaj style dokumentu
             AddDocumentStyles(document);
 
             ConvertHtmlToBody(htmlDoc.DocumentNode, body);
 
-            // Strażnik balansu pól złożonych: pole otwarte markerem begin (TOC/PAGEREF),
-            // którego marker końca zniknął w edycji, domykamy na końcu treści — niedomknięty
-            // fldChar Begin uszkadza dokument w Wordzie.
             if (_openFieldMarkerCount > 0)
             {
                 var lastPara = body.Elements<Paragraph>().LastOrDefault();
@@ -241,29 +167,21 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 }
             }
 
-            // Ustaw metadane
             if (metadata != null)
             {
                 SetDocumentMetadata(document, metadata);
             }
 
-            // Dodaj nagłówek i stopkę
             AddHeaderAndFooter(document, header, footer);
 
-            // Dodaj ustawienia strony
             AddPageSettings(body, header, footer, margins, pageSize);
 
-            // Własne nagłówki/stopki sekcji ≥ 1 (po AddPageSettings — body-level sectPr istnieje)
             AddSectionHeadersFooters(document, sectionHeadersFooters);
 
-            // Część przypisów (footnotes.xml + relacja + content type) — tylko gdy dokument ma przypisy.
             AddFootnotes(footnotes);
 
-            // Część przypisów końcowych (endnotes.xml + relacja + content type) — analogicznie.
             AddEndnotes(endnotes);
 
-            // Format numeracji przypisów POKAZYWANY w edytorze → jawny w:numFmt w settings.xml
-            // (plik musi wyglądać jak ekran; bez tego Word wracał do swoich domyślnych).
             ApplyNoteNumberFormats(document, footnoteNumberFormat, endnoteNumberFormat);
 
             document.Save();
@@ -293,18 +211,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
         catch
         {
-            // Pass-through is best-effort: a malformed / unexpected original must never break the
-            // save — fall back to the fully self-contained generated document.
+            
             return generated;
         }
     }
 
-    /// <summary>
-    /// Replaces the generated package's styles.xml, theme and fontTable with the originals so the
-    /// full style set (incl. table styles) and the document/theme fonts survive the round-trip.
-    /// Body, sectPr, headers/footers, images and numbering remain as generated (they carry the
-    /// editor's actual changes and standard style IDs that exist in the original styles.xml).
-    /// </summary>
     private static byte[] PreserveOriginalParts(byte[] generated, Stream originalPackage)
     {
         var ms = new MemoryStream();
@@ -321,9 +232,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             if (origMain == null || targetMain == null)
                 return generated;
 
-            // styles.xml — pełny zestaw stylów (w tym ~100 stylów tabel) + docDefaults (font/theme).
-            // FeedData do ISTNIEJĄCEGO partu zachowuje kanoniczną nazwę (styles.xml) i relację;
-            // nie odwołujemy się do .Styles, więc Save nie nadpisze strumienia zserializowanym DOM.
             if (origMain.StyleDefinitionsPart != null)
             {
                 var styles = targetMain.StyleDefinitionsPart ?? targetMain.AddNewPart<StyleDefinitionsPart>();
@@ -331,8 +239,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 styles.FeedData(s);
             }
 
-            // theme — definicje theme fonts/colors (np. minor=Cambria), do których odwołują się
-            // docDefaults (asciiTheme=minorHAnsi). Musi być spójny ze stylami.
             if (origMain.ThemePart != null)
             {
                 var theme = targetMain.ThemePart ?? targetMain.AddNewPart<ThemePart>();
@@ -340,7 +246,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 theme.FeedData(s);
             }
 
-            // fontTable — tabela fontów używanych w dokumencie.
             if (origMain.FontTablePart != null)
             {
                 var fonts = targetMain.FontTablePart ?? targetMain.AddNewPart<FontTablePart>();
@@ -356,7 +261,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return ms.ToArray();
     }
 
-    /// <summary>Token w:numFmt przypisów (podzbiór wspierany przez GUI) → wartość OOXML.</summary>
     private static NumberFormatValues? MapNoteNumberFormat(string? token) => token switch
     {
         "decimal" => NumberFormatValues.Decimal,
@@ -380,7 +284,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         settingsPart.Settings ??= new Settings();
         var settings = settingsPart.Settings;
 
-        // Sekwencja CT_Settings: footnotePr przed endnotePr, oba za evenAndOddHeaders.
         settings.RemoveAllChildren<FootnoteDocumentWideProperties>();
         settings.RemoveAllChildren<EndnoteDocumentWideProperties>();
         if (footnoteFmt != null)
@@ -390,23 +293,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         settings.Save();
     }
 
-    /// <summary>
-    /// FALLBACK dla klientów niewysyłających formatu z modelu: przenosi w:footnotePr /
-    /// w:endnotePr (m.in. w:numFmt) z oryginalnego settings.xml do wygenerowanego pakietu —
-    /// regeneracja gubiła te elementy i Word wracał do domyślnej numeracji endnotes
-    /// (lowerRoman). Element już obecny w celu (ApplyNoteNumberFormats — format z edytora)
-    /// WYGRYWA i nie jest nadpisywany. Kopiujemy wybiórczo (nie cały settings.xml): pełna
-    /// kopia przywracałaby documentProtection i nadpisywała evenAndOddHeaders.
-    /// </summary>
     private static void PreserveNoteProperties(MainDocumentPart origMain, MainDocumentPart targetMain)
     {
         var origSettings = origMain.DocumentSettingsPart?.Settings;
         var origFootnotePr = origSettings?.GetFirstChild<FootnoteDocumentWideProperties>();
         var origEndnotePr = origSettings?.GetFirstChild<EndnoteDocumentWideProperties>();
 
-        // Sekcyjny override (w:sectPr/w:footnotePr|w:endnotePr) ma w Wordzie pierwszeństwo,
-        // a regenerowany sectPr go nie niesie — przenosimy go na poziom document-wide
-        // (ten sam efekt wizualny dla dokumentów o jednym formacie przypisów).
         var origFirstSect = origMain.Document?.Body?.Descendants<SectionProperties>().FirstOrDefault();
         var sectFootnotePr = origFirstSect?.GetFirstChild<FootnoteProperties>();
         var sectEndnotePr = origFirstSect?.GetFirstChild<EndnoteProperties>();
@@ -418,10 +310,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             ? new EndnoteDocumentWideProperties(sectEndnotePr.ChildElements.Select(c => c.CloneNode(true)))
             : (EndnoteDocumentWideProperties?)origEndnotePr?.CloneNode(true);
 
-        // Odwołania do przypisów-separatorów (<w:footnote w:id="-1"/> itd.) wskazują ID
-        // w CZĘŚCIACH pakietu oryginału — w regenerowanym pakiecie część może nie istnieć
-        // (dokument bez przypisów dolnych) i Word zgłasza uszkodzenie „Przypisy dolne".
-        // Separatory Word odtwarza z domyślnych, więc odwołania są zbędne.
         footnotePr?.RemoveAllChildren<FootnoteSpecialReference>();
         endnotePr?.RemoveAllChildren<EndnoteSpecialReference>();
         if (footnotePr is { HasChildren: false }) footnotePr = null;
@@ -432,10 +320,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         settingsPart.Settings ??= new Settings();
         var settings = settingsPart.Settings;
 
-        // Format z modelu edytora (ApplyNoteNumberFormats) ma pierwszeństwo — dopełniamy
-        // tylko brakujące elementy. Sekwencja CT_Settings: footnotePr przed endnotePr,
-        // oba za evenAndOddHeaders; endnotePr dopinany na końcu jest zawsze poprawny,
-        // footnotePr wstawiamy przed istniejącym endnotePr.
         if (footnotePr != null && settings.GetFirstChild<FootnoteDocumentWideProperties>() == null)
         {
             if (settings.GetFirstChild<EndnoteDocumentWideProperties>() is { } existingEndnotePr)
@@ -448,29 +332,19 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         settings.Save();
     }
 
-    /// <summary>
-    /// Writes the document's headers and footers. Each variant (default / first / even) is
-    /// emitted independently as its own part with a type=Default/First/Even reference, and
-    /// the section/settings opt-ins (titlePg, evenAndOddHeaders) are written so Word and a
-    /// round-trip import pick them up — including titlePg with a blank first-page band.
-    /// </summary>
     private void AddHeaderAndFooter(WordprocessingDocument document, HeaderFooterContent? header, HeaderFooterContent? footer)
     {
         if (_mainPart == null) return;
 
         if (header != null)
         {
-            // Variants are written independently of the default part: a titlePg document
-            // may legitimately have a first-page header and NO default one (blank ordinary
-            // pages) — skipping variants when Html is empty destroyed them on first save.
+            
             if (!string.IsNullOrWhiteSpace(header.Html))
                 WriteHeaderPart(header.Html, HeaderFooterValues.Default);
 
             if (header.DifferentFirstPage)
             {
-                // titlePg must survive even when the first-page band is blank; dropping it
-                // would leak the default header onto page 1 after reopening in Word.
-                // Null FirstPageHtml = no explicit part (Word inherits/blank), empty = blank part.
+                
                 if (header.FirstPageHtml != null)
                     WriteHeaderPart(header.FirstPageHtml, HeaderFooterValues.First);
                 EnsureTitlePage();
@@ -514,7 +388,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         var htmlDoc = new HtmlDocument();
         htmlDoc.LoadHtml(prepared);
 
-        // Image relationships must be scoped to THIS part — Word won't resolve cross-part rIds.
         var prevContainer = _currentImageContainer;
         var prevInHF = _inHeaderFooter;
         var prevSection = _currentSectionStyleId;
@@ -532,8 +405,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             _currentSectionStyleId = prevSection;
         }
 
-        // CT_HdrFtr requires at least one block-level element — a blank band (titlePg with
-        // an intentionally empty first page) is expressed as a single empty paragraph.
         if (!headerElement.HasChildren)
             headerElement.Append(new Paragraph());
 
@@ -571,7 +442,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             _currentSectionStyleId = prevSection;
         }
 
-        // See WriteHeaderPart: CT_HdrFtr requires at least one block-level element.
         if (!footerElement.HasChildren)
             footerElement.Append(new Paragraph());
 
@@ -587,8 +457,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         if (sectionProps == null) return;
         if (sectionProps.Elements<TitlePage>().Any()) return;
 
-        // CT_SectPr sequence: titlePg precedes textDirection/bidi/rtlGutter/docGrid/
-        // printerSettings — a plain Append lands after docGrid on preserved packages.
         var tail = sectionProps.ChildElements.FirstOrDefault(c =>
             c is TextDirection or BiDi or GutterOnRight or DocGrid or PrinterSettingsReference);
         var titlePg = new TitlePage();
@@ -622,21 +490,8 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return sectionProps;
     }
 
-    /// <summary>
-    /// sectPr, do którego wpinamy referencje nagłówka/stopki i titlePg: PIERWSZY sectPr
-    /// w kolejności dokumentu. W dokumencie wielosekcyjnym to sectPr pierwszego markera —
-    /// sekcje bez własnych referencji dziedziczą je w Wordzie z poprzedniej sekcji; gdyby
-    /// referencje trafiły tylko do body-level sectPr (ostatnia sekcja), wcześniejsze strony
-    /// nie miałyby nagłówka/stopki.
-    /// </summary>
     private SectionProperties? GetReferenceSectionProps() => _firstSectionProps ?? GetOrCreateSectionProps();
 
-    /// <summary>
-    /// Konwertuje HTML na elementy nagłówka/stopki.
-    /// Akceptuje wszystkie tagi obsługiwane przez body (h1-6, p, ul/ol, table, img, blockquote, hr).
-    /// Treść która nie tworzy block-level (np. tekst bez paragrafu, samodzielny &lt;span&gt;) jest
-    /// pakowana w domyślny &lt;p&gt;. Header w DOCX nie może zawierać lużnych Runów.
-    /// </summary>
     private void ConvertHtmlToHeaderFooter(HtmlNode node, OpenXmlCompositeElement parent)
     {
         Paragraph? pendingTextParagraph = null;
@@ -649,7 +504,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     && !pendingTextParagraph.Elements<Hyperlink>().Any()
                     && !pendingTextParagraph.Elements<SimpleField>().Any())
                 {
-                    // pusty paragraf po flushy nie powinien być dodawany
+                    
                 }
                 else
                 {
@@ -686,8 +541,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 case "sup":
                 case "a":
                 {
-                    // Inline-level w header/footer — pakujemy do bieżącego (lub nowego) paragrafu.
-                    // Specjalne klasy field-page / field-numpages = pole liczby strony.
+                    
                     pendingTextParagraph ??= new Paragraph();
                     if (child.HasClass("field-page") || child.HasClass("page-number"))
                     {
@@ -707,7 +561,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     }
                     else
                     {
-                        // Reużyj CreateRunsFromNode z dziedziczeniem stylu rodzica (span style=...)
+                        
                         var parentStyle = child.GetAttributeValue("style", "");
                         RunProperties? base_ = null;
                         if (!string.IsNullOrEmpty(parentStyle))
@@ -732,8 +586,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 case "img":
                 {
                     pendingTextParagraph ??= new Paragraph();
-                    // Pass-through (ADR-0056): podgląd VML/OLE z data-docx-xml → oryginalny
-                    // fragment zamiast konwersji podglądowego SVG (który jako a:blip psuje pakiet).
+                    
                     if (child.GetAttributeValue("data-docx-xml", "") != ""
                         && TryRestorePreservedElement(child) is { } preservedHfImg)
                     {
@@ -789,8 +642,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 case "header":
                 case "footer":
                 {
-                    // Pass-through grafiki XML (ADR-0056): kształt/grupa w paśmie wraca 1:1
-                    // z data-docx-xml (dotąd generyczna rekursja gubiła go przy każdym zapisie).
+                    
                     if (child.GetAttributeValue("data-docx-xml", "") != ""
                         && TryRestorePreservedElement(child) is { } preservedHfBlock)
                     {
@@ -798,8 +650,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                         parent.Append(new Paragraph(new Run(preservedHfBlock)));
                         break;
                     }
-                    // Pole tekstowe (np. adres w stopce Qutasator) — do bufora, przypinane do
-                    // następnego akapitu; pozostałe kontenery — zejdź w dzieci.
+                    
                     if (IsTextBoxNode(child))
                     {
                         FlushPending();
@@ -812,7 +663,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 }
                 default:
                 {
-                    // nieznany tag — traktujemy jak inline (zejdź w dzieci do bieżącego paragrafu)
+                    
                     pendingTextParagraph ??= new Paragraph();
                     foreach (var run in CreateRunsFromNode(child, null))
                     {
@@ -825,27 +676,13 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
         FlushPending();
 
-        // Pola tekstowe bez akapitu-następnika (np. textbox jako ostatni element pasma) —
-        // domykający akapit staje się ich akapitem-kotwicą.
         FlushPendingTextBoxesInto(parent);
 
-        // Header/Footer MUSZĄ zawierać co najmniej jeden block-level (np. Paragraph),
-        // inaczej Word odmówi otwarcia dokumentu.
         if (!parent.Elements<Paragraph>().Any() && !parent.Elements<Table>().Any())
         {
             parent.Append(new Paragraph());
         }
 
-        // Każdy paragraf w header/footer bez własnego stylu otrzymuje domyślny
-        // styl sekcji ("Header"/"Footer"), tak jak robi to Word natywnie.
-        // Dzięki temu czcionka i odstępy są zgodne z konwencją Worda
-        // i tekst nie pojawia się jako "Normal".
-        // WYJĄTEK (bug 13261178): akapit z WŁASNYMI w:tabs (odtworzonymi z data-tab-stops =
-        // kompletny efektywny zestaw) nie może dostać stylu, którego definicja niesie stopy —
-        // stopy stylu SUMUJĄ się z bezpośrednimi (ECMA-376). Nasza definicja Header/Footer
-        // jest już bez stopów, ale ConvertPreservingPackage podmienia styles.xml na ORYGINALNY,
-        // gdzie wordowy Header/Footer ma 4536:center/9072:right — tabulator pasma przeskakiwał
-        // wtedy na dodany stop przy każdym zapisie.
         if (_currentSectionStyleId != null)
         {
             foreach (var p in parent.Elements<Paragraph>())
@@ -856,10 +693,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Ustawia <c>ParagraphStyleId</c> dla paragrafu, o ile nie ma już ustawionego stylu.
-    /// Używane dla paragrafów w nagłówku/stopce, by przejęły styl "Header"/"Footer".
-    /// </summary>
     private static void ApplyDefaultSectionStyle(Paragraph paragraph, string styleId)
     {
         var props = paragraph.ParagraphProperties;
@@ -888,12 +721,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         sectionProps.InsertAt(new FooterReference { Type = type, Id = footerPartId }, 0);
     }
 
-    /// <summary>
-    /// Wpina WŁASNE nagłówki/stopki sekcji ≥ 1 na ich sectPr: sekcja o indeksie s (0-based)
-    /// → _emittedSectionProps[s] (paragraph-level sectPr zamykający tę sekcję) albo body-level
-    /// sectPr, gdy s to sekcja ostatnia. Sekcja 0 (bazowa) idzie standardową ścieżką
-    /// AddHeaderAndFooter → pierwszy sectPr; sekcje bez wpisu dziedziczą w Wordzie.
-    /// </summary>
     private void AddSectionHeadersFooters(WordprocessingDocument document, IReadOnlyList<SectionHeaderFooter>? sections)
     {
         if (sections == null || sections.Count == 0) return;
@@ -903,18 +730,15 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
         foreach (var entry in sections)
         {
-            if (entry.SectionIndex < 1) continue; // sekcja 0 = pola bazowe Header/Footer
+            if (entry.SectionIndex < 1) continue; 
 
             SectionProperties? target = null;
             if (entry.SectionIndex < _emittedSectionProps.Count)
                 target = _emittedSectionProps[entry.SectionIndex];
             else if (entry.SectionIndex == _emittedSectionProps.Count)
-                target = bodySectPr; // ostatnia sekcja
-            if (target == null) continue; // markery usunięte z treści → sekcja nie istnieje
+                target = bodySectPr; 
+            if (target == null) continue; 
 
-            // See AddHeaderAndFooter: variants are independent of the default part (empty
-            // Html = the section inherits the default in Word), and titlePg survives even
-            // with no explicit first part (null FirstPageHtml = inherit from previous section).
             if (entry.Header is { } h)
             {
                 if (!string.IsNullOrWhiteSpace(h.Html))
@@ -951,11 +775,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Odczytuje domyślne wartości dokumentu z kontenera .document-content wygenerowanego
-    /// przez DocxToHtmlConverter: inline font-family/font-size oraz data-default-* z odstępami
-    /// akapitowymi docDefaults oryginału. Bez kontenera pola zostają null (fallback konfiguracja).
-    /// </summary>
     private void CaptureDocumentDefaults(HtmlDocument htmlDoc)
     {
         var container = htmlDoc.DocumentNode.SelectSingleNode("//div[contains(@class,'document-content')]");
@@ -964,7 +783,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         var style = container.GetAttributeValue("style", "");
         var inv = System.Globalization.CultureInfo.InvariantCulture;
 
-        // Pierwszy krój z listy font-family (reader emituje 'Nazwa',fallback).
         var fontMatch = Regex.Match(style, @"font-family:\s*'?([^;',]+)");
         if (fontMatch.Success && !string.IsNullOrWhiteSpace(fontMatch.Groups[1].Value))
             _docDefaultFontFamily = fontMatch.Groups[1].Value.Trim();
@@ -991,11 +809,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         _docDefaultColumns = ParseColumnDataAttributes(container);
     }
 
-    /// <summary>
-    /// Odtwarza <see cref="ColumnLayout"/> z atrybutów data-col-* (kontener .document-content
-    /// albo marker div.docx-section-break). Zwraca null, gdy brak data-col-count &gt; 1
-    /// (układ jednokolumnowy — ADR-0039).
-    /// </summary>
     private static ColumnLayout? ParseColumnDataAttributes(HtmlNode node)
     {
         var countRaw = node.GetAttributeValue("data-col-count", "");
@@ -1037,7 +850,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return layout;
     }
 
-    /// <summary>Domyślne odstępy akapitowe pakietu: z kontenera dokumentu albo fallback Worda.</summary>
     private SpacingBetweenLines BuildDefaultSpacing()
     {
         if (_docDefaultSpacingAfterTw == null && _docDefaultSpacingBeforeTw == null && _docDefaultSpacingLine == null)
@@ -1059,24 +871,18 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return spacing;
     }
 
-    /// <summary>
-    /// Dodaje domyślne style do dokumentu z dokładnym odwzorowaniem
-    /// </summary>
     private void AddDocumentStyles(WordprocessingDocument document)
     {
         var stylesPart = _mainPart!.AddNewPart<StyleDefinitionsPart>();
         var styles = new Styles();
 
-        // Domyślny krój/rozmiar: z kontenera dokumentu (reader emituje je z docDefaults
-        // oryginału), a gdy brak — firmowa czcionka z konfiguracji (DocumentDefaults).
         var bodyFont = _docDefaultFontFamily
             ?? (string.IsNullOrWhiteSpace(_defaults.FontFamily) ? "Calibri" : _defaults.FontFamily);
         var headingFont = string.IsNullOrWhiteSpace(_defaults.HeadingFontFamily) ? bodyFont : _defaults.HeadingFontFamily;
-        // Rozmiar w DOCX jest podawany w pół-punktach (1pt = 2 jednostki).
+        
         var fontSizePt = _docDefaultFontSizePt ?? _defaults.FontSizePt;
         var halfPt = ((int)Math.Round(fontSizePt * 2)).ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        // Domyślne właściwości dokumentu
         var docDefaults = new DocDefaults(
             new RunPropertiesDefault(
                 new RunPropertiesBaseStyle(
@@ -1092,7 +898,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         );
         styles.Append(docDefaults);
 
-        // Styl normalny
         var normalStyle = new Style
         {
             Type = StyleValues.Paragraph,
@@ -1108,7 +913,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         ));
         styles.Append(normalStyle);
 
-        // Style nagłówków z dokładnymi rozmiarami jak w Word
         string[] headingColors = { "2F5496", "2F5496", "1F3763", "2F5496", "2F5496", "1F3763" };
         string[] headingSizes = { "32", "26", "24", "22", "22", "22" };
         bool[] headingBold = { true, true, true, true, true, false };
@@ -1127,7 +931,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             headingStyle.Append(new NextParagraphStyle { Val = "Normal" });
             headingStyle.Append(new PrimaryStyle());
             
-            // Kolejność w <w:pPr> wg schematu (EG_PPrBase): keepNext → keepLines → spacing → outlineLvl.
             var paraProps = new StyleParagraphProperties(
                 new KeepNext(),
                 new KeepLines(),
@@ -1136,9 +939,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             );
             headingStyle.Append(paraProps);
             
-            // Kolejność dzieci w <w:rPr> jest narzucona schematem OOXML (EG_RPrBase):
-            // rFonts → b → i → … → color → … → sz. Zła kolejność (np. sz przed color, b po color)
-            // = błąd schematu → Word zgłasza „dokument uszkodzony". Emitujemy w poprawnej sekwencji.
             var runPropsElements = new List<OpenXmlElement>
             {
                 new RunFonts { Ascii = headingFont, HighAnsi = headingFont },
@@ -1152,7 +952,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             styles.Append(headingStyle);
         }
 
-        // Styl hiperłącza
         var hyperlinkStyle = new Style
         {
             Type = StyleValues.Character,
@@ -1165,7 +964,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         ));
         styles.Append(hyperlinkStyle);
 
-        // Styl akapitu listy
         var listParagraph = new Style
         {
             Type = StyleValues.Paragraph,
@@ -1178,14 +976,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         ));
         styles.Append(listParagraph);
 
-        // Styl Nagłówka (Header) — wbudowany styl Worda, używany dla treści
-        // nagłówka strony (odstępy zgodne z konwencją Worda).
-        // UWAGA: styl NIE deklaruje tab-stopów (Word ma tu 4536:center/9072:right).
-        // Tab-stopy stylu SUMUJĄ się z bezpośrednimi w:tabs akapitu (ECMA-376),
-        // a kompletny efektywny zestaw każdego akapitu i tak wraca per akapit
-        // z data-tab-stops — stopy w stylu DODAWAŁY pozycje, których dokument
-        // źródłowy nie miał, i po pierwszym zapisie tabulator stopki/nagłówka
-        // przeskakiwał na 4536:center zamiast własnego stopu (bug 13261178).
         var headerStyle = new Style
         {
             Type = StyleValues.Paragraph,
@@ -1213,7 +1003,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         headerCharStyle.Append(new UIPriority { Val = 99 });
         styles.Append(headerCharStyle);
 
-        // Styl Stopki (Footer) — bez tab-stopów, patrz komentarz przy stylu Header.
         var footerStyle = new Style
         {
             Type = StyleValues.Paragraph,
@@ -1241,7 +1030,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         footerCharStyle.Append(new UIPriority { Val = 99 });
         styles.Append(footerCharStyle);
 
-        // Domyślny styl Run (wymagany jako bazowy dla LinkedStyle)
         var defaultParagraphFont = new Style
         {
             Type = StyleValues.Character,
@@ -1257,9 +1045,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         stylesPart.Styles = styles;
     }
 
-    /// <summary>
-    /// Konwertuje węzły HTML na elementy Body
-    /// </summary>
     private void ConvertHtmlToBody(HtmlNode node, Body body)
     {
         foreach (var child in node.ChildNodes)
@@ -1271,8 +1056,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             }
         }
 
-        // Pola tekstowe bez akapitu-następnika (textbox na samym końcu treści) —
-        // dopisz akapit-kotwicę, żeby drawing nie przepadł.
         FlushPendingTextBoxesInto(body);
 
         if (!body.Elements<Paragraph>().Any() && !body.Elements<Table>().Any())
@@ -1281,9 +1064,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Konwertuje węzeł HTML na elementy OpenXML
-    /// </summary>
     private List<OpenXmlElement> ConvertHtmlNode(HtmlNode node)
     {
         var elements = new List<OpenXmlElement>();
@@ -1306,17 +1086,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return elements;
     }
 
-    /// <summary>
-    /// Konwertuje element HTML na elementy OpenXML z pełnym odwzorowaniem
-    /// </summary>
     private List<OpenXmlElement> ConvertHtmlElement(HtmlNode node)
     {
         var elements = new List<OpenXmlElement>();
         var tagName = node.Name.ToLower();
 
-        // Pass-through grafiki XML (ADR-0056): element z data-docx-xml (div.docx-shape,
-        // span.docx-preserved, img podglądu VML/OLE) niesie oryginalny OOXML — odtwarzamy
-        // 1:1 zamiast stratnej konwersji HTML (dotąd kształty ginęły w generycznej rekursji).
         if (node.NodeType == HtmlNodeType.Element
             && node.GetAttributeValue("data-docx-xml", "") != ""
             && TryRestorePreservedElement(node) is { } preservedElement)
@@ -1339,10 +1113,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             case "div":
                 if (IsTextBoxNode(node))
                 {
-                    // Pole tekstowe Worda — NIE spłaszczaj do zwykłych akapitów (tak ginęła
-                    // cała ramka przy pierwszym autosave). Drawing czeka w buforze i zostanie
-                    // przypięty do NASTĘPNEGO akapitu (reader emituje div bezpośrednio przed
-                    // akapitem-kotwicą — patrz DocxToHtmlConverter.HoistTextBox).
+                    
                     BufferTextBoxDrawing(node);
                 }
                 else if (IsSectionBreakNode(node))
@@ -1351,14 +1122,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 }
                 else if (node.HasClass("docx-column-break"))
                 {
-                    // Podział kolumny hoistowany przez przeglądarkę do bloku top-level (po edycji)
-                    // → akapit z runem Break type=column. Wewnątrz akapitu obsługuje CreateRunsFromNode.
+                    
                     elements.Add(new Paragraph(new Run(new Break { Type = BreakValues.Column })));
                 }
                 else if (IsPageBreakNode(node))
                 {
-                    // Marker sekcji tuż za page-breakiem = przerwa sekcji typu nextPage;
-                    // sectPr sam łamie stronę, dodatkowy w:br type=page dawałby pustą stronę.
+                    
                     if (!NextElementSiblingIsSectionBreak(node))
                         elements.Add(CreatePageBreak());
                 }
@@ -1422,9 +1191,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return elements;
     }
 
-    /// <summary>
-    /// Konwertuje element P na Paragraph z pełnym parsowaniem stylów
-    /// </summary>
     private Paragraph ConvertParagraphElement(HtmlNode node)
     {
         var paragraph = new Paragraph();
@@ -1433,30 +1199,23 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         var style = node.GetAttributeValue("style", "");
         ApplyParagraphStyle(props, style);
 
-        // Sprawdź data-style-id dla zachowania oryginalnego stylu Word
         var styleId = node.GetAttributeValue("data-style-id", "");
         if (!string.IsNullOrEmpty(styleId))
         {
             props.Append(new ParagraphStyleId { Val = styleId });
         }
 
-        // Tab-stopy per akapit (reader: data-tab-stops="pos:align[:leader];…", pos w twips) —
-        // odtwarzane jako w:tabs, żeby pozycje/wyrównania/leadery nie ginęły przy zapisie.
         var tabStopsAttr = node.GetAttributeValue("data-tab-stops", "");
         if (!string.IsNullOrEmpty(tabStopsAttr) && ParseTabStops(tabStopsAttr) is { } tabs)
         {
             props.Append(tabs);
         }
 
-        // pStyle/tabs dokładane są PO ApplyParagraphStyle — przywróć kolejność schematu
-        // (pStyle pierwsze, tabs przed spacing/jc).
         NormalizeParagraphPropertiesOrder(props);
 
         if (props.HasChildren)
             paragraph.Append(props);
 
-        // Pola tekstowe zbuforowane przez poprzedzające je div.docx-textbox — ten akapit
-        // jest ich akapitem-kotwicą (run z drawingiem na początku treści akapitu).
         AttachPendingTextBoxes(paragraph);
 
         AppendInlineContent(paragraph, node);
@@ -1464,18 +1223,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return paragraph;
     }
 
-    /// <summary>
-    /// Konwertuje nagłówek na Paragraph z odpowiednim stylem
-    /// </summary>
     private Paragraph ConvertHeadingElement(HtmlNode node, int level)
     {
         var paragraph = new Paragraph();
         var props = new ParagraphProperties();
         props.Append(new ParagraphStyleId { Val = $"Heading{level}" });
 
-        // PEŁNE właściwości akapitu z inline CSS (gap-analysis pkt 1): dotąd nagłówki szły
-        // przez ApplyParagraphStyleExtras (sam text-align) — spacing/wcięcia/tło/ramki/
-        // pageBreakBefore GINĘŁY przy każdym zapisie.
         var style = node.GetAttributeValue("style", "");
         if (!string.IsNullOrEmpty(style))
         {
@@ -1489,31 +1242,22 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return paragraph;
     }
 
-    /// <summary>
-    /// Konwertuje listę na paragrafy z prawidłową definicją numeracji Word
-    /// </summary>
     private List<OpenXmlElement> ConvertListElement(HtmlNode node, bool ordered, int level = 0, int? parentNumId = null)
     {
         var elements = new List<OpenXmlElement>();
 
-        // Fragment listy może zaczynać się na głębszym poziomie (data-ilvl z readera, np.
-        // kontynuacja poziomu 1 po zwykłym akapicie) — bez tego eksport spłaszczał go do
-        // ilvl=0: złe wcięcie i format poziomu 0 zamiast właściwego.
         level = ResolveListLevel(node, level);
 
         int numId;
         if (parentNumId.HasValue)
         {
-            // Zagnieżdżona lista — współdziel numId z rodzicem
+            
             numId = parentNumId.Value;
         }
         else
         {
             EnsureNumberingPart();
 
-            // Tożsamość listy z readera: fragmenty tej samej listy logicznej (np. rozdzielone
-            // zwykłym akapitem) niosą ten sam data-num-id → współdzielą jedną NumberingInstance,
-            // więc Word kontynuuje numerację. Bez atrybutu (lista utworzona w edytorze) — nowa.
             var htmlListId = node.GetAttributeValue("data-num-id", "");
             if (htmlListId.Length > 0 && _numIdByHtmlList.TryGetValue(htmlListId, out var existingNumId))
             {
@@ -1521,26 +1265,16 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             }
             else
             {
-                // Przeskanuj strukturę listy aby określić format dla każdego poziomu
+                
                 var levelFormats = new Dictionary<int, bool>();
                 ScanListLevels(node, ordered, level, levelFormats);
 
-                // Wykryj poziomy z punktatorem obrazkowym (DocxToHtmlConverter wstawia
-                // <span class="list-marker"><img .../></span> jako wizualny marker).
-                // Osadzalny obraz (data URI) → prawdziwy w:numPicBullet + w:lvlPicBulletId;
-                // nieosadzalny → jak dotąd: numFmt=none i obraz inline w treści.
                 var pictureBulletLevels = new Dictionary<int, string?>();
                 ScanPictureBulletLevels(node, level, pictureBulletLevels);
 
-                // Definicje poziomów round-tripowane z readera (data-num-fmt / data-lvl-text /
-                // data-start / data-bullet-font / data-suffix / data-is-legal / data-lvl-restart /
-                // data-ind-*-tw) — zachowują oryginalny format numeracji zamiast hardkodowanej drabinki.
                 var levelSpecs = new Dictionary<int, HtmlListLevelSpec>();
                 ScanListLevelSpecs(node, level, levelSpecs);
 
-                // Poziomy z data-lvl-override = pełne w:lvlOverride/w:lvl NA INSTANCJI —
-                // ich definicje nie trafiają do abstraktu (inne instancje tego samego
-                // abstraktu wyglądają inaczej).
                 var overrideSpecs = levelSpecs
                     .Where(kv => kv.Value.IsLvlOverride)
                     .ToDictionary(kv => kv.Key, kv => kv.Value);
@@ -1551,17 +1285,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     .Where(kv => !overrideSpecs.ContainsKey(kv.Key))
                     .ToDictionary(kv => kv.Key, kv => kv.Value);
 
-                // Definicja (w:abstractNum) współdzielona między listami o tym samym
-                // data-abstract-num-id; instancja (w:num) per data-num-id. „Rozpocznij od nowa"
-                // = nowa instancja ze startOverride na wspólny abstrakt (FR-EXPORT-004),
-                // a nie kopia definicji z przepisanym w:start.
                 var htmlAbstractId = node.GetAttributeValue("data-abstract-num-id", "");
                 int abstractNumId;
                 if (htmlAbstractId.Length > 0 && _abstractIdByHtmlAbstract.TryGetValue(htmlAbstractId, out var existingAbstract))
                 {
                     abstractNumId = existingAbstract;
-                    // Ten fragment może używać poziomów, których fragment tworzący abstrakt
-                    // nie widział (miały drabinkę domyślną) — dosyłamy ich definicje.
+                    
                     UpgradeSharedAbstractLevels(abstractNumId, levelFormats, abstractPicLevels, abstractSpecs);
                 }
                 else
@@ -1575,7 +1304,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     .Where(kv => kv.Value.StartOverride > 0)
                     .ToDictionary(kv => kv.Key, kv => kv.Value.StartOverride);
 
-                // Pełne nadpisania poziomów budowane tym samym mechanizmem co poziomy abstraktu.
                 var instancePicLevels = new HashSet<int>();
                 var fullLevelOverrides = new Dictionary<int, Level>();
                 foreach (var (lvl, overrideSpec) in overrideSpecs)
@@ -1603,10 +1331,8 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         {
             if (child.Name.ToLower() != "li") continue;
             
-            // Sprawdź czy li zawiera zagnieżdżone listy
             var nestedLists = child.SelectNodes("./ul|./ol");
             
-            // Utwórz paragraf z elementem listy
             var para = new Paragraph();
             var props = new ParagraphProperties();
             props.Append(new ParagraphStyleId { Val = "ListParagraph" });
@@ -1615,29 +1341,21 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 new NumberingId { Val = numId }
             ));
             
-            // PEŁNE właściwości akapitu z inline CSS li (gap-analysis pkt 1): dotąd tylko
-            // text-align — spacing/tło/ramki punktu listy GINĘŁY przy każdym zapisie.
-            // BEZ sekcji wcięć: wcięcia list niesie kontrakt data-ind-*-tw
-            // (AppendListItemIndentation), a margin-left na li to delta prezentacyjna.
             var liStyle = child.GetAttributeValue("style", "");
             if (!string.IsNullOrEmpty(liStyle))
             {
                 ApplyParagraphStyle(props, liStyle, includeIndentation: false);
             }
 
-            // Direct w:ind elementu listy (kontrakt data-ind-*-tw z readera) — bez tego
-            // wcięcie nadpisane na akapicie wracałoby po zapisie do definicji poziomu.
             AppendListItemIndentation(props, child);
 
-            // Kolor znacznika per pozycja (14104878): rPr ZNAKU KOŃCA AKAPITU — Word koloruje
-            // nim numer/punktator. Bez odtworzenia kolor znacznika ginął przy pierwszym zapisie.
             var markColorRaw = child.GetAttributeValue("data-mark-color", "");
             var markSizeRaw = child.GetAttributeValue("data-mark-size", "");
             var hasMarkColor = Regex.IsMatch(markColorRaw, "^[0-9A-Fa-f]{6}$");
             var hasMarkSize = Regex.IsMatch(markSizeRaw, @"^\d{1,4}$");
             if (hasMarkColor || hasMarkSize)
             {
-                // Jeden wspólny rPr znaku końca akapitu (kolejność EG_RPrBase: color przed sz).
+                
                 var markProps = new ParagraphMarkRunProperties();
                 if (hasMarkColor) markProps.Append(new Color { Val = markColorRaw });
                 if (hasMarkSize) markProps.Append(new FontSize { Val = markSizeRaw });
@@ -1647,7 +1365,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
             para.Append(props);
 
-            // Buduj base RunProperties ze stylu <li> (dziedziczenie do span/text wewnątrz)
             RunProperties? liBaseProps = null;
             if (!string.IsNullOrEmpty(liStyle))
             {
@@ -1656,22 +1373,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 if (!liBaseProps.HasChildren) liBaseProps = null;
             }
 
-            // Dodaj zawartość (bez zagnieżdżonej listy)
             foreach (var liChild in child.ChildNodes)
             {
                 var liChildName = liChild.Name.ToLower();
                 if (liChildName == "ul" || liChildName == "ol")
-                    continue; // Zagnieżdżona lista będzie obsłużona osobno
+                    continue; 
 
-                // <span class="list-marker"> jest artefaktem prezentacyjnym dodanym przez
-                // DocxToHtmlConverter, żeby przeglądarka pokazała niestandardowy punktator
-                // (obrazek lub znak Wingdings/Symbol). Przy eksporcie:
-                //   - obrazek, którego poziom dostał PRAWDZIWY w:numPicBullet — pomijamy
-                //     (Word narysuje go sam z definicji numeracji; inline run by go zdublował),
-                //   - obrazek nieosadzalny (poziom z numFmt=none) — zachowaj jako wiodący
-                //     inline run, żeby grafika nie zginęła,
-                //   - tekstowy marker (np. ✓, ✗) pomijamy — Word wstawi własny automatyczny
-                //     punktator z definicji numeracji.
                 if (liChildName == "span" && IsListMarkerSpan(liChild))
                 {
                     var img = liChild.SelectSingleNode(".//img");
@@ -1697,14 +1404,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
             elements.Add(para);
 
-            // Obsłuż zagnieżdżone listy — współdziel numId
             if (nestedLists != null)
             {
                 foreach (var nestedList in nestedLists)
                 {
                     var isOrdered = nestedList.Name.ToLower() == "ol";
-                    // ResolveListLevel wewnątrz honoruje data-ilvl zagnieżdżonego kontenera
-                    // (skoki poziomów, np. 0 → 2, są legalne w WordprocessingML).
+                    
                     elements.AddRange(ConvertListElement(nestedList, isOrdered, level + 1, numId));
                 }
             }
@@ -1737,21 +1442,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         NormalizeParagraphPropertiesOrder(props);
     }
 
-    /// <summary>
-    /// Definicja poziomu listy odczytana z data-* kontenera (round-trip z DocxToHtmlConverter).
-    /// </summary>
     private readonly record struct HtmlListLevelSpec(
         string? Fmt, string? LvlText, int Start, string? BulletFont,
         int StartOverride, string? Suffix, bool IsLegal, int LvlRestart,
         string? IndLeftTw, string? IndHangingTw, string? IndFirstLineTw,
         bool IsLvlOverride, string? MarkerColor = null, string? MarkerSizeHalfPoints = null);
 
-    /// <summary>
-    /// Zbiera definicje poziomów z atrybutów data-* na kontenerach ul/ol (każdy zagnieżdżony
-    /// kontener opisuje swój poziom): data-num-fmt / data-lvl-text / data-start / data-bullet-font
-    /// / data-start-override / data-suffix / data-is-legal / data-lvl-restart / data-ind-*-tw.
-    /// Pierwsze napotkane wystąpienie poziomu wygrywa.
-    /// </summary>
     private static void ScanListLevelSpecs(HtmlNode node, int level, Dictionary<int, HtmlListLevelSpec> specs)
     {
         if (!specs.ContainsKey(level))
@@ -1808,11 +1504,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Efektywny poziom listy dla kontenera ul/ol: data-ilvl z readera (fragment listy może
-    /// zaczynać się na GŁĘBSZYM poziomie, np. kontynuacja ilvl=1 po zwykłym akapicie),
-    /// z fallbackiem do poziomu wynikającego z zagnieżdżenia HTML.
-    /// </summary>
     private static int ResolveListLevel(HtmlNode node, int fallback)
     {
         var raw = node.GetAttributeValue("data-ilvl", "");
@@ -1821,7 +1512,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return Math.Clamp(fallback, 0, 8);
     }
 
-    /// <summary>Mapuje token data-num-fmt (nazwy w:numFmt) na NumberFormatValues.</summary>
     private static bool TryMapNumFmt(string token, out NumberFormatValues fmt)
     {
         switch (token)
@@ -1835,11 +1525,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             case "bullet": fmt = NumberFormatValues.Bullet; return true;
             case "none": fmt = NumberFormatValues.None; return true;
             default:
-                // Token spoza mapy pochodzi z data-num-fmt readera (surowa wartość w:numFmt
-                // z importowanego dokumentu: ordinal/cardinalText/ordinalText/chicago/
-                // formaty językowe…) — odtwórz 1:1 zamiast degradować do decimal
-                // (pkt 22.10 specyfikacji list). Guard na kształt tokenu odsiewa śmieci
-                // z ręcznie edytowanego HTML.
+                
                 if (Regex.IsMatch(token, "^[a-zA-Z][a-zA-Z0-9]*$"))
                 {
                     fmt = new NumberFormatValues(token);
@@ -1850,9 +1536,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Skanuje strukturę HTML listy aby określić format (ordered/unordered) dla każdego poziomu zagnieżdżenia
-    /// </summary>
     private void ScanListLevels(HtmlNode node, bool ordered, int level, Dictionary<int, bool> levelFormats)
     {
         if (!levelFormats.ContainsKey(level))
@@ -1871,19 +1554,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Wykrywa poziomy listy, które używają punktatora obrazkowego — czyli mają
-    /// <c>&lt;span class="list-marker"&gt;&lt;img/&gt;&lt;/span&gt;</c> wewnątrz &lt;li&gt;.
-    /// Wartość = data URI obrazu (eksport jako w:numPicBullet) albo null, gdy źródło nie jest
-    /// osadzalne — wtedy fallback: obraz zostaje inline w treści, poziom bez markera Worda.
-    /// </summary>
     private static void ScanPictureBulletLevels(HtmlNode node, int level, Dictionary<int, string?> pictureBulletLevels)
     {
         foreach (var child in node.ChildNodes)
         {
             if (child.Name.ToLower() != "li") continue;
 
-            // Sprawdź bezpośrednie dzieci <li>, czy któreś z nich jest markerem obrazkowym.
             foreach (var liChild in child.ChildNodes)
             {
                 if (liChild.Name.ToLower() != "span") continue;
@@ -1907,9 +1583,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Czy element to <c>&lt;span class="list-marker"&gt;</c> emitowany przez DocxToHtmlConverter.
-    /// </summary>
     private static bool IsListMarkerSpan(HtmlNode node)
     {
         var cls = node.GetAttributeValue("class", "");
@@ -1922,9 +1595,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return false;
     }
 
-    /// <summary>
-    /// Upewnia się że dokument ma NumberingDefinitionsPart
-    /// </summary>
     private void EnsureNumberingPart()
     {
         if (_numberingPart != null) return;
@@ -1934,9 +1604,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         _numberingPart.Numbering.Save();
     }
 
-    /// <summary>
-    /// Tworzy definicję abstrakcyjnej numeracji
-    /// </summary>
     private int CreateAbstractNumbering(
         Dictionary<int, bool> levelFormats,
         Dictionary<int, string?>? pictureBulletLevels = null,
@@ -1946,7 +1613,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
         var abstractNum = new AbstractNum { AbstractNumberId = abstractNumId };
 
-        // Dodaj wymagany identyfikator Nsid dla poprawnej obsługi numeracji w Word
         var nsidValue = Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper();
         abstractNum.Append(new Nsid { Val = nsidValue });
         abstractNum.Append(new MultiLevelType { Val = MultiLevelValues.HybridMultilevel });
@@ -1954,7 +1620,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         var exportedPicBulletLevels = new HashSet<int>();
         var specLevels = new HashSet<int>();
 
-        // Zdefiniuj 9 poziomów — każdy poziom ma format zgodny ze strukturą HTML
         for (int lvl = 0; lvl < 9; lvl++)
         {
             var isOrdered = ResolveLevelOrdered(levelFormats, lvl);
@@ -1963,9 +1628,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             var hasPicBulletMarker = pictureBulletLevels != null
                 && pictureBulletLevels.TryGetValue(lvl, out picBulletUri);
 
-            // Poziomy zbudowane z jawnych data-* notujemy — późniejszy fragment współdzielący
-            // abstrakt może dosłać definicje poziomów, których ten fragment nie używał
-            // (UpgradeSharedAbstractLevels podmienia wtedy poziomy z drabinki domyślnej).
             if (spec != null || hasPicBulletMarker) specLevels.Add(lvl);
 
             abstractNum.Append(BuildAbstractLevel(
@@ -1976,7 +1638,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         if (exportedPicBulletLevels.Count > 0)
             _picBulletLevelsByAbstract[abstractNumId] = exportedPicBulletLevels;
 
-        // Wstaw na początku (przed instancjami)
         var firstInstance = _numberingPart!.Numbering.Elements<NumberingInstance>().FirstOrDefault();
         if (firstInstance != null)
             _numberingPart.Numbering.InsertBefore(abstractNum, firstInstance);
@@ -1987,16 +1648,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return abstractNumId;
     }
 
-    /// <summary>Format poziomu (ordered/unordered) — domyślnie jak poziom najwyższy.</summary>
     private static bool ResolveLevelOrdered(Dictionary<int, bool> levelFormats, int lvl) =>
         levelFormats.TryGetValue(lvl, out var fmt)
             ? fmt
             : (levelFormats.TryGetValue(0, out var defaultFmt) && defaultFmt);
 
-    /// <summary>
-    /// Buduje definicję pojedynczego poziomu (w:lvl) w kolejności sekwencji CT_Lvl — używane
-    /// zarówno dla poziomów abstraktu, jak i pełnych nadpisań w:lvlOverride/w:lvl na instancji.
-    /// </summary>
     private Level BuildAbstractLevel(int lvl, bool isOrdered, bool hasPicBulletMarker,
         string? picBulletUri, HtmlListLevelSpec? spec, HashSet<int> exportedPicBulletLevels)
     {
@@ -2006,8 +1662,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             if (hasPicBulletMarker && picBulletUri != null
                 && TryCreatePictureBullet(picBulletUri, out var numPicBulletId))
             {
-                // Prawdziwy punktator graficzny (FR-EXPORT-006): znak z lvlText jest w Wordzie
-                // zastępowany obrazem wskazanym przez w:lvlPicBulletId.
+                
                 levelDef.Append(new NumberingFormat { Val = NumberFormatValues.Bullet });
                 levelDef.Append(new LevelText { Val = "" });
                 levelDef.Append(new LevelPictureBulletId { Val = numPicBulletId });
@@ -2015,14 +1670,13 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             }
             else if (hasPicBulletMarker)
             {
-                // Obraz nieosadzalny (src nie jest data URI / SVG) — grafika zostaje inline
-                // w treści runu, automatyczny marker Worda wyłączony.
+                
                 levelDef.Append(new NumberingFormat { Val = NumberFormatValues.None });
                 levelDef.Append(new LevelText { Val = string.Empty });
             }
             else if (spec is { Fmt: not null } sp && TryMapNumFmt(sp.Fmt, out var mappedFmt))
             {
-                // Round-trip z data-*: dokładny format/lvlText/font punktatora z oryginału.
+                
                 if (mappedFmt == NumberFormatValues.Bullet)
                 {
                     levelDef.Append(new NumberingFormat { Val = NumberFormatValues.Bullet });
@@ -2035,7 +1689,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 else
                 {
                     levelDef.Append(new NumberingFormat { Val = mappedFmt });
-                    // lvlText z placeholderem %N; bez niego (lub uszkodzony) — standardowe "%N.".
+                    
                     var lvlText = !string.IsNullOrEmpty(sp.LvlText) && sp.LvlText.Contains('%')
                         ? sp.LvlText
                         : $"%{lvl + 1}.";
@@ -2067,23 +1721,22 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             {
                 levelDef.Append(new NumberingFormat { Val = NumberFormatValues.Bullet });
                 
-                // Standardowe definicje bullet Word z prawidłowymi czcionkami:
                 var bulletType = lvl % 3;
                 switch (bulletType)
                 {
-                    case 0: // Wypełnione kółko (Symbol)
+                    case 0: 
                         levelDef.Append(new LevelText { Val = "\uF0B7" });
                         levelDef.Append(new NumberingSymbolRunProperties(
                             new RunFonts { Ascii = "Symbol", HighAnsi = "Symbol", Hint = FontTypeHintValues.Default }
                         ));
                         break;
-                    case 1: // Puste kółko (Courier New)
+                    case 1: 
                         levelDef.Append(new LevelText { Val = "o" });
                         levelDef.Append(new NumberingSymbolRunProperties(
                             new RunFonts { Ascii = "Courier New", HighAnsi = "Courier New", ComplexScript = "Courier New", Hint = FontTypeHintValues.Default }
                         ));
                         break;
-                    case 2: // Wypełniony kwadrat (Wingdings)
+                    case 2: 
                         levelDef.Append(new LevelText { Val = "\uF0A7" });
                         levelDef.Append(new NumberingSymbolRunProperties(
                             new RunFonts { Ascii = "Wingdings", HighAnsi = "Wingdings", Hint = FontTypeHintValues.Default }
@@ -2092,29 +1745,26 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 }
             }
             
-            // Kolejność schematu CT_Lvl (sequence!): start, numFmt, lvlRestart, isLgl, suff,
-            // lvlText, lvlPicBulletId, lvlJc, pPr, rPr. Gałęzie wyżej dołożyły start/numFmt/
-            // lvlText(/lvlPicBulletId) — nowe elementy wstawiamy tuż PO numFmt.
             if (spec is { } specProps && levelDef.GetFirstChild<NumberingFormat>() is { } numFmtAnchor)
             {
                 OpenXmlElement anchor = numFmtAnchor;
                 if (specProps.LvlRestart >= 0)
                 {
-                    // Surowa wartość w:lvlRestart (jednobazowa; 0 = poziom nigdy nie restartuje).
+                    
                     var lvlRestartEl = new LevelRestart { Val = specProps.LvlRestart };
                     levelDef.InsertAfter(lvlRestartEl, anchor);
                     anchor = lvlRestartEl;
                 }
                 if (specProps.IsLegal)
                 {
-                    // w:isLgl — etykieta „legal": wszystkie poziomy formatowane jako decimal.
+                    
                     var isLglEl = new IsLegalNumberingStyle();
                     levelDef.InsertAfter(isLglEl, anchor);
                     anchor = isLglEl;
                 }
                 if (specProps.Suffix is { } suffixToken)
                 {
-                    // w:suff — separator znacznik→tekst; tab jest domyślny, emitujemy odstępstwa.
+                    
                     levelDef.InsertAfter(new LevelSuffix
                     {
                         Val = suffixToken == "space" ? LevelSuffixValues.Space : LevelSuffixValues.Nothing
@@ -2122,29 +1772,24 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 }
             }
 
-            // w:rPr musi być OSTATNIM dzieckiem w:lvl — gałęzie dokładają go po lvlText,
-            // więc przenosimy go za lvlJc/pPr (wcześniej lądował przed nimi, poza schematem).
             var markerRunProps = levelDef.GetFirstChild<NumberingSymbolRunProperties>();
             markerRunProps?.Remove();
 
             if (spec is { MarkerColor: not null } specWithColor)
             {
                 markerRunProps ??= new NumberingSymbolRunProperties();
-                // Kolejność EG_RPrBase: rFonts przed color.
+                
                 markerRunProps.Append(new Color { Val = specWithColor.MarkerColor });
             }
             if (spec is { MarkerSizeHalfPoints: not null } specWithSize)
             {
-                // w:sz rozmiaru numeru/punktatora — bez odtworzenia rozmiar znacznika ginął
-                // przy pierwszym zapisie (marker wracał do rozmiaru tekstu/domyślnego).
+                
                 markerRunProps ??= new NumberingSymbolRunProperties();
                 markerRunProps.Append(new FontSize { Val = specWithSize.MarkerSizeHalfPoints });
             }
 
             levelDef.Append(new LevelJustification { Val = LevelJustificationValues.Left });
 
-            // Wcięcia: dokładne twips z definicji poziomu oryginału (data-ind-*-tw); bez nich
-            // dotychczasowa drabinka 720×(lvl+1) z wcięciem wiszącym 360.
             var indentation = new Indentation();
             if (spec is { IndLeftTw: not null } or { IndHangingTw: not null } or { IndFirstLineTw: not null })
             {
@@ -2165,13 +1810,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             return levelDef;
     }
 
-    /// <summary>
-    /// Dosyła do WSPÓŁDZIELONEGO abstraktu definicje poziomów, których fragment tworzący
-    /// abstrakt nie używał (dostały drabinkę domyślną). Poziomy zbudowane wcześniej z jawnych
-    /// data-* nie są podmieniane (pierwsza definicja wygrywa — spójnie z resztą kontraktu).
-    /// Bezpieczne: fragment tworzący abstrakt nie miał elementów na upgradowanym poziomie
-    /// (inaczej niosłyby data-*), więc wygląd żadnego wcześniejszego akapitu się nie zmienia.
-    /// </summary>
     private void UpgradeSharedAbstractLevels(
         int abstractNumId,
         Dictionary<int, bool> levelFormats,
@@ -2217,12 +1855,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             _numberingPart!.Numbering.Save();
     }
 
-    /// <summary>
-    /// Tworzy (lub reużywa — deduplikacja po data URI) w:numPicBullet w części numeracji:
-    /// ImagePart + relacja + VML v:shape/v:imagedata (wariant, który zapisuje sam Word).
-    /// Zwraca false dla nieparsowalnego data URI lub SVG (imagedata na SVG psuje pakiet) —
-    /// wtedy caller zostawia obraz inline w treści (kontrolowana degradacja, zero utraty).
-    /// </summary>
     private bool TryCreatePictureBullet(string dataUri, out int numPicBulletId)
     {
         if (_picBulletIdByDataUri.TryGetValue(dataUri, out numPicBulletId))
@@ -2269,7 +1901,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 }))
         { NumberingPictureBulletId = numPicBulletId };
 
-        // Kolejność schematu w:numbering: numPicBullet* → abstractNum* → num*.
         var firstAbstract = _numberingPart.Numbering.Elements<AbstractNum>().FirstOrDefault();
         var firstNum = _numberingPart.Numbering.Elements<NumberingInstance>().FirstOrDefault();
         if (firstAbstract != null)
@@ -2284,11 +1915,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return true;
     }
 
-    /// <summary>
-    /// Tworzy instancję numeracji. „Rozpocznij od nowa"/„Ustaw wartość" = w:lvlOverride
-    /// z w:startOverride na instancji (FR-EXPORT-004) — restart bez kopiowania definicji.
-    /// Pełne nadpisanie wyglądu poziomu (data-lvl-override) = w:lvlOverride z własnym w:lvl.
-    /// </summary>
     private int CreateNumberingInstance(
         int abstractNumId,
         Dictionary<int, int>? startOverrides = null,
@@ -2304,7 +1930,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             .OrderBy(l => l);
         foreach (var lvl in overrideLevels)
         {
-            // Sekwencja CT_NumLvl: w:startOverride, potem w:lvl.
+            
             var levelOverride = new LevelOverride { LevelIndex = lvl };
             if (startOverrides != null && startOverrides.TryGetValue(lvl, out var startValue))
                 levelOverride.Append(new StartOverrideNumberingValue { Val = startValue });
@@ -2319,20 +1945,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return numId;
     }
 
-    /// <summary>
-    /// Konwertuje tabelę HTML na Table z pełnym odwzorowaniem stylów
-    /// </summary>
     private Table ConvertTableElement(HtmlNode node)
     {
         var table = new Table();
         var tableProps = new TableProperties();
 
-        // Domyślne obramowania — None (żadne linie), chyba że CSS tabeli jawnie definiuje `border:`.
-        // Wcześniej wymuszaliśmy solid-black jako default, co powodowało fałszywe czarne linie
-        // w tabelach, które w oryginalnym DOCX miały `w:tblBorders` z val=nil/none lub w ogóle bez
-        // definicji (bordery per-komórka są w pełni opisane przez ApplyCellBorders).
-        // Kolejność dzieci wg sekwencji CT_TblBorders: top, left, bottom, right, insideH,
-        // insideV (bottom przed left = błąd walidacji — jak tcBorders w ADR-0031).
         var defaultBorders = new TableBorders(
             new TopBorder { Val = BorderValues.None, Size = 0 },
             new LeftBorder { Val = BorderValues.None, Size = 0 },
@@ -2342,20 +1959,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             new InsideVerticalBorder { Val = BorderValues.None, Size = 0 }
         );
         
-        // Parsuj style tabeli
         var tableStyle = node.GetAttributeValue("style", "");
 
-        // Referencja stylu tabeli Worda zachowana przez reader w data-* — emitujemy ją z powrotem.
-        // w:tblStyle musi być PIERWSZYM dzieckiem tblPr (kolejność schematu). Rozwiązane wartości
-        // stylu i tak są w inline CSS komórek, więc wygląd odtwarza formatowanie bezpośrednie,
-        // a referencja stylu przeżywa round-trip (edycja w Wordzie dalej "widzi" styl).
         var tblStyleId = node.GetAttributeValue("data-tbl-style", "");
         if (!string.IsNullOrEmpty(tblStyleId))
             tableProps.Append(new TableStyle { Val = System.Net.WebUtility.HtmlDecode(tblStyleId) });
 
-        // Szerokość (reader emituje też ułamkowe %: 66.66%). Marker data-tbl-w="auto" oznacza,
-        // że px w CSS jest tylko renderowe (geometria z tblGrid), a oryginał miał tblW=auto —
-        // wtedy nie wolno utrwalić dxa.
         var tableWidthIsAuto = node.GetAttributeValue("data-tbl-w", "") == "auto";
         var tableWidthMatch = Regex.Match(tableStyle, @"width:\s*([\d.]+)(px|%)?");
         if (tableWidthIsAuto)
@@ -2378,13 +1987,10 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
         else
         {
-            // No explicit width (e.g. CSS width:auto) → AUTO, sizing to content/grid like Word.
-            // Previously this forced 100% (pct 5000), which stretched content-sized tables to
-            // full text width. Patrz analiza orginał_GOOD (tblW auto) vs zapisany_BAD (pct 5000).
+            
             tableProps.Append(new TableWidth { Width = "0", Type = TableWidthUnitValues.Auto });
         }
 
-        // Wyrównanie tabeli
         if (tableStyle.Contains("margin-left:auto") && tableStyle.Contains("margin-right:auto"))
         {
             tableProps.Append(new TableJustification { Val = TableRowAlignmentValues.Center });
@@ -2394,7 +2000,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             tableProps.Append(new TableJustification { Val = TableRowAlignmentValues.Right });
         }
 
-        // Odstęp między komórkami: preferuj dokładne twips z data-*, inaczej border-spacing px.
         var cellSpacingTwAttr = node.GetAttributeValue("data-cell-spacing-tw", "");
         if (int.TryParse(cellSpacingTwAttr, out var cellSpacingTw) && cellSpacingTw > 0)
         {
@@ -2411,7 +2016,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             }
         }
 
-        // Wcięcie tabeli (margin-left w px, nie 'auto') → w:tblInd. Wcześniej gubione na eksporcie.
         var indentMatch = Regex.Match(tableStyle, @"margin-left:\s*(-?[\d.]+)px");
         if (indentMatch.Success)
         {
@@ -2420,7 +2024,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 tableProps.Append(new TableIndentation { Width = (int)Math.Round(indentPx * 15), Type = TableWidthUnitValues.Dxa });
         }
 
-        // Parsuj obramowania tabeli z CSS
         var borderMatch = Regex.Match(tableStyle, @"(?<![a-z-])border:\s*([\d.]+)px\s+(\w+)\s+#?([a-fA-F0-9]{3,6})");
         if (borderMatch.Success)
         {
@@ -2438,25 +2041,14 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             );
         }
 
-        // Tabela ze stylem Worda (data-tbl-style) i BEZ jawnego CSS-owego obramowania na
-        // <table>: NIE emituj tblBorders — bezpośrednie val=none NADPISYWAŁO obramowania
-        // stylu (Tabela – Siatka traciła linie w Wordzie), a przy ponownym otwarciu reader
-        // znakował tabelę data-no-borders i strata się utrwalała. Jawny brak obramowań
-        // oryginału niesie data-no-borders="1" — wtedy val=none jest zamierzone.
         var noBordersMarker = node.GetAttributeValue("data-no-borders", "") == "1";
         if (borderMatch.Success || noBordersMarker || string.IsNullOrEmpty(tblStyleId))
             tableProps.Append(defaultBorders);
 
-        // Reader emituje table-layout:fixed dla tabel z geometrią kolumn z tblGrid —
-        // wymuszanie Autofit gubiło układ Worda przy każdym zapisie (autosave!).
-        // Marker data-tbl-layout="autofit" = fixed w CSS jest tylko renderowe.
         var isFixedLayout = tableStyle.Contains("table-layout:fixed")
             && node.GetAttributeValue("data-tbl-layout", "") != "autofit";
         tableProps.Append(new TableLayout { Type = isFixedLayout ? TableLayoutValues.Fixed : TableLayoutValues.Autofit });
         
-        // Domyślne marginesy komórek = domyślne Worda (TableNormal): top/bottom=0, left/right=108
-        // twips. Wcześniej hardkodowane 40/80 dodawało pionowy margines do każdej komórki (tabele
-        // rosły w pionie). Per-komórkowe tcMar z CSS i tak nadpisują tę wartość.
         tableProps.Append(new TableCellMarginDefault(
             new TopMargin { Width = "0", Type = TableWidthUnitValues.Dxa },
             new TableCellLeftMargin { Width = 108, Type = TableWidthValues.Dxa },
@@ -2464,7 +2056,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             new TableCellRightMargin { Width = 108, Type = TableWidthValues.Dxa }
         ));
 
-        // w:tblLook (flagi formatowania warunkowego stylu) — round-trip z data-tbl-look.
         var tblLookHex = node.GetAttributeValue("data-tbl-look", "");
         if (Regex.IsMatch(tblLookHex, "^[0-9A-Fa-f]{4}$"))
         {
@@ -2484,10 +2075,8 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
         table.Append(tableProps);
 
-        // Oblicz liczbę kolumn
         var maxCols = 0;
-        // Tylko wiersze TEJ tabeli (bezpośrednie lub w thead/tbody/tfoot) — `.//tr` schodziło
-        // do tabel ZAGNIEŻDŻONYCH i duplikowało ich wiersze jako wiersze tabeli zewnętrznej.
+        
         var rowNodes = node.SelectNodes("./tr | ./thead/tr | ./tbody/tr | ./tfoot/tr");
         if (rowNodes != null)
         {
@@ -2507,9 +2096,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             }
         }
 
-        // Siatka tabeli. Szerokości kolumn pochodzą z <colgroup> (reader emituje je z tblGrid);
-        // wcześniej grid był odtwarzany z samej LICZBY komórek bez szerokości, więc geometria
-        // kolumn Worda ginęła przy każdym zapisie.
         var colWidthsTwips = ReadColgroupWidthsTwips(node);
         var gridColCount = Math.Max(maxCols, colWidthsTwips.Count);
         if (gridColCount > 0)
@@ -2525,10 +2111,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             table.Append(grid);
         }
 
-        // Przetwórz wiersze. HTML pomija komórki przykryte przez rowspan w kolejnych
-        // wierszach — OOXML wymaga tam jawnych komórek kontynuacji (vMerge bez val).
-        // Bez nich komórki przesuwały się w lewo i tabela była uszkodzona w Wordzie.
-        // activeRowSpans: kolumna gridu → (pozostałe wiersze scalenia, rozpiętość kolumn).
         var activeRowSpans = new Dictionary<int, (int RemainingRows, int ColSpan)>();
         if (rowNodes != null)
         {
@@ -2547,16 +2129,9 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     }
                 }
 
-                // Właściwości wiersza (kolejność schematu trPr: gridBefore → gridAfter →
-                // wBefore → wAfter → cantSplit → trHeight → tblHeader).
-                // Wysokość: preferuj dokładne twips + regułę z data-* (round-trip bez strat
-                // px→twips i bez gubienia hRule=exact); fallback: height/min-height px → atLeast.
                 var rowStyle = rowNode.GetAttributeValue("style", "");
                 var rowProps = new TableRowProperties();
 
-                // Dystansowe <td data-grid-spacer> (reader: sloty siatki w:gridBefore/w:gridAfter)
-                // wracają jako właściwości wiersza, NIE jako realne komórki — inaczej każdy zapis
-                // zamieniałby wcięcie wiersza w siatce na pustą komórkę (zmiana struktury tabeli).
                 var rowCellNodes = rowNode.SelectNodes("./td|./th");
                 var gridBeforeSpan = GridSpacerSpan(rowCellNodes?.FirstOrDefault(), "before");
                 var gridAfterSpan = GridSpacerSpan(rowCellNodes?.LastOrDefault(), "after");
@@ -2564,7 +2139,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     rowProps.Append(new GridBefore { Val = gridBeforeSpan });
                 if (gridAfterSpan > 0)
                     rowProps.Append(new GridAfter { Val = gridAfterSpan });
-                // wBefore/wAfter tylko gdy wszystkie objęte kolumny niosą dokładne twips z tblGrid.
+                
                 if (gridBeforeSpan > 0 && gridBeforeSpan <= colWidthsTwips.Count
                     && colWidthsTwips.Take(gridBeforeSpan).All(c => c.Exact && c.Tw > 0))
                     rowProps.Append(new WidthBeforeTableRow
@@ -2603,7 +2178,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     }
                 }
 
-                // Wiersz nagłówkowy powtarzany na kolejnych stronach (w:tblHeader).
                 if (rowNode.GetAttributeValue("data-tbl-header", "") == "1")
                     rowProps.Append(new TableHeader());
 
@@ -2615,8 +2189,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 {
                     foreach (var cellNode in cells)
                     {
-                        // Spacer siatki (gridBefore/gridAfter) nie jest komórką — konsumuje
-                        // wyłącznie sloty siatki (kursor), właściwości poszły do trPr wyżej.
+                        
                         if (cellNode.GetAttributeValue("data-grid-spacer", "") != "")
                         {
                             gridCursor += Math.Max(1, cellNode.GetAttributeValue("colspan", 1));
@@ -2628,13 +2201,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                         var cell = new TableCell();
                         var cellProps = new TableCellProperties();
 
-                        // Colspan
                         var colspanAttr = cellNode.GetAttributeValue("colspan", "1");
                         if (!int.TryParse(colspanAttr, out var colspan) || colspan < 1) colspan = 1;
                         if (colspan > 1)
                             cellProps.Append(new GridSpan { Val = colspan });
 
-                        // Rowspan
                         var rowspanAttr = cellNode.GetAttributeValue("rowspan", "1");
                         if (int.TryParse(rowspanAttr, out var rowspan) && rowspan > 1)
                         {
@@ -2645,18 +2216,14 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                         var cellStartColumn = gridCursor;
                         gridCursor += colspan;
 
-                        // Parsuj style komórki
                         var cellStyle = cellNode.GetAttributeValue("style", "");
                         ApplyCellStyle(cellProps, cellStyle);
 
-                        // Gdy wszystkie kolumny siatki pod komórką mają DOKŁADNE twips
-                        // (data-w-tw, bez ręcznego resize), tcW = ich suma — spójne z
-                        // w:tblGrid i bez dryfu zaokrągleń px→twips per zapis.
                         if (cellStartColumn + colspan <= colWidthsTwips.Count)
                         {
                             var spanned = colWidthsTwips.GetRange(cellStartColumn, colspan);
                             var tcW = cellProps.GetFirstChild<TableCellWidth>();
-                            // Nie ruszamy szerokości procentowych (inna semantyka niż dxa).
+                            
                             var isPct = tcW?.Type?.Value == TableWidthUnitValues.Pct;
                             if (!isPct && spanned.All(c => c.Exact && c.Tw > 0))
                             {
@@ -2673,18 +2240,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                             }
                         }
                         
-                        // Obramowania komórki
                         ApplyCellBorders(cellProps, cellStyle);
 
-                        // Kolejność dzieci tcPr wg schematu (CT_TcPr) — elementy zbierane są
-                        // z kilku miejsc (colspan/vMerge → ApplyCellStyle → ApplyCellBorders)
-                        // i bez sortowania tcW lądował za gridSpan, a tcMar/vAlign przed
-                        // tcBorders (błędy walidacji OOXML).
                         NormalizeTableCellPropertiesOrder(cellProps);
 
                         cell.Append(cellProps);
 
-                        // Zawartość komórki
                         var hasContent = false;
                         foreach (var childNode in cellNode.ChildNodes)
                         {
@@ -2725,10 +2286,8 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     }
                 }
 
-                // Kontynuacje scaleń wypadające ZA ostatnią komórką wiersza.
                 AppendPendingContinuations();
 
-                // Scalenia rozpoczęte w tym wierszu obejmują dopiero KOLEJNE wiersze.
                 foreach (var col in activeRowSpans.Keys.ToList())
                 {
                     if (spansStartedThisRow.Contains(col)) continue;
@@ -2744,9 +2303,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return table;
     }
 
-    /// <summary>
-    /// Porządkuje dzieci w:tcPr zgodnie ze schematem OOXML (CT_TcPr). Sort stabilny.
-    /// </summary>
     private static void NormalizeTableCellPropertiesOrder(TableCellProperties props)
     {
         if (!props.HasChildren) return;
@@ -2775,10 +2331,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             props.Append(child);
     }
 
-    /// <summary>
-    /// Komórka kontynuacji scalenia pionowego (w:vMerge bez w:val = continue) —
-    /// odpowiednik komórki, którą HTML pomija pod komórką z rowspan.
-    /// </summary>
     private static TableCell CreateVerticalMergeContinuationCell(int colSpan)
     {
         var props = new TableCellProperties();
@@ -2788,10 +2340,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return new TableCell(props, new Paragraph());
     }
 
-    /// <summary>
-    /// Liczba slotów siatki dystansowego &lt;td data-grid-spacer="before|after"&gt; (reader:
-    /// w:gridBefore/w:gridAfter). 0, gdy węzeł nie jest spacerem wskazanej strony.
-    /// </summary>
     private static int GridSpacerSpan(HtmlNode? cellNode, string side)
     {
         if (cellNode == null || cellNode.GetAttributeValue("data-grid-spacer", "") != side)
@@ -2799,13 +2347,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return Math.Max(1, cellNode.GetAttributeValue("colspan", 1));
     }
 
-    /// <summary>
-    /// Szerokości kolumn (twips) z &lt;colgroup&gt; tabeli. Preferowane dokładne twips z
-    /// data-w-tw (reader emituje je z w:tblGrid; Exact=true) — konwersja px→twips zaokrągla,
-    /// więc siatka dryfowała o kilka twips przy KAŻDYM zapisie (3020→3015→…). Ręczny resize
-    /// kolumny w edytorze usuwa data-w-tw i wraca fallback px (Exact=false).
-    /// Kolumna bez szerokości daje 0 (Word rozłoży resztę).
-    /// </summary>
     private static List<(int Tw, bool Exact)> ReadColgroupWidthsTwips(HtmlNode tableNode)
     {
         var result = new List<(int Tw, bool Exact)>();
@@ -2830,23 +2371,16 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return result;
     }
 
-    /// <summary>
-    /// Sprawdza czy tag jest inline
-    /// </summary>
     private bool IsInlineTag(string tagName) => tagName switch
     {
         "span" or "strong" or "b" or "em" or "i" or "u" or "s" or "strike" or "sub" or "sup" or "a" => true,
         _ => false
     };
 
-    /// <summary>
-    /// Aplikuje style do komórki tabeli
-    /// </summary>
     private void ApplyCellStyle(TableCellProperties cellProps, string style)
     {
         if (string.IsNullOrEmpty(style)) return;
         
-        // Szerokość (min-width pomijamy — to artefakt edytora, nie geometria Worda).
         var widthMatch = Regex.Match(style, @"(?<![a-z-])width:\s*([\d.]+)(px|%)?");
         if (widthMatch.Success)
         {
@@ -2863,14 +2397,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             cellProps.Append(new TableCellWidth { Type = TableWidthUnitValues.Auto });
         }
         
-        // Kolor tła
         var bgColor = ExtractColor(style, @"background(?:-color)?:\s*");
         if (bgColor != null)
         {
             cellProps.Append(new Shading { Val = ShadingPatternValues.Clear, Fill = bgColor });
         }
         
-        // Wyrównanie pionowe
         var vAlignMatch = Regex.Match(style, @"vertical-align:\s*(top|middle|bottom)");
         if (vAlignMatch.Success)
         {
@@ -2883,7 +2415,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             cellProps.Append(new TableCellVerticalAlignment { Val = vAlign });
         }
         
-        // Padding
         var paddingMatch = Regex.Match(style, @"padding:\s*([\d.]+)px(?:\s+([\d.]+)px)?(?:\s+([\d.]+)px)?(?:\s+([\d.]+)px)?");
         if (paddingMatch.Success)
         {
@@ -2900,13 +2431,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             ));
         }
 
-        // NoWrap
         if (style.Contains("white-space:nowrap") || style.Contains("white-space: nowrap"))
         {
             cellProps.Append(new NoWrap());
         }
 
-        // Writing mode
         if (style.Contains("writing-mode:vertical-rl"))
         {
             cellProps.Append(new TextDirection { Val = TextDirectionValues.TopToBottomRightToLeft });
@@ -2917,9 +2446,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Aplikuje obramowania do komórki
-    /// </summary>
     private void ApplyCellBorders(TableCellProperties cellProps, string style)
     {
         if (string.IsNullOrEmpty(style)) return;
@@ -2927,8 +2453,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         var sides = ResolveCssBorderSides(style);
         if (sides == null) return;
 
-        // Kolejność wg schematu CT_TcBorders: top → left → bottom → right
-        // (inna kolejność = błąd walidacji OOXML).
         var borders = new TableCellBorders();
         AppendCellBorderSide(borders, sides[0], () => new TopBorder());
         AppendCellBorderSide(borders, sides[3], () => new LeftBorder());
@@ -2944,10 +2468,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         var border = create();
         if (s.Val == BorderValues.None)
         {
-            // Word rozstrzyga konflikt krawędzi WAGAMI: val="none" ma wagę 0 i PRZEGRYWA
-            // z widoczną linią ze stylu tabeli (czarna siatka wracała na „pustych" stronach).
-            // val="nil" = absolutny brak linii, poza rozstrzyganiem konfliktów — tego samego
-            // używa Word przy „Brak krawędzi".
+            
             border.Val = BorderValues.Nil;
         }
         else
@@ -2961,18 +2482,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
     private readonly record struct CssBorderSide(BorderValues Val, uint Size, string? Color);
 
-    /// <summary>
-    /// Rozwiązuje obramowania komórki z inline CSS PER STRONA: [top, right, bottom, left];
-    /// element null = brak informacji o stronie (nie emitować — o linii zdecyduje styl tabeli).
-    /// Obsługiwane formy serializacji (przeglądarka przepisuje style po każdej edycji!):
-    ///  - per-strona: <c>border-top: 0.7px solid #000</c> / <c>medium none</c>,
-    ///  - skrót: <c>border: …</c> (także bez koloru / z currentcolor),
-    ///  - zbiorcze longhandy z 1–4 wartościami: <c>border-style: none solid solid;
-    ///    border-width: medium 0.7px 0.7px; border-color: currentcolor rgb(…) rgb(…)</c> —
-    ///    tak CSSOM serializuje MIESZANE strony; wcześniej „none" w takiej liście zerowało
-    ///    wszystkie strony albo strona ginęła całkiem i Word malował czarną siatkę ze stylu.
-    /// Strona niewidoczna w edytorze (szerokość 0 / transparent / rgba z alpha=0) = jawny None.
-    /// </summary>
     private CssBorderSide?[]? ResolveCssBorderSides(string style)
     {
         var sides = new CssBorderSide?[4];
@@ -3006,7 +2515,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         side = default;
         if (string.IsNullOrWhiteSpace(value)) return false;
 
-        // „none" / „medium none" / „medium none currentcolor" / „hidden" — formy serializacji braku linii.
         if (Regex.IsMatch(value, @"\b(none|hidden)\b", RegexOptions.IgnoreCase))
         {
             side = new CssBorderSide(BorderValues.None, 0, null);
@@ -3047,7 +2555,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return new CssBorderSide(val, size, NormalizeCssColorToken(colorToken) ?? "auto");
     }
 
-    /// <summary>Kolor, przy którym linia jest w edytorze niewidoczna — semantycznie brak linii.</summary>
     private static bool IsInvisibleCssColor(string? token)
     {
         if (string.IsNullOrWhiteSpace(token)) return false;
@@ -3056,7 +2563,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return Regex.IsMatch(token, @"^rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*0(\.0+)?\s*\)$");
     }
 
-    /// <summary>Wartości box-model CSS (1–4 tokeny) rozwinięte do [top, right, bottom, left].</summary>
     private static string[]? ExpandCssBoxValues(string? decl)
     {
         if (string.IsNullOrWhiteSpace(decl)) return null;
@@ -3071,14 +2577,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         };
     }
 
-    /// <summary>Wartość pojedynczej deklaracji CSS (np. „border-color") lub null, gdy jej brak.</summary>
     private static string? GetCssDeclarationValue(string style, string property)
     {
         var match = Regex.Match(style, $@"(?<![a-z-]){Regex.Escape(property)}\s*:\s*([^;]+)");
         return match.Success ? match.Groups[1].Value.Trim() : null;
     }
 
-    /// <summary>Normalizuje token koloru CSS (hex #rgb/#rrggbb, rgb(), rgba()) do 6-znakowego hex; null gdy nie kolor.</summary>
     private string? NormalizeCssColorToken(string? token)
     {
         if (string.IsNullOrWhiteSpace(token)) return null;
@@ -3094,24 +2598,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return null;
     }
 
-    /// <summary>
-    /// Parsuje styl obramowania CSS na wartość OpenXML
-    /// </summary>
-    /// <summary>
-    /// CSS px → w:sz (1/8 pt): sz = px × 72/96 × 8 = px × 6. Symetryczne do readera (sz/6 → px);
-    /// wcześniejsze ×8 pogrubiało każdą linię o 33% przy każdym round-tripie. Minimum 2 (0.25 pt).
-    /// </summary>
     private static uint CssPxToBorderEighthPoints(string px)
     {
         var v = double.Parse(px, System.Globalization.CultureInfo.InvariantCulture);
         return (uint)Math.Max(2, Math.Round(v * 6));
     }
 
-    /// <summary>
-    /// Jak <see cref="CssPxToBorderEighthPoints"/>, ale świadome stylu: CSS `double` mieści
-    /// w border-width TRZY pasma (linia/przerwa/linia), a w:sz opisuje szerokość jednej linii —
-    /// bez dzielenia przez 3 każdy round-trip potraja grubość podwójnej ramki.
-    /// </summary>
     private static uint CssBorderWidthToEighthPoints(string px, BorderValues style)
     {
         var v = double.Parse(px, System.Globalization.CultureInfo.InvariantCulture);
@@ -3129,9 +2621,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         _ => BorderValues.Single
     };
 
-    /// <summary>
-    /// Normalizuje kolor (3 znaki na 6)
-    /// </summary>
     private string NormalizeColor(string color)
     {
         if (color.Length == 3)
@@ -3139,17 +2628,13 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return color;
     }
 
-    /// <summary>
-    /// Wyciąga kolor z CSS (obsługuje hex i rgb)
-    /// </summary>
     private string? ExtractColor(string style, string prefix)
     {
-        // Najpierw hex
+        
         var hexMatch = Regex.Match(style, $@"{prefix}#?([a-fA-F0-9]{{3,6}})");
         if (hexMatch.Success)
             return NormalizeColor(hexMatch.Groups[1].Value);
         
-        // Potem rgb()
         var rgbMatch = Regex.Match(style, $@"{prefix}rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)");
         if (rgbMatch.Success)
         {
@@ -3159,7 +2644,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             return $"{r:X2}{g:X2}{b:X2}";
         }
         
-        // rgba()
         var rgbaMatch = Regex.Match(style, $@"{prefix}rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*[\d.]+\s*\)");
         if (rgbaMatch.Success)
         {
@@ -3172,14 +2656,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return null;
     }
 
-    /// <summary>
-    /// Konwertuje obraz na Paragraph z obrazem - z dokładnym odwzorowaniem wymiarów
-    /// </summary>
-    /// <summary>
-    /// Zwraca efektywny data:URL obrazu do zapisu. Dla legacy EMF/WMF `src` to tylko placeholder
-    /// SVG (podgląd w przeglądarce) — prawdziwy metafile jest w `data-original-src`. Zapis placeholdera
-    /// SVG jako gołego `a:blip` daje NIEPOPRAWNY DOCX (Word: „dokument uszkodzony"), więc preferujemy oryginał.
-    /// </summary>
     private static string ResolveImageSrc(HtmlNode node)
     {
         var original = node.GetAttributeValue("data-original-src", "");
@@ -3211,18 +2687,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Tworzy paragraf z obrazem z zachowaniem oryginalnych wymiarów EMU.
-    /// </summary>
     private Paragraph CreateImageParagraph(byte[] imageBytes, string contentType, HtmlNode node)
     {
         var drawing = BuildImageDrawing(imageBytes, contentType, node);
         return drawing != null ? new Paragraph(new Run(drawing)) : new Paragraph();
     }
 
-    /// <summary>
-    /// Tworzy inline Run z obrazem (do osadzania w paragrafie header/footer/body).
-    /// </summary>
     private Run? CreateImageRun(HtmlNode node)
     {
         var src = ResolveImageSrc(node);
@@ -3241,24 +2711,14 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Buduje Drawing dla obrazka, dodaje ImagePart do aktualnej części (body/header/footer).
-    /// </summary>
     private Drawing? BuildImageDrawing(byte[] imageBytes, string contentType, HtmlNode node)
     {
         var container = _currentImageContainer ?? (OpenXmlPart?)_mainPart;
         if (container == null) return null;
 
-        // HARD GUARD: goły `a:blip` na SVG (bez rastrowego fallbacku) jest NIEPOPRAWNY w DOCX —
-        // Word zgłasza uszkodzony plik. Placeholdery legacy niosą prawdziwy metafile w
-        // `data-original-src` (obsłużone w ResolveImageSrc), więc tu SVG = brak fallbacku → pomiń
-        // (kontrolowana strata, NIGDY uszkodzony dokument).
         if (contentType == "image/svg+xml")
             return null;
 
-        // Part musi dostać PRAWDZIWY content type danych. Wcześniej wszystko spoza krótkiej listy
-        // (TIFF/ICO/WEBP/EMZ…) lądowało jako rzekomy Jpeg — obraz przeżywał pierwszy zapis z błędną
-        // deklaracją typu i przestawał się renderować po round-tripie.
         PartTypeInfo? knownType = contentType switch
         {
             "image/png" => ImagePartType.Png,
@@ -3271,9 +2731,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             "image/x-wmf" or "image/wmf" => ImagePartType.Wmf,
             _ => (PartTypeInfo?)null
         };
-        // Nieznany typ: zachowaj zadeklarowany image/* (np. image/webp, image/x-emz) zamiast
-        // fałszować Jpeg; wartości niebędące poprawnym typem obrazu → bezpieczny fallback Jpeg
-        // (zachowanie historyczne dla dziwnych wejść z edytora).
+        
         var isPlainImageMime = Regex.IsMatch(contentType, @"^image/[\w.+-]+$");
 
         ImagePart imagePart = container switch
@@ -3291,11 +2749,8 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
         var relationshipId = container.GetIdOfPart(imagePart);
 
-        // Alt text → round-tripped into wp:docPr/@descr. DeEntitize so the stored text is
-        // the real string (the reader re-encodes once); otherwise entities double-escape.
         var altText = HtmlEntity.DeEntitize(node.GetAttributeValue("alt", "")) ?? string.Empty;
 
-        // Próbuj najpierw użyć oryginalnych wymiarów EMU (zachowanych z DOCX)
         long widthEmu, heightEmu;
 
         var emuWidthAttr = node.GetAttributeValue("data-width-emu", "");
@@ -3309,7 +2764,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
         else
         {
-            // Fallback: parsuj ze stylu CSS (obsługuje liczby zmiennoprzecinkowe)
+            
             var style = node.GetAttributeValue("style", "");
             var widthMatch = Regex.Match(style, @"width:\s*([\d.]+)px");
             var heightMatch = Regex.Match(style, @"height:\s*([\d.]+)px");
@@ -3318,7 +2773,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             var width = widthMatch.Success ? double.Parse(widthMatch.Groups[1].Value, ci) : 200;
             var height = heightMatch.Success ? double.Parse(heightMatch.Groups[1].Value, ci) : width * 0.75;
 
-            // Atrybuty width/height (HTML)
             if (!widthMatch.Success)
             {
                 var wAttr = node.GetAttributeValue("width", "");
@@ -3336,9 +2790,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             heightEmu = OoxmlUnits.PixelsToEmu(height);
         }
 
-        // Limit szerokości:
-        //  - body: ~15 cm (5 400 000 EMU)
-        //  - header/footer: ~17 cm (6 120 000 EMU) – w nagłówku obrazki są zwykle szersze
         var maxWidthEmu = _inHeaderFooter ? 6_120_000L : 5_400_000L;
         if (widthEmu > maxWidthEmu)
         {
@@ -3346,31 +2797,24 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             widthEmu = maxWidthEmu;
             heightEmu = (long)(heightEmu * scale);
         }
-        if (widthEmu < OoxmlUnits.EmuPerPixel) widthEmu = OoxmlUnits.EmuPerPixel;   // min 1 px
+        if (widthEmu < OoxmlUnits.EmuPerPixel) widthEmu = OoxmlUnits.EmuPerPixel;   
         if (heightEmu < OoxmlUnits.EmuPerPixel) heightEmu = OoxmlUnits.EmuPerPixel;
 
         _imageCounter++;
 
-        // Word-like positioning: when the editor marks the image as floating
-        // (data-pos-mode="front"|"behind") we emit wp:anchor with position offsets;
-        // otherwise it stays an inline image (default OOXML behaviour). Offsets are
-        // read from data-x-emu / data-y-emu set by the editor on drag-end.
         var posMode = node.GetAttributeValue("data-pos-mode", "");
         var isFloating = posMode == "front" || posMode == "behind";
 
-        // Optional border (a:ln in pic:spPr): width in EMU = px * 9525.
         int.TryParse(node.GetAttributeValue("data-border-width", "0"), out var borderWidthPx);
         var borderColor = node.GetAttributeValue("data-border-color", "").TrimStart('#');
         var borderStyle = node.GetAttributeValue("data-border-style", "solid");
 
-        // Optional crop (a:srcRect on pic:blipFill): l/t/r/b in 1/1000 of a percent.
         int.TryParse(node.GetAttributeValue("data-crop-l", "0"), out var cropL);
         int.TryParse(node.GetAttributeValue("data-crop-r", "0"), out var cropR);
         int.TryParse(node.GetAttributeValue("data-crop-t", "0"), out var cropT);
         int.TryParse(node.GetAttributeValue("data-crop-b", "0"), out var cropB);
         var hasCrop = cropL > 0 || cropR > 0 || cropT > 0 || cropB > 0;
 
-        // BlipFill — with optional srcRect carrying the crop percentages.
         var blip = new DocumentFormat.OpenXml.Drawing.Blip { Embed = relationshipId };
         var blipFill = new DocumentFormat.OpenXml.Drawing.Pictures.BlipFill(blip);
         if (hasCrop)
@@ -3385,7 +2829,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
         blipFill.Append(new DocumentFormat.OpenXml.Drawing.Stretch(new DocumentFormat.OpenXml.Drawing.FillRectangle()));
 
-        // ShapeProperties — with optional outline (a:ln) for the border.
         var shapeProps = new DocumentFormat.OpenXml.Drawing.Pictures.ShapeProperties(
             new DocumentFormat.OpenXml.Drawing.Transform2D(
                 new DocumentFormat.OpenXml.Drawing.Offset { X = 0, Y = 0 },
@@ -3433,8 +2876,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             );
         }
 
-        // Floating mode: wp:anchor with position offsets and the "no wrap" mode that
-        // matches Word's "Behind text" / "In front of text" options (no text reflow).
         long.TryParse(node.GetAttributeValue("data-x-emu", "0"), out var xEmu);
         long.TryParse(node.GetAttributeValue("data-y-emu", "0"), out var yEmu);
         var behind = posMode == "behind";
@@ -3446,15 +2887,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             { RelativeFrom = DocumentFormat.OpenXml.Drawing.Wordprocessing.HorizontalRelativePositionValues.Page },
             new DocumentFormat.OpenXml.Drawing.Wordprocessing.VerticalPosition(
                 new DocumentFormat.OpenXml.Drawing.Wordprocessing.PositionOffset(yEmu.ToString(System.Globalization.CultureInfo.InvariantCulture)))
-            // Horizontal offset is page-relative (editor origin = left page edge), but the
-            // editor's vertical origin is the TOP OF THE TEXT AREA (the body band starts one
-            // margin below the page edge). Emitting Y relative to the top text margin keeps the
-            // offset consistent both ways and makes Word place the object where the editor shows
-            // it — a page-relative Y would render one top-margin too high.
+            
             { RelativeFrom = DocumentFormat.OpenXml.Drawing.Wordprocessing.VerticalRelativePositionValues.Margin },
             new DocumentFormat.OpenXml.Drawing.Wordprocessing.Extent { Cx = widthEmu, Cy = heightEmu },
             new DocumentFormat.OpenXml.Drawing.Wordprocessing.EffectExtent { LeftEdge = 0, TopEdge = 0, RightEdge = 0, BottomEdge = 0 },
-            // Oryginalny tryb zawijania z data-wrap (reader); brak → WrapNone jak dotąd.
+            
             BuildAnchorWrapElement(node),
             BuildImageDocProperties((uint)_imageCounter, $"Image{_imageCounter}", altText),
             new DocumentFormat.OpenXml.Drawing.Wordprocessing.NonVisualGraphicFrameDrawingProperties(
@@ -3476,35 +2913,19 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return new Drawing(anchor);
     }
 
-    /// <summary>Pola tekstowe oczekujące na przypięcie do najbliższego następnego akapitu.</summary>
     private readonly List<Drawing> _pendingTextBoxDrawings = new();
 
-    /// <summary>
-    /// Czy węzeł to pole tekstowe Worda wyemitowane przez DocxToHtmlConverter
-    /// (<c>div.docx-textbox</c> / <c>data-textbox="1"</c>).
-    /// </summary>
     private static bool IsTextBoxNode(HtmlNode node)
         => node.NodeType == HtmlNodeType.Element
            && node.Name.Equals("div", StringComparison.OrdinalIgnoreCase)
            && (node.HasClass("docx-textbox") || node.GetAttributeValue("data-textbox", "") == "1");
 
-    /// <summary>
-    /// Buforuje drawing pola tekstowego napotkanego na poziomie blokowym. Model kotwicy:
-    /// reader emituje div bezpośrednio PRZED akapitem-kotwicą, więc drawing zostaje
-    /// przypięty do NASTĘPNEGO konwertowanego akapitu (<see cref="AttachPendingTextBoxes"/>).
-    /// Dzięki temu relacja „obiekt ↔ akapit" przeżywa pełny round-trip bez sztucznych ID.
-    /// </summary>
     private void BufferTextBoxDrawing(HtmlNode node)
     {
         var drawing = BuildTextBoxDrawing(node);
         if (drawing != null) _pendingTextBoxDrawings.Add(drawing);
     }
 
-    /// <summary>
-    /// Przypina zbuforowane pola tekstowe do akapitu (run z drawingiem na początku treści —
-    /// dla obiektu pływającego pozycja runa w akapicie nie wpływa na układ, a początek
-    /// jest deterministyczny dla round-tripu).
-    /// </summary>
     private void AttachPendingTextBoxes(Paragraph paragraph)
     {
         if (_pendingTextBoxDrawings.Count == 0) return;
@@ -3513,10 +2934,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         _pendingTextBoxDrawings.Clear();
     }
 
-    /// <summary>
-    /// Awaryjny flush: treść skończyła się bez akapitu-następnika (textbox jako ostatni
-    /// element) — tworzony jest akapit-kotwica, żeby drawing nie przepadł.
-    /// </summary>
     private void FlushPendingTextBoxesInto(OpenXmlElement parent)
     {
         if (_pendingTextBoxDrawings.Count == 0) return;
@@ -3531,15 +2948,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return drawing != null ? new Run(drawing) : null;
     }
 
-    /// <summary>
-    /// Odtwarza pole tekstowe Worda z <c>div.docx-textbox</c> jako <c>wps:wsp</c> z
-    /// <c>w:txbxContent</c> (format DrawingML, Word 2010+). Kotwiczone (data-pos-mode
-    /// front/behind albo position:absolute) → <c>wp:anchor</c> w konwencji edytora — te same
-    /// osie co obrazy: X = PositionOffset od lewej krawędzi strony (relativeFrom=page),
-    /// Y = od górnego marginesu (relativeFrom=margin); pozostałe → <c>wp:inline</c>.
-    /// Rozmiar z data-width/height-emu (fallback: width/min-height px ze stylu),
-    /// obramowanie data-border-* → <c>a:ln</c>. Null, gdy pole nie ma treści.
-    /// </summary>
     private Drawing? BuildTextBoxDrawing(HtmlNode node)
     {
         var content = BuildTextBoxContent(node);
@@ -3631,8 +3039,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             new Wp.HorizontalPosition(
                 new Wp.PositionOffset(xEmu.ToString(System.Globalization.CultureInfo.InvariantCulture)))
             { RelativeFrom = Wp.HorizontalRelativePositionValues.Page },
-            // Pionowo Margin — origin Y edytora to góra obszaru treści (spójnie z obrazami;
-            // reader dodaje i odejmuje ten sam górny margines → round-trip idempotentny).
+            
             new Wp.VerticalPosition(
                 new Wp.PositionOffset(yEmu.ToString(System.Globalization.CultureInfo.InvariantCulture)))
             { RelativeFrom = Wp.VerticalRelativePositionValues.Margin },
@@ -3658,11 +3065,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return new Drawing(anchor);
     }
 
-    /// <summary>
-    /// Treść pola tekstowego (<c>w:txbxContent</c>) z dzieci div.docx-textbox. Bufor
-    /// zagnieżdżonych textboxów jest izolowany — pole w polu degraduje do drawingu inline
-    /// wewnątrz treści, zamiast „uciec" do akapitów body.
-    /// </summary>
     private TextBoxContent? BuildTextBoxContent(HtmlNode node)
     {
         var saved = _pendingTextBoxDrawings.ToList();
@@ -3712,7 +3114,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 }
             }
 
-            // Zagnieżdżone textboxy zbuforowane przez dzieci — nie mogą czekać na akapit body.
             if (_pendingTextBoxDrawings.Count > 0)
             {
                 var trailing = new Paragraph();
@@ -3727,16 +3128,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
 
         if (!content.HasChildren) return null;
-        // w:txbxContent wymaga co najmniej jednego akapitu (sama tabela nie wystarcza Wordowi).
+        
         if (!content.Elements<Paragraph>().Any()) content.Append(new Paragraph());
         return content;
     }
 
-    /// <summary>
-    /// Element wrap* dla <c>wp:anchor</c> z <c>data-wrap</c> (round-trip z readera).
-    /// wrapTight/wrapThrough wymagają wrapPolygon, którego HTML nie niesie — przybliżenie
-    /// przez wrapSquare (Word nadal opływa obiekt); brak/none → WrapNone (front/behind).
-    /// </summary>
     private static OpenXmlElement BuildAnchorWrapElement(HtmlNode node)
         => node.GetAttributeValue("data-wrap", "") switch
         {
@@ -3749,7 +3145,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         => long.TryParse(node.GetAttributeValue(attribute, ""), System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var value) ? value : null;
 
-    /// <summary>Wartość CSS w px dla danej właściwości z inline style (np. width/left/top).</summary>
     private static long? CssPxValue(string style, string property)
     {
         if (string.IsNullOrEmpty(style)) return null;
@@ -3762,9 +3157,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             : null;
     }
 
-    /// <summary>
-    /// Konwertuje link na Paragraph z hiperłączem
-    /// </summary>
     private Paragraph ConvertAnchorElement(HtmlNode node)
     {
         var para = new Paragraph();
@@ -3775,8 +3167,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
         try
         {
-            // Kotwica wewnętrzna (wpisy TOC): w:anchor bez wymuszania stylizacji —
-            // Word renderuje takie linki formatowaniem runów, nie stylem Hyperlink.
+            
             var hyperlink = internalAnchor.Length > 0
                 ? new Hyperlink { Anchor = System.Net.WebUtility.HtmlDecode(internalAnchor) }
                 : new Hyperlink { Id = _mainPart!.AddHyperlinkRelationship(new Uri(href, UriKind.RelativeOrAbsolute), true).Id };
@@ -3803,7 +3194,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
         catch
         {
-            // Jeśli URI jest nieprawidłowy, dodaj jako zwykły tekst
+            
             AppendInlineContent(para, node);
         }
 
@@ -3830,14 +3221,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return para;
     }
 
-    /// <summary>
-    /// Tworzy paragraf stylizowany na linię horyzontalną
-    /// </summary>
-    /// <summary>
-    /// Odtwarza poziomą linię Worda z markera readera (span.docx-hr + data-hr-*):
-    /// w:r → w:pict → v:rect z o:hr="t" (+ hralign/hrpct/hrnoshade/hrstd, fillcolor,
-    /// wysokość w pt) — struktura 1:1 z „Wstaw → linia pozioma" Worda.
-    /// </summary>
     private static Run CreateVmlHorizontalRuleRun(HtmlNode node)
     {
         const string ovml = "urn:schemas-microsoft-com:office:office";
@@ -3875,13 +3258,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return para;
     }
 
-    /// <summary>
-    /// Dodaje inline content do paragrafu.
-    /// Style font-* / color / font-weight / font-style ustawione na rodzicu (<p>/<h1>/<li>/...)
-    /// dziedziczą się w HTML kaskadowo na dzieci. W DOCX run NIE dziedziczy automatycznie,
-    /// więc budujemy bazowe `RunProperties` ze stylu rodzica i przekazujemy je
-    /// do `CreateRunsFromNode` jako `inheritedProps`.
-    /// </summary>
     private void AppendInlineContent(Paragraph paragraph, HtmlNode node)
     {
         RunProperties? baseRunProps = null;
@@ -3890,7 +3266,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         {
             baseRunProps = new RunProperties();
             ApplyRunStyle(baseRunProps, parentStyle);
-            // jeżeli ApplyRunStyle nic nie dodał, traktuj jako brak
+            
             if (!baseRunProps.HasChildren)
                 baseRunProps = null;
         }
@@ -3903,17 +3279,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Pętla treści inline akapitu — wydzielona z <see cref="AppendInlineContent"/>, bo wrappery
-    /// segmentów linii tabulatorowej readera (span.docx-tab-text) są PRZEZROCZYSTE: ich dzieci
-    /// (hyperlink wpisu spisu treści, markery pól, zakładki) muszą trafić na poziom akapitu.
-    /// </summary>
     private void AppendInlineChildren(Paragraph paragraph, IEnumerable<HtmlNode> children, RunProperties? baseRunProps)
     {
         foreach (var child in children)
         {
-            // Pole tekstowe wewnątrz akapitu/li (div w <li> jest poprawnym flow content —
-            // reader nie hoistuje go przed element listy) → drawing inline w tym akapicie.
+            
             if (child.NodeType == HtmlNodeType.Element && IsTextBoxNode(child))
             {
                 var tbRun = BuildTextBoxRun(child);
@@ -3921,7 +3291,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 continue;
             }
 
-            // Inline content control (formant) zachowany z odczytu DOCX — owijamy ponownie w SdtRun.
             if (child.NodeType == HtmlNodeType.Element
                 && child.Name.Equals("span", StringComparison.OrdinalIgnoreCase)
                 && child.HasClass("sdt-inline"))
@@ -3932,9 +3301,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 continue;
             }
 
-            // Pola numeru strony w TREŚCI (nie tylko w stopce) — bez tego span.field-page/
-            // page-number/field-numpages wychodził jako LITERALNY tekst „{page}"/„{pages}"
-            // (placeholder readera) zamiast pola PAGE/NUMPAGES.
             if (child.NodeType == HtmlNodeType.Element
                 && child.Name.Equals("span", StringComparison.OrdinalIgnoreCase))
             {
@@ -3958,16 +3324,13 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             if (child.NodeType == HtmlNodeType.Element
                 && child.Name.Equals("span", StringComparison.OrdinalIgnoreCase))
             {
-                // Wrapper segmentu linii tabulatorowej (reader, spis treści) — przezroczysty:
-                // dzieci są treścią akapitu (hyperlink/markery pól muszą wrócić na ten poziom).
+                
                 if (child.HasClass("docx-tab-text"))
                 {
                     AppendInlineChildren(paragraph, child.ChildNodes, MergeRunProps(baseRunProps, child));
                     continue;
                 }
 
-                // Zakładka (cel PAGEREF/hyperlinków wewnętrznych, np. _Toc… przy nagłówku) —
-                // odtwarzamy parę bookmarkStart/bookmarkEnd z unikalnym w:id.
                 if (child.HasClass("docx-bookmark"))
                 {
                     var bmName = System.Net.WebUtility.HtmlDecode(child.GetAttributeValue("data-bm-name", ""));
@@ -3981,8 +3344,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 }
             }
 
-            // Hiperłącze inline → PRAWDZIWY w:hyperlink (wcześniej degradowało do stylizowanych
-            // runów — klik przestawał działać w Wordzie po pierwszym zapisie).
             if (child.NodeType == HtmlNodeType.Element
                 && child.Name.Equals("a", StringComparison.OrdinalIgnoreCase))
             {
@@ -4002,7 +3363,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>Klon odziedziczonych RunProperties wzbogacony o inline style danego węzła.</summary>
     private RunProperties? MergeRunProps(RunProperties? baseRunProps, HtmlNode node)
     {
         var style = node.GetAttributeValue("style", "");
@@ -4012,13 +3372,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return merged.HasChildren ? merged : baseRunProps;
     }
 
-    /// <summary>
-    /// Odtwarza w:hyperlink z inline'owego &lt;a&gt;. Kotwica wewnętrzna (data-anchor lub
-    /// href="#zakładka" — wpisy spisu treści) → w:anchor BEZ narzucania koloru (wpisy TOC
-    /// w Wordzie wyglądają jak zwykły tekst; stylizację niosą runy). URL → relacja zewnętrzna
-    /// ze stylem Hyperlink (parytet z dotychczasowym wyglądem). Null przy nieprawidłowym URI —
-    /// wywołujący degraduje do zwykłych runów.
-    /// </summary>
     private Hyperlink? BuildHyperlinkElement(HtmlNode node, RunProperties? inheritedProps)
     {
         var href = node.GetAttributeValue("href", "");
@@ -4048,8 +3401,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
         foreach (var child in node.ChildNodes)
         {
-            // Markery pól (PAGEREF wpisu TOC żyje WEWNĄTRZ hyperlinka) i taby idą
-            // przez CreateRunsFromNode jak każda treść inline.
+            
             foreach (var run in CreateRunsFromNode(child, inheritedProps))
             {
                 if (!isInternal)
@@ -4069,9 +3421,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return hyperlink;
     }
 
-    /// <summary>
-    /// Tworzy Run z węzła HTML z pełnym odwzorowaniem formatowania
-    /// </summary>
     private List<Run> CreateRunsFromNode(HtmlNode node, RunProperties? inheritedProps = null)
     {
         var runs = new List<Run>();
@@ -4082,8 +3431,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 var text = System.Net.WebUtility.HtmlDecode(node.InnerText);
                 if (!string.IsNullOrEmpty(text))
                 {
-                    // Literalny znak tabulacji → w:tab (element), nie tekst w w:t — Word nie
-                    // renderuje tabów zapisanych w treści w:t, więc ginęły po round-tripie.
+                    
                     var parts = text.Split('\t');
                     for (int pi = 0; pi < parts.Length; pi++)
                     {
@@ -4108,8 +3456,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             case HtmlNodeType.Element:
                 var tagName = node.Name.ToLower();
 
-                // Pass-through grafiki XML (ADR-0056) w kontekście inline: kształt/VML/OLE
-                // z data-docx-xml wraca jako oryginalny run child (w:drawing/w:pict/w:object).
                 if (node.GetAttributeValue("data-docx-xml", "") != ""
                     && TryRestorePreservedElement(node) is { } preservedInline)
                 {
@@ -4117,35 +3463,24 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     break;
                 }
 
-                // Manualny page break: reader emituje <div class="page-break"> WEWNĄTRZ akapitu
-                // (Break siedzi w runie), więc trafia tu, a nie do bloku. Bez tego znak rozpoczęcia
-                // nowej strony ginął po round-tripie (R-15). Jeden węzeł page-break → jeden Break,
-                // bez duplikacji; dokument bez page-breaków nie dostaje żadnego.
                 if (IsPageBreakNode(node))
                 {
                     runs.Add(new Run(new Break { Type = BreakValues.Page }));
                     break;
                 }
 
-                // Podział kolumny: reader emituje <div class="docx-column-break"> z w:br type=column.
-                // Odtwarzamy go jako run z Break type=column (ADR-0039).
                 if (node.NodeType == HtmlNodeType.Element && node.HasClass("docx-column-break"))
                 {
                     runs.Add(new Run(new Break { Type = BreakValues.Column }));
                     break;
                 }
 
-                // Pozioma linia Worda (reader: span.docx-hr z w:pict/v:rect o:hr="t") —
-                // odtwarzamy oryginalny VML z data-hr-*, żeby linia nie znikała po zapisie.
                 if (node.GetAttributeValue("data-docx-hr", "") != "")
                 {
                     runs.Add(CreateVmlHorizontalRuleRun(node));
                     break;
                 }
 
-                // Odwołanie do przypisu dolnego: <sup class="footnote-ref" data-footnote-id="fn-N">.
-                // Emituje w:footnoteReference z identyfikatorem OOXML przypisanym w AssignFootnoteOoxmlIds.
-                // Odwołanie do nieistniejącego przypisu jest POMIJANE (brak osieroconego w:footnoteReference).
                 if (node.Name.Equals("sup", StringComparison.OrdinalIgnoreCase) && node.HasClass("footnote-ref"))
                 {
                     var run = CreateFootnoteReferenceRun(node, inheritedProps);
@@ -4153,8 +3488,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     break;
                 }
 
-                // Odwołanie do przypisu końcowego: <sup class="endnote-ref" data-endnote-id="en-N">.
-                // Emituje w:endnoteReference; odwołanie do nieistniejącego przypisu jest POMIJANE.
                 if (node.Name.Equals("sup", StringComparison.OrdinalIgnoreCase) && node.HasClass("endnote-ref"))
                 {
                     var run = CreateEndnoteReferenceRun(node, inheritedProps);
@@ -4162,8 +3495,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     break;
                 }
 
-                // Segment pozycyjny tab-stopu (reader: nagłówek/stopka z w:tabs) — segment
-                // zaczyna się od tabulatora; pozycję odtwarza pPr/w:tabs z data-tab-stops.
                 if (node.HasClass("docx-tab-seg"))
                 {
                     var segTab = new Run();
@@ -4176,10 +3507,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     break;
                 }
 
-                // Wypełniacz tabulatora (spis treści, w:leader) → sam w:tab. Kropki są
-                // prezentacyjne (pseudo-element CSS GUI), a pozycję i znak wypełniacza
-                // odtwarza pPr/w:tabs z data-tab-stops — nie schodzimy w dzieci (w środku
-                // jest tylko literalny \t, który dałby DRUGI tabulator).
                 if (node.HasClass("docx-tab-leader"))
                 {
                     var leaderTab = new Run();
@@ -4190,10 +3517,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     break;
                 }
 
-                // Marker pola złożonego (reader: TOC/PAGEREF) → fldChar begin+instrText+separate
-                // lub end. Dzięki temu Word po zapisie z edytora dalej umie zaktualizować spis
-                // treści (F9). Osierocony end (użytkownik usunął początek) jest pomijany —
-                // niesparowany fldChar uszkadza dokument.
                 if (node.HasClass("docx-fld-marker"))
                 {
                     var kind = node.GetAttributeValue("data-fld", "");
@@ -4216,8 +3539,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                     break;
                 }
 
-                // Zakładka w kontekście inline — parę bookmarkStart/End odtwarza poziom akapitu
-                // (AppendInlineContent); tu tylko nie emitujemy nic (span jest pusty).
                 if (node.HasClass("docx-bookmark"))
                     break;
 
@@ -4256,7 +3577,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                         var imgPara = ConvertImageElement(node);
                         if (imgPara != null)
                         {
-                            // Wyciągnij run z obrazem
+                            
                             foreach (var r in imgPara.Elements<Run>())
                             {
                                 runs.Add((Run)r.CloneNode(true));
@@ -4264,13 +3585,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                         }
                         return runs;
                     case "a":
-                        // Hiperłącze w inline context
+                        
                         var href = node.GetAttributeValue("href", "#");
                         try
                         {
                             var relId = _mainPart!.AddHyperlinkRelationship(new Uri(href, UriKind.RelativeOrAbsolute), true).Id;
-                            // Dodaj runy z linkiem - w inline kontekście nie możemy dodać Hyperlink do Run
-                            // więc po prostu stylizujemy tekst
+                            
                             var linkProps = (newProps.CloneNode(true) as RunProperties) ?? new RunProperties();
                             if (!linkProps.Elements<Color>().Any())
                                 linkProps.Append(new Color { Val = "0563C1" });
@@ -4288,7 +3608,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                         return runs;
                 }
 
-                // Parsuj style inline
                 var style = node.GetAttributeValue("style", "");
                 ApplyRunStyle(newProps, style);
 
@@ -4302,16 +3621,9 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return runs;
     }
 
-    // Zarezerwowane identyfikatory OOXML dla technicznych elementów części przypisów.
-    // Przypisy użytkownika zaczynają się od 1, więc nigdy z nimi nie kolidują.
     private const long FootnoteSeparatorId = -1;
     private const long FootnoteContinuationSeparatorId = 0;
 
-    /// <summary>
-    /// Deterministycznie przydziela identyfikatory OOXML przypisom po kolejności listy modelu
-    /// (htmlId → 1..N). Odwołania w treści odwzorowują się przez ten słownik; sama treść jest
-    /// jednym źródłem prawdy (numer widoczny nie jest tożsamością).
-    /// </summary>
     private void AssignFootnoteOoxmlIds(IReadOnlyList<DomainFootnote>? footnotes)
     {
         if (footnotes == null) return;
@@ -4324,10 +3636,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Buduje run z <c>w:footnoteReference</c> dla odwołania <c>&lt;sup class="footnote-ref"&gt;</c>.
-    /// Zwraca null, gdy odwołanie wskazuje przypis spoza listy (nie emitujemy osieroconego odwołania).
-    /// </summary>
     private Run? CreateFootnoteReferenceRun(HtmlNode node, RunProperties? inheritedProps)
     {
         var htmlId = node.GetAttributeValue("data-footnote-id", "");
@@ -4346,12 +3654,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return run;
     }
 
-    /// <summary>
-    /// Tworzy część <c>word/footnotes.xml</c> (relacja + content type przez <see cref="MainDocumentPart.AddNewPart"/>)
-    /// z wymaganymi separatorami technicznymi i treścią przypisów użytkownika. Nic nie tworzy dla
-    /// dokumentów bez przypisów (brak nadmiarowej części). Zapisujemy wyłącznie przypisy z listy
-    /// modelu — reader zwraca je w kolejności odwołań, więc każdy ma odpowiadające odwołanie.
-    /// </summary>
     private void AddFootnotes(IReadOnlyList<DomainFootnote>? footnotes)
     {
         if (_mainPart == null || footnotes == null || footnotes.Count == 0)
@@ -4375,11 +3677,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         footnotesPart.Footnotes.Save();
     }
 
-    /// <summary>
-    /// Odtwarza treść przypisu z HTML przez istniejące konwertery treści (akapity/runy/listy/linki),
-    /// aby nie duplikować logiki mapowania. Pierwszy akapit dostaje run ze znacznikiem auto-numeru
-    /// (<c>w:footnoteRef</c>). Relacje obrazów są zakresowane do części przypisów.
-    /// </summary>
     private WpFootnote BuildFootnoteElement(DomainFootnote model, long ooxmlId, FootnotesPart footnotesPart)
     {
         var footnote = new WpFootnote { Id = ooxmlId };
@@ -4407,7 +3704,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         if (blocks.Count == 0)
             blocks.Add(new Paragraph());
 
-        // Znacznik auto-numeru na początku pierwszego akapitu (po pPr, jeśli istnieje).
         if (blocks[0] is Paragraph firstParagraph)
         {
             var markRun = new Run(new RunProperties(new VerticalTextAlignment { Val = VerticalPositionValues.Superscript }),
@@ -4425,7 +3721,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return footnote;
     }
 
-    /// <summary>Techniczny przypis-separator (w:separator / w:continuationSeparator) z zarezerwowanym id.</summary>
     private static WpFootnote CreateSeparatorFootnote(long id, FootnoteEndnoteValues type)
     {
         OpenXmlElement mark = type == FootnoteEndnoteValues.Separator
@@ -4434,13 +3729,9 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return new WpFootnote(new Paragraph(new Run(mark))) { Id = id, Type = type };
     }
 
-    // ── Przypisy końcowe (endnotes.xml) ──────────────────────────────────────────
-    // Rezerwacja id separatorów jest współdzielona semantycznie z footnotes (-1/0), ale
-    // endnotes.xml to osobna część z własną przestrzenią id, więc kolizji nie ma.
     private const long EndnoteSeparatorId = -1;
     private const long EndnoteContinuationSeparatorId = 0;
 
-    /// <summary>Deterministycznie przydziela id OOXML przypisom końcowym (htmlId → 1..N).</summary>
     private void AssignEndnoteOoxmlIds(IReadOnlyList<DomainEndnote>? endnotes)
     {
         if (endnotes == null) return;
@@ -4453,10 +3744,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Buduje run z <c>w:endnoteReference</c> dla <c>&lt;sup class="endnote-ref"&gt;</c>.
-    /// Zwraca null, gdy odwołanie wskazuje przypis spoza listy (bez osieroconego odwołania).
-    /// </summary>
     private Run? CreateEndnoteReferenceRun(HtmlNode node, RunProperties? inheritedProps)
     {
         var htmlId = node.GetAttributeValue("data-endnote-id", "");
@@ -4475,10 +3762,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return run;
     }
 
-    /// <summary>
-    /// Tworzy część <c>word/endnotes.xml</c> (relacja + content type przez <see cref="MainDocumentPart.AddNewPart"/>)
-    /// z separatorami technicznymi i treścią przypisów końcowych. Nic nie tworzy dla dokumentów bez nich.
-    /// </summary>
     private void AddEndnotes(IReadOnlyList<DomainEndnote>? endnotes)
     {
         if (_mainPart == null || endnotes == null || endnotes.Count == 0)
@@ -4502,10 +3785,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         endnotesPart.Endnotes.Save();
     }
 
-    /// <summary>
-    /// Odtwarza treść przypisu końcowego z HTML przez istniejące konwertery treści. Pierwszy akapit
-    /// dostaje run ze znacznikiem auto-numeru (<c>w:endnoteRef</c>). Relacje obrazów → część endnotes.
-    /// </summary>
     private WpEndnote BuildEndnoteElement(DomainEndnote model, long ooxmlId, EndnotesPart endnotesPart)
     {
         var endnote = new WpEndnote { Id = ooxmlId };
@@ -4550,7 +3829,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return endnote;
     }
 
-    /// <summary>Techniczny przypis końcowy-separator (w:separator / w:continuationSeparator).</summary>
     private static WpEndnote CreateSeparatorEndnote(long id, FootnoteEndnoteValues type)
     {
         OpenXmlElement mark = type == FootnoteEndnoteValues.Separator
@@ -4559,10 +3837,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return new WpEndnote(new Paragraph(new Run(mark))) { Id = id, Type = type };
     }
 
-    /// <summary>
-    /// Parsuje atrybut data-tab-stops ("4536:center;9072:right:dot") na w:tabs.
-    /// Zwraca null przy braku poprawnych wpisów.
-    /// </summary>
     private static Tabs? ParseTabStops(string attr)
     {
         var tabs = new Tabs();
@@ -4596,32 +3870,16 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return tabs.HasChildren ? tabs : null;
     }
 
-    /// <summary>
-    /// Aplikuje styl CSS do ParagraphProperties z pełnym parsowaniem
-    /// </summary>
-    /// <param name="props">Właściwości akapitu (mutowane).</param>
-    /// <param name="style">Inline CSS akapitu.</param>
-    /// <param name="includeIndentation">
-    /// false dla elementów LIST: ich wcięcia autorytatywnie niesie kontrakt data-ind-*-tw
-    /// (AppendListItemIndentation), a margin-left na li to DELTA względem paddingu kontenera —
-    /// zmapowana wprost na w:ind podwajałaby wcięcie.
-    /// </param>
     private void ApplyParagraphStyle(ParagraphProperties props, string style, bool includeIndentation = true)
     {
         if (string.IsNullOrEmpty(style)) return;
 
-        // „Podział strony przed" jako WŁAŚCIWOŚĆ akapitu (w:pageBreakBefore) — jak checkbox
-        // w dialogu Worda i style nagłówków. To celowo INNA reprezentacja niż ręczny podział
-        // (marker div.page-break → w:br type=page): właściwość round-tripuje bez dodatkowego
-        // pustego akapitu i w Wordzie pozostaje zaznaczonym checkboxem, nie twardym breakiem.
         if (Regex.IsMatch(style, @"(page-break-before|break-before)\s*:\s*(always|page)", RegexOptions.IgnoreCase))
             props.Append(new PageBreakBefore());
         else if (Regex.IsMatch(style, @"(page-break-before|break-before)\s*:\s*auto", RegexOptions.IgnoreCase))
-            // Jawne wyłączenie (reader: direct w:pageBreakBefore val=false; dialog: odznaczenie
-            // aktywnego podziału) — val=false nadpisuje pageBreakBefore z definicji STYLU.
+            
             props.Append(new PageBreakBefore { Val = false });
 
-        // Text-align
         var alignMatch = Regex.Match(style, @"text-align:\s*(left|center|right|justify)");
         if (alignMatch.Success)
         {
@@ -4635,8 +3893,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             props.Append(new Justification { Val = align });
         }
 
-        // Wcięcia. Regexy łapią px i pt oraz wartości ujemne/ułamkowe (gap-analysis pkt 2:
-        // dialog akapitu pisze pt, a `(\d+)px` gubił wszystko poza całkowitymi px).
         if (includeIndentation)
         {
             var indentation = new Indentation();
@@ -4680,7 +3936,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 props.Append(indentation);
         }
 
-        // Odstępy
         var spacing = new SpacingBetweenLines();
         bool hasSpacing = false;
         var inv = System.Globalization.CultureInfo.InvariantCulture;
@@ -4705,10 +3960,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             hasSpacing = true;
         }
 
-        // ADR-0053: reader emituje w:after jako padding-bottom (odstępy akapitów SUMUJĄ się
-        // jak w Wordzie zamiast kolapsować jak marginesy CSS); margin-bottom wyżej zostaje
-        // honorowane (akapity z tłem/obramowaniem i treść autorstwa GUI sprzed zmiany).
-        // Gdy występują oba, padding-bottom (bardziej szczegółowe źródło) wygrywa.
         var paddingBottomMatch = Regex.Match(style, @"(?<![\w-])padding-bottom:\s*([\d.,]+)(px|pt)?");
         if (paddingBottomMatch.Success)
         {
@@ -4716,9 +3967,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             var unit = paddingBottomMatch.Groups[2].Value;
             if (unit == "px") val = OoxmlUnits.PixelsToPoints(val);
             var afterTw = (int)Math.Round(OoxmlUnits.PointsToTwips(val));
-            // padding-bottom:0 przy akapicie z tłem/ramką to tylko reset klasowego
-            // domyślnego odstępu (after siedzi w margin-bottom) — zero nie może
-            // nadpisać niezerowej wartości z margin-bottom.
+            
             if (afterTw > 0 || !marginBottomMatch.Success)
             {
                 spacing.After = afterTw.ToString();
@@ -4726,7 +3975,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             }
         }
 
-        // atLeast z readera (PG-10): line-height:max(Xpt, var(--w-line-single…)) — bierzemy pt.
         var atLeastMatch = Regex.Match(style, @"line-height:\s*max\(\s*([\d.,]+)pt");
         if (atLeastMatch.Success)
         {
@@ -4743,9 +3991,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             var unit = lineHeightMatch.Groups[2].Value;
             if (unit == "pt")
             {
-                // Dokładna wartość w pt. Reader oznacza regułę atLeast markerem
-                // --w-line-rule:atLeast — bez niego atLeast wracało jako exact,
-                // a exact przycina w Wordzie tekst wyższy niż linia.
+                
                 spacing.Line = ((int)Math.Round(OoxmlUnits.PointsToTwips(val))).ToString();
                 spacing.LineRule = Regex.IsMatch(style, @"--w-line-rule\s*:\s*atLeast")
                     ? LineSpacingRuleValues.AtLeast
@@ -4753,11 +3999,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             }
             else
             {
-                // Mnożnik. Reader emituje wartość SKALIBROWANĄ metrykami fontu (PG-09)
-                // + marker --w-line-tw z oryginalnym w:line w 240-tych — round-trip
-                // bierze marker, nie wartość renderową (inaczej każdy zapis rozciągałby
-                // interlinię o współczynnik kalibracji). Bez markera (np. starsza treść)
-                // wartość traktujemy jak mnożnik Worda — dotychczasowe zachowanie.
+                
                 var lineTwMarker = Regex.Match(style, @"--w-line-tw\s*:\s*(\d+)");
                 spacing.Line = lineTwMarker.Success
                     ? lineTwMarker.Groups[1].Value
@@ -4770,34 +4012,22 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         if (hasSpacing)
             props.Append(spacing);
 
-        // w:contextualSpacing (znosi odstępy między paragrafami tego samego stylu) —
-        // oznaczony w CSS jako --w-contextual-spacing:1
         if (Regex.IsMatch(style, @"--w-contextual-spacing\s*:\s*1"))
         {
             props.Append(new ContextualSpacing());
         }
 
-        // Kolor tła paragrafu
         var bgColor = ExtractColor(style, @"background(?:-color)?:\s*");
         if (bgColor != null)
         {
             props.Append(new Shading { Val = ShadingPatternValues.Clear, Fill = bgColor });
         }
 
-        // Obramowania paragrafu
         ApplyParagraphBorders(props, style);
 
-        // Kolejność dzieci pPr wg schematu (CT_PPrBase): jc musi być PO spacing/ind.
-        // Dotąd jc szło pierwsze i naruszenie ujawniało się dopiero, gdy akapit miał
-        // jednocześnie wyrównanie i odstępy (np. wyśrodkowana komórka tabeli ze
-        // spacingiem ze stylu tabeli) — Word potrafi taki plik zgłosić jako uszkodzony.
         NormalizeParagraphPropertiesOrder(props);
     }
 
-    /// <summary>
-    /// Porządkuje dzieci w:pPr zgodnie ze schematem OOXML (EG_PPrBase). Sort stabilny —
-    /// elementy o tej samej randze zachowują kolejność wstawienia.
-    /// </summary>
     private static void NormalizeParagraphPropertiesOrder(ParagraphProperties props)
     {
         if (!props.HasChildren) return;
@@ -4820,7 +4050,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             OutlineLevel => 18,
             ParagraphMarkRunProperties => 19,
             SectionProperties => 20,
-            _ => 14 // nieznane zostają między contextualSpacing a jc (kolejność wstawienia)
+            _ => 14 
         };
 
         var ordered = props.ChildElements.OrderBy(Rank).ToList();
@@ -4829,9 +4059,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             props.Append(child);
     }
 
-    /// <summary>
-    /// Aplikuje dodatkowe style do paragrafu (bez nadpisywania StyleId)
-    /// </summary>
     private void ApplyParagraphStyleExtras(ParagraphProperties props, string style)
     {
         if (string.IsNullOrEmpty(style)) return;
@@ -4851,9 +4078,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Aplikuje obramowania paragrafu z CSS
-    /// </summary>
     private void ApplyParagraphBorders(ParagraphProperties props, string style)
     {
         var borders = new ParagraphBorders();
@@ -4886,28 +4110,22 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             props.Append(borders);
     }
 
-    /// <summary>
-    /// Aplikuje styl CSS do RunProperties z pełnym parsowaniem
-    /// </summary>
     private void ApplyRunStyle(RunProperties props, string style)
     {
         if (string.IsNullOrEmpty(style)) return;
 
-        // Font-weight
         if (Regex.IsMatch(style, @"font-weight:\s*(bold|[7-9]\d{2})"))
         {
             if (!props.Elements<Bold>().Any())
                 props.Append(new Bold());
         }
 
-        // Font-style
         if (style.Contains("font-style:italic") || style.Contains("font-style: italic"))
         {
             if (!props.Elements<Italic>().Any())
                 props.Append(new Italic());
         }
 
-        // Text-decoration: obsługa wielu wartości
         var textDecMatch = Regex.Match(style, @"text-decoration:\s*([^;]+)");
         if (textDecMatch.Success)
         {
@@ -4918,7 +4136,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 props.Append(new Strike());
         }
 
-        // Font-size (obsługa pt, px, em, rem)
         var fontSizeMatch = Regex.Match(style, @"font-size:\s*([\d.,]+)(pt|px|em|rem)");
         if (fontSizeMatch.Success)
         {
@@ -4929,29 +4146,21 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             double ptSize = unit switch
             {
                 "px" => OoxmlUnits.PixelsToPoints(size),
-                "em" => size * 11, // Assume base 11pt
+                "em" => size * 11, 
                 "rem" => size * 11,
-                _ => size // pt
+                _ => size 
             };
 
             var halfPoints = ((int)OoxmlUnits.PointsToHalfPoints(ptSize)).ToString();
-            // Nested span with an explicit size overrides an inherited ancestor size (CSS
-            // cascade — nearest wins). props may already carry a FontSize cloned from the
-            // parent; replace it instead of skipping, otherwise the per-word size is dropped.
+            
             SetOrReplaceFontSize(props, halfPoints);
         }
-        // font-size: smaller/larger
+        
         else if (style.Contains("font-size:smaller") || style.Contains("font-size: smaller"))
         {
-            SetOrReplaceFontSize(props, "18"); // ~9pt
+            SetOrReplaceFontSize(props, "18"); 
         }
 
-        // Font-family. The first family wins (the rest is the generic fallback list, e.g.
-        // 'Times New Roman',serif). Multi-word names arrive quoted, and crucially the browser
-        // serialises innerHTML with inner double quotes as the ENTITY &quot; — which HtmlAgilityPack
-        // does NOT decode. We must HTML-decode the style FIRST: otherwise the `;` inside `&quot;`
-        // is mistaken for a CSS declaration separator and the name is truncated (e.g. "&quot"),
-        // leaking into w:rFonts so Word silently reverts to its default font.
         var decodedStyle = System.Net.WebUtility.HtmlDecode(style);
         var fontFamilyMatch = Regex.Match(decodedStyle, @"font-family:\s*([^,;]+)");
         if (fontFamilyMatch.Success)
@@ -4959,13 +4168,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             var fontName = fontFamilyMatch.Groups[1].Value.Trim().Trim('"', '\'').Trim();
             if (fontName.Length > 0)
             {
-                // A nested span with an explicit font-family must OVERRIDE the font inherited
-                // from an ancestor span (CSS cascade — nearest wins). The editor nests per-word
-                // font spans inside the original run's font span, so props usually already
-                // carries a RunFonts cloned from the parent. Skipping here (the old behaviour)
-                // silently dropped the per-word font and collapsed the whole sentence to the
-                // ancestor font. Update the Latin faces in place, preserving any inherited
-                // EastAsia/ComplexScript/Hint and the schema-mandated element order.
+                
                 var existingFonts = props.Elements<RunFonts>().FirstOrDefault();
                 if (existingFonts != null)
                 {
@@ -4979,7 +4182,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             }
         }
 
-        // Color (obsługa hex, rgb, rgba). Nested span overrides inherited color (patrz font-family).
         var colorVal = ExtractColor(style, @"(?<!background-)color:\s*");
         if (colorVal != null)
         {
@@ -4990,20 +4192,17 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 props.Append(new Color { Val = colorVal });
         }
 
-        // Background-color
         var bgColorVal = ExtractColor(style, @"background-color:\s*");
         if (bgColorVal != null && !props.Elements<Shading>().Any())
         {
             props.Append(new Shading { Fill = bgColorVal, Val = ShadingPatternValues.Clear });
         }
 
-        // Vertical align
         if (style.Contains("vertical-align:super") && !props.Elements<VerticalTextAlignment>().Any())
             props.Append(new VerticalTextAlignment { Val = VerticalPositionValues.Superscript });
         if (style.Contains("vertical-align:sub") && !props.Elements<VerticalTextAlignment>().Any())
             props.Append(new VerticalTextAlignment { Val = VerticalPositionValues.Subscript });
 
-        // Letter spacing
         var letterSpacingMatch = Regex.Match(style, @"letter-spacing:\s*([\d.,]+)(pt|px)");
         if (letterSpacingMatch.Success && !props.Elements<Spacing>().Any())
         {
@@ -5014,14 +4213,12 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             props.Append(new Spacing { Val = (int)OoxmlUnits.PointsToTwips(ls) });
         }
 
-        // Text-transform
         if (style.Contains("text-transform:uppercase") || style.Contains("text-transform: uppercase"))
         {
             if (!props.Elements<Caps>().Any())
                 props.Append(new Caps());
         }
         
-        // font-variant
         if (style.Contains("font-variant:small-caps") || style.Contains("font-variant: small-caps"))
         {
             if (!props.Elements<SmallCaps>().Any())
@@ -5029,11 +4226,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
     }
 
-    /// <summary>
-    /// Ustawia rozmiar czcionki na RunProperties, nadpisując wartość odziedziczoną po
-    /// przodku (kaskada CSS — wygrywa najbliższy). Bez nadpisywania zagnieżdżony span
-    /// z własnym rozmiarem gubił go, gdy props niósł już FontSize sklonowany z rodzica.
-    /// </summary>
     private static void SetOrReplaceFontSize(RunProperties props, string halfPoints)
     {
         var existing = props.Elements<FontSize>().FirstOrDefault();
@@ -5053,13 +4245,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return new Paragraph(new Run(new Break { Type = BreakValues.Page }));
     }
 
-    /// <summary>
-    /// Recognises a manual page break in any of the representations the pipeline may produce:
-    /// the project marker <c>class="page-break"</c> (reader output + insertPageBreak), an explicit
-    /// <c>data-docx-break="page"</c>, or a CSS <c>page-break-before</c>/<c>break-before: page</c>.
-    /// Used so the break survives DOCX → HTML → DOCX (R-15). Natural Word pagination is NOT a
-    /// page break and never matches here.
-    /// </summary>
     private static bool IsPageBreakNode(HtmlNode node)
     {
         if (node.NodeType != HtmlNodeType.Element) return false;
@@ -5070,18 +4255,9 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return Regex.IsMatch(style, @"(page-break-before|break-before)\s*:\s*(always|page)", RegexOptions.IgnoreCase);
     }
 
-    /// <summary>
-    /// Marker końca sekcji emitowany przez DocxToHtmlConverter (R-10): niewidoczny
-    /// <c>div.docx-section-break</c> z geometrią NASTĘPNEJ sekcji w data-*.
-    /// </summary>
     private static bool IsSectionBreakNode(HtmlNode node) =>
         node.NodeType == HtmlNodeType.Element && node.HasClass("docx-section-break");
 
-    /// <summary>
-    /// Czy następny znaczący sąsiad (pomijając komentarze i białe znaki) to marker sekcji.
-    /// Reader emituje parę <c>div.page-break</c> + <c>div.docx-section-break</c> dla przerwy
-    /// nextPage — page-break jest wtedy tylko wizualny i nie może stać się w:br type=page.
-    /// </summary>
     private static bool NextElementSiblingIsSectionBreak(HtmlNode node)
     {
         var next = node.NextSibling;
@@ -5093,12 +4269,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return next != null && IsSectionBreakNode(next);
     }
 
-    /// <summary>
-    /// Zamyka bieżącą sekcję: paragraf z pPr/sectPr niosącym geometrię sekcji ZAMYKANEJ
-    /// (tak koduje to OOXML), po czym otwiera następną sekcję geometrią z data-* markera.
-    /// Pierwszy taki sectPr zapamiętujemy — do niego pójdą referencje nagłówka/stopki
-    /// (kolejne sekcje dziedziczą je w Wordzie, gdy nie deklarują własnych).
-    /// </summary>
     private Paragraph CreateSectionBreakParagraph(HtmlNode node)
     {
         var closingSection = new SectionProperties();
@@ -5113,10 +4283,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return new Paragraph(new ParagraphProperties(closingSection));
     }
 
-    /// <summary>
-    /// Geometria sekcji z data-* markera; brakujące wartości dziedziczą z poprzedniej
-    /// sekcji (przybliżenie dziedziczenia sekcji Worda).
-    /// </summary>
     private static SectionGeometry ReadSectionGeometryFromMarker(HtmlNode node, SectionGeometry previous)
     {
         var inv = System.Globalization.CultureInfo.InvariantCulture;
@@ -5162,15 +4328,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             HeaderDistanceCm = Attr("data-header-distance-cm"),
             FooterDistanceCm = Attr("data-footer-distance-cm"),
             BreakType = node.GetAttributeValue("data-break-type", "nextPage"),
-            // Kolumny NIE dziedziczą po poprzedniej sekcji — w OOXML brak w:cols = jednokolumnowa.
+            
             Columns = ParseColumnDataAttributes(node)
         };
     }
 
-    /// <summary>
-    /// w:type sekcji — zapisywany tylko, gdy różni się od domyślnego nextPage.
-    /// Musi poprzedzać pgSz/pgMar (kolejność schematu sectPr).
-    /// </summary>
     private static void AppendSectionBreakType(SectionProperties sectionProps, string? breakType)
     {
         SectionMarkValues? val = breakType switch
@@ -5187,12 +4349,9 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
     private void SetDocumentMetadata(WordprocessingDocument document, DocumentMetadata metadata)
     {
-        // docProps/core.xml pisane wprost. `document.PackageProperties` tworzyło OPC-ową
-        // część `package/services/metadata/core-properties/*.psmdcp` — technicznie legalną,
-        // ale nietypową dla DOCX i flagowaną przez narzędzia/wersje Worda jako podejrzana.
+        
         WriteCoreProperties(document, metadata);
 
-        // Extended Properties (app.xml — Company, Manager)
         var extPropsPart = document.AddExtendedFilePropertiesPart();
         extPropsPart.Properties = new Properties();
 
@@ -5201,7 +4360,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         if (!string.IsNullOrEmpty(metadata.Manager))
             extPropsPart.Properties.Manager = new Manager(metadata.Manager);
 
-        extPropsPart.Properties.Application = new DocumentFormat.OpenXml.ExtendedProperties.Application("Qutas D2Tools");
+        extPropsPart.Properties.Application = new DocumentFormat.OpenXml.ExtendedProperties.Application("Doc2 D2Tools");
         extPropsPart.Properties.Save();
     }
 
@@ -5226,7 +4385,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             new XAttribute(xsi + "type", "dcterms:W3CDTF"),
             value.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss'Z'"));
 
-        // Kolejność wg sekwencji schematu OPC core-properties.
         Add(cp + "category", metadata.Category);
         Add(cp + "contentStatus", metadata.ContentStatus);
         root.Add(DateElement(dcterms + "created", metadata.Created ?? DateTime.UtcNow));
@@ -5245,9 +4403,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         new XDocument(root).Save(stream);
     }
 
-    /// <summary>
-    /// Dodaje ustawienia strony z dokładnymi marginesami
-    /// </summary>
     private void AddPageSettings(Body body, HeaderFooterContent? header = null, HeaderFooterContent? footer = null, PageMargins? margins = null, Domain.Models.PageSize? pageSize = null)
     {
         var sectionProps = body.Elements<SectionProperties>().FirstOrDefault();
@@ -5257,9 +4412,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             body.Append(sectionProps);
         }
 
-        // Body-level sectPr opisuje OSTATNIĄ sekcję. Gdy body zawierało markery sekcji,
-        // jej geometria pochodzi z ostatniego markera (_currentSection); bez markerów —
-        // z argumentów (dotychczasowe zachowanie, jedna sekcja).
         var geometry = _hasSectionMarkers
             ? _currentSection
             : new SectionGeometry { PageSize = pageSize, Margins = margins, Columns = _docDefaultColumns };
@@ -5269,23 +4421,9 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         AppendSectionGeometry(sectionProps, geometry);
     }
 
-    /// <summary>
-    /// Dopisuje w:pgSz + w:pgMar do sectPr wg geometrii sekcji (jedno źródło reguł dla
-    /// body-level i paragraph-level sectPr).
-    ///
-    /// Margins (cm) → twips via the central converter (the exact factor is 1440/2.54).
-    /// Defaults are 1 inch sides, 0.5 inch header/footer bands. Body margins are written
-    /// AS AUTHORED — they must not be inflated. The reader derives the header/footer band
-    /// height as (margin − distance); here we invert that to recover the original
-    /// w:header / w:footer distance = (margin − band), clamped to [0, 720] — unless the
-    /// section marker carried the authored distances (data-header/footer-distance-cm),
-    /// which round-trip verbatim. The previous Math.Max(top, headerHeight + 720) +
-    /// hardcoded Header/Footer=720 pushed a small-margin / small-header document
-    /// (top=567, header=6) to top=1281, adding pages. Patrz analiza orginał_GOOD vs zapisany_BAD.
-    /// </summary>
     private void AppendSectionGeometry(SectionProperties sectionProps, SectionGeometry geometry)
     {
-        // Round-trip the authored page size/orientation; fall back to A4 portrait when unknown.
+        
         if (!sectionProps.Elements<OoxmlPageSize>().Any())
         {
             AppendBeforeTitlePage(sectionProps, BuildPageSize(geometry.PageSize));
@@ -5303,7 +4441,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         int topTwips    = margins != null ? (int)Math.Round(OoxmlUnits.CmToTwips(margins.Top))    : defaultMarginTwips;
         int bottomTwips = margins != null ? (int)Math.Round(OoxmlUnits.CmToTwips(margins.Bottom)) : defaultMarginTwips;
 
-        const int maxBandDistanceTwips = 720; // 0.5"
+        const int maxBandDistanceTwips = 720; 
         uint headerDistance = geometry.HeaderDistanceCm is { } hd
             ? (uint)Math.Max(0, (int)Math.Round(OoxmlUnits.CmToTwips(hd)))
             : (uint)Math.Clamp(topTwips - headerHeightTwips, 0, maxBandDistanceTwips);
@@ -5327,11 +4465,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         AppendColumns(sectionProps, geometry.Columns);
     }
 
-    /// <summary>
-    /// Dopisuje w:cols do sectPr (po pgSz/pgMar, przed titlePg/docGrid — kolejność CT_SectPr).
-    /// Emituje TYLKO gdy sekcja jest realnie wielokolumnowa (Count &gt; 1). Równe → num+space+
-    /// equalWidth; nierówne → equalWidth="0" + w:col per kolumna z w:w/w:space (ADR-0039).
-    /// </summary>
     private static void AppendColumns(SectionProperties sectionProps, ColumnLayout? cols)
     {
         if (cols == null || cols.Count <= 1) return;
@@ -5359,10 +4492,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         AppendBeforeTitlePage(sectionProps, columns);
     }
 
-    /// <summary>
-    /// pgSz/pgMar must precede titlePg in CT_SectPr, but AddHeaderAndFooter (which sets
-    /// titlePg) runs before AddPageSettings — a plain Append would put them after it.
-    /// </summary>
     private static void AppendBeforeTitlePage(SectionProperties sectionProps, OpenXmlElement element)
     {
         var titlePg = sectionProps.GetFirstChild<TitlePage>();
@@ -5372,7 +4501,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
     private static OoxmlPageSize BuildPageSize(Domain.Models.PageSize? pageSize)
     {
-        // A4 portrait default (twips) matches Word's default new-document section.
+        
         const int a4WidthTwips = 11906;
         const int a4HeightTwips = 16838;
 
@@ -5397,15 +4526,9 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return props;
     }
 
-    /// <summary>
-    /// Builds a PAGE/NUMPAGES field run, carrying the field span's font (font-size etc.) so the
-    /// page number keeps the footer's size on round-trip instead of falling back to a default.
-    /// Falls back to the parent span's style for the wrapped {page} case.
-    /// </summary>
     private SimpleField BuildFieldRun(string instruction, HtmlNode fieldNode)
     {
-        // fldSimple is paragraph-level; the run properties (font-size etc.) live on an inner run
-        // so Word — and our reader on the next round-trip — keep the page number's footer font.
+        
         var run = new Run();
         var style = fieldNode.GetAttributeValue("style", "");
         if (string.IsNullOrEmpty(style))
@@ -5416,9 +4539,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             ApplyRunStyle(rPr, style);
             if (rPr.HasChildren) run.Append(rPr);
         }
-        // Cached field result. The reader's placeholders ({page}/{pages}) must NEVER become the
-        // cached text — Word shows the cached value until the field recalculates, so a leaked
-        // "{page}" would display literally. Fall back to "1" for placeholders/empty/non-numeric.
+        
         var inner = fieldNode.InnerText?.Trim() ?? string.Empty;
         if (inner.Length == 0 || inner.Contains("{page", StringComparison.OrdinalIgnoreCase) || !inner.Any(char.IsDigit))
             inner = "1";
@@ -5426,11 +4547,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return new SimpleField(run) { Instruction = instruction };
     }
 
-    /// <summary>
-    /// span.field-date → żywe pole daty (w:fldSimple) z instrukcją z data-fld-instr (ADR-0084).
-    /// Wartość zbuforowana = tekst wyświetlany w edytorze; Word dalej umie pole zaktualizować.
-    /// Bez instrukcji (starszy zapis) — pole DATE z domyślnym polskim obrazem daty.
-    /// </summary>
     private SimpleField BuildDateFieldRun(HtmlNode fieldNode)
     {
         var instruction = System.Net.WebUtility.HtmlDecode(
@@ -5458,18 +4574,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
 
     private int PxToTwips(int px) => (int)OoxmlUnits.PixelsToTwips(px);
 
-    // ═════════════════ Pass-through grafik XML (ADR-0056) ═════════════════
-    // Element HTML z data-docx-xml niesie ORYGINALNY fragment OOXML (w:drawing/w:pict/
-    // w:object/mc:AlternateContent, base64 OuterXml — wzorzec data-sdt-props) oraz bajty
-    // części relacji w data-docx-rels (base64 JSON {rId:{ct,data}}). Odtwarzamy fragment
-    // 1:1 z przepięciem rId na nowo dodane części — bez tego kształty/OLE/grupy ginęły
-    // przy KAŻDYM zapisie (body/nagłówki są regenerowane z HTML). Uszkodzony/nadmiarowy
-    // marker → null (degradacja do stratnej ścieżki, nigdy wysypka ani uszkodzony pakiet).
-
-    /// <summary>
-    /// Odtwarza zachowany fragment OOXML z atrybutów pass-through. Null, gdy marker jest
-    /// nieobecny/uszkodzony/ponad limit, root spoza białej listy albo brakuje części relacji.
-    /// </summary>
     private OpenXmlElement? TryRestorePreservedElement(HtmlNode node)
     {
         var encoded = node.GetAttributeValue("data-docx-xml", "");
@@ -5480,7 +4584,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             if (xmlBytes.Length == 0 || xmlBytes.Length > DocxToHtmlConverter.MaxPreservedXmlBytes) return null;
             var xml = System.Text.Encoding.UTF8.GetString(xmlBytes);
 
-            // Twarda walidacja XML (XXE/DTD/encje zablokowane) PRZED oddaniem SDK.
             var settings = new System.Xml.XmlReaderSettings
             {
                 DtdProcessing = System.Xml.DtdProcessing.Prohibit,
@@ -5510,16 +4613,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
         catch
         {
-            // Uszkodzony marker (ręczna edycja, obce dane) — degradacja bez wyjątku.
+            
             return null;
         }
     }
 
-    /// <summary>
-    /// Odtwarza części relacji fragmentu (data-docx-rels) w bieżącym kontenerze
-    /// (body/header/footer/przypisy) i przepina rId we fragmencie na nowe. False, gdy
-    /// jakikolwiek wymagany rId nie ma bajtów (wiszący rId = uszkodzony dokument).
-    /// </summary>
     private bool RestorePreservedRels(HtmlNode node, OpenXmlElement element)
     {
         var referenced = DocxToHtmlConverter.CollectRelationshipIds(element);
@@ -5554,7 +4652,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return true;
     }
 
-    /// <summary>Nowa część dla odtwarzanej relacji: obrazy → ImagePart, reszta → EmbeddedObjectPart.</summary>
     private static OpenXmlPart? CreatePreservedPart(OpenXmlPart container, string contentType)
     {
         try
@@ -5575,12 +4672,11 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         }
         catch
         {
-            // Kontener nie wspiera danego typu części — degradacja (fragment nie zostanie odtworzony).
+            
             return null;
         }
     }
 
-    /// <summary>Przepina wszystkie atrybuty r:* o wartości oldId na newId w całym fragmencie.</summary>
     private static void ReplaceRelationshipId(OpenXmlElement element, string oldId, string newId)
     {
         void Fix(OpenXmlElement el)
@@ -5595,14 +4691,9 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         Fix(element);
     }
 
-    /// <summary>
-    /// Buduje SdtProperties (Tag/Alias) na podstawie atrybutów data-sdt-* z elementu HTML.
-    /// </summary>
     private static SdtProperties BuildSdtProperties(HtmlNode node)
     {
-        // Pełne właściwości formantu (typ + parametry) zachowane przez reader w data-sdt-props
-        // (base64 OuterXml). Odtwarzamy je 1:1 — bez tego formant tracił typ (checkbox/dropdown/
-        // date/…) i stawał się generyczny przy każdym eksporcie/autosave.
+        
         var encoded = node.GetAttributeValue("data-sdt-props", "");
         if (!string.IsNullOrEmpty(encoded))
         {
@@ -5610,12 +4701,9 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             {
                 var xml = System.Text.Encoding.UTF8.GetString(System.Convert.FromBase64String(encoded));
                 var restored = new SdtProperties(xml);
-                // w:id musi być unikalne w dokumencie — usuń, Word nada nowe (kolizje = uszkodzony plik).
+                
                 restored.Elements<SdtId>().ToList().ForEach(e => e.Remove());
-                // w:placeholder (docPart z GLOSARIUSZA oryginału) i w:dataBinding (customXml/
-                // storeItemID) wskazują części pakietu, których regenerowany DOCX nie zawiera —
-                // wiszące odwołania wyzwalają w Wordzie „znaleziono zawartość, której nie może
-                // odczytać" i tryb naprawy. LocalName łapie też wariant w15:dataBinding.
+                
                 restored.ChildElements
                     .Where(e => e.LocalName is "placeholder" or "dataBinding")
                     .ToList().ForEach(e => e.Remove());
@@ -5623,7 +4711,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             }
             catch
             {
-                // Uszkodzone/niezgodne data-sdt-props — degradacja do tag/alias zamiast wysypki.
+                
             }
         }
 
@@ -5637,9 +4725,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return props;
     }
 
-    /// <summary>
-    /// Buduje SdtBlock z wrappera &lt;div class="sdt-block"&gt; ze znacznikami data-sdt-*.
-    /// </summary>
     private SdtBlock BuildSdtBlockFromHtml(HtmlNode node)
     {
         var sdt = new SdtBlock();
@@ -5652,8 +4737,6 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
                 content.Append(el);
         }
 
-        // SdtContentBlock musi mieć przynajmniej jeden Paragraph, inaczej Word
-        // potraktuje SDT jako uszkodzony.
         if (!content.Elements<Paragraph>().Any() && !content.Elements<Table>().Any())
             content.Append(new Paragraph());
 
@@ -5661,20 +4744,16 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         return sdt;
     }
 
-    /// <summary>
-    /// Buduje SdtRun z &lt;span class="sdt-inline"&gt; ze znacznikami data-sdt-*.
-    /// </summary>
     private SdtRun? BuildSdtRunFromHtml(HtmlNode node, RunProperties? inheritedProps)
     {
         var sdt = new SdtRun();
         sdt.Append(BuildSdtProperties(node));
 
         var content = new SdtContentRun();
-        // Złóż run-y z dzieci span-a w tym samym kontekście co AppendInlineContent.
+        
         foreach (var child in node.ChildNodes)
         {
-            // Pola numeru strony wewnątrz formantu (galeria Worda „Strona X z Y") muszą
-            // wrócić jako pola — CreateRunsFromNode zrobiłoby z nich literalny „{page}".
+            
             if (child.NodeType == HtmlNodeType.Element
                 && child.Name.Equals("span", StringComparison.OrdinalIgnoreCase))
             {

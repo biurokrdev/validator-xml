@@ -3,14 +3,6 @@ import { vi } from 'vitest';
 import { EditorToolbarComponent } from './editor-toolbar';
 import { EditorCommand, EditorState } from '../../models/document.model';
 
-/**
- * Testy przycisku „Cofnij" (undo) i „Ponów" (redo) w pasku narzędzi.
- *
- * Sprawdzają WIRING przycisku (widoczność, stan disabled/enabled, emitowaną komendę),
- * niezależnie od samego mechanizmu historii edytora (ten żyje w WysiwygEditorComponent
- * i opiera się na contenteditable/execCommand, których jsdom nie wspiera — patrz
- * scenariusz manualny w .ai/CHANGELOG.md).
- */
 describe('EditorToolbarComponent — przyciski undo/redo', () => {
   let fixture: ComponentFixture<EditorToolbarComponent>;
   let component: EditorToolbarComponent;
@@ -113,11 +105,6 @@ describe('EditorToolbarComponent — przyciski undo/redo', () => {
   });
 });
 
-/**
- * Rozmiar czcionki z pola input — ENTER nie może kasować zaznaczonego tekstu.
- * Przyczyna: synchroniczny blur w trakcie ENTER → setFontSize przywraca zaznaczenie do edytora,
- * a domyślny ENTER kasuje je. Fix: preventDefault + odroczony blur (aplikacja przez blur).
- */
 describe('EditorToolbarComponent — ENTER w polu rozmiaru czcionki', () => {
   let fixture: ComponentFixture<EditorToolbarComponent>;
   let component: EditorToolbarComponent;
@@ -138,10 +125,10 @@ describe('EditorToolbarComponent — ENTER w polu rozmiaru czcionki', () => {
 
     component.onFontSizeInputEnter(ev);
 
-    expect(prevented).toBe(true);              // domyślny ENTER zablokowany
-    expect(blurSpy).not.toHaveBeenCalled();    // blur NIE jest synchroniczny (w trakcie ENTER)
+    expect(prevented).toBe(true);              
+    expect(blurSpy).not.toHaveBeenCalled();    
 
-    vi.runAllTimers();                         // dopiero po zdarzeniu ENTER
+    vi.runAllTimers();                         
     expect(blurSpy).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
@@ -158,11 +145,6 @@ describe('EditorToolbarComponent — ENTER w polu rozmiaru czcionki', () => {
   });
 });
 
-/**
- * „Pokaż wszystko" (¶) — przycisk PRZYWRÓCONY (2026-08-14, pełna funkcja znaków
- * formatowania: overlay spacji/tabów/br + CSS ¶). Wiring: klik emituje komendę
- * toggleFormattingMarks, podświetlenie z EditorState.formattingMarks.
- */
 describe('EditorToolbarComponent — przycisk „Pokaż wszystko"', () => {
   let fixture: ComponentFixture<EditorToolbarComponent>;
   let component: EditorToolbarComponent;

@@ -1,0 +1,33 @@
+<div class="admin-layout">
+  <main class="admin-content">
+    <router-outlet />
+  </main>
+
+  <aside class="admin-sidebar">
+    <div class="sidebar-brand">
+      <img src="logo.svg" alt="Doc2 Logo" class="sidebar-logo" />
+      <span class="sidebar-title">Administracja</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a class="nav-item" routerLink="files" routerLinkActive="active">
+        Lista plików
+      </a>
+      <a class="nav-item" routerLink="deliveries" routerLinkActive="active">
+        Pliki do wysłania
+      </a>
+      <a class="nav-item" routerLink="walidator-struktury" routerLinkActive="active">
+        Walidator struktury
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a class="nav-item back-link" routerLink="/">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Powrót do aplikacji
+      </a>
+    </div>
+  </aside>
+</div>

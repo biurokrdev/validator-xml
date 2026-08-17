@@ -1,7 +1,6 @@
 <div class="wysiwyg-editor-wrapper" [class.read-only]="readOnly">
   <div class="pages-container">
-    <!-- Każda strona w geometrii swojej sekcji (rozmiar/orientacja/marginesy z pageGeometries;
-         sekcja 1 = pageSize/pageMargins, kolejne z markerów docx-section-break) -->
+    
     @for (page of pageContents(); track $index) {
       <div class="page-wrapper">
         <div class="page"
@@ -11,8 +10,6 @@
              [style.--w-line-single]="documentDefaultLineSingle()"
              [attr.data-page-number]="$index + 1">
 
-          <!-- Nagłówek strony: zaczyna się headerDistance od krawędzi (w:pgMar header),
-               min-height = pasmo (margines − dystans); wyższa treść SPYCHA body jak w Wordzie -->
           <div class="page-header"
                [class.editing]="editingSection() === 'header'"
                [style.margin-top.px]="headerOffsetPx($index)"
@@ -32,7 +29,7 @@
                 (beforeinput)="onEditorBeforeInput($event)"
                 (input)="onHeaderInput($event)"
               ></div>
-              <!-- Pasek nagłówka przeniesiony do d2-header-footer-panel (dock po lewej). -->
+              
             } @else {
               <div class="header-display" [class.show-formatting-marks]="showFormattingMarks()" [innerHTML]="getHeaderContentSafe($index)"></div>
             }
@@ -99,8 +96,6 @@
             ></div>
           }
 
-          <!-- Stopka strony: dół stopki footerDistance od dołu strony; wyższa treść odbiera
-               miejsce body (repaginacja mierzy realne pasmo) -->
           <div class="page-footer"
                [class.editing]="editingSection() === 'footer'"
                [style.margin-bottom.px]="footerOffsetPx($index)"
@@ -110,7 +105,7 @@
                (click)="startEditingFooter($event)"
                (dblclick)="startEditingFooter($event)">
             @if (editingSection() === 'footer' && $index === editingHfPageIndex()) {
-              <!-- Pasek stopki przeniesiony do d2-header-footer-panel (dock po lewej). -->
+              
               <div
                 #footerContent
                 class="footer-editor-content"
@@ -126,10 +121,6 @@
             }
           </div>
 
-          <!-- Przypisy końcowe (jak w MS Word): region WEWNĄTRZ strony, zaraz pod ostatnim
-               blokiem treści (top liczony w repaginacji), z separatorem; nadmiar przelewa się
-               na kolejne strony (kontynuacja = separator na całą szerokość). Elementy żyją
-               POZA contenteditable body — nie wchodzą do zapisu treści. -->
           @if (endnoteRegionFor($index); as enRegion) {
             <div class="endnotes-region"
                  role="region"
@@ -156,17 +147,12 @@
                        [attr.data-testid]="'endnote-content-' + entry.en.id"
                        [innerHTML]="endnoteSafeHtml(entry.en)"
                        (blur)="commitEndnoteContent(entry.en.id, $event)"></div>
-                  <!-- Bez przycisku usuwania (jak w Wordzie): przypis znika po skasowaniu
-                       odwołania w treści — syncEndnotesWithBody przycina osierocone wpisy. -->
+                  
                 </div>
               }
             </div>
           }
 
-          <!-- Przypisy dolne (jak w MS Word): region na DOLE strony, na której jest odwołanie
-               (kotwica od dołu, tuż nad stopką; rezerwacja miejsca w paginacji skróciła body,
-               więc region nie nachodzi na treść). Elementy żyją POZA contenteditable body —
-               nie wchodzą do zapisu treści. -->
           @if (footnoteRegionFor($index); as fnRegion) {
             <div class="footnotes-region"
                  role="region"
@@ -193,14 +179,12 @@
                        [attr.data-testid]="'footnote-content-' + entry.fn.id"
                        [innerHTML]="footnoteSafeHtml(entry.fn)"
                        (blur)="commitFootnoteContent(entry.fn.id, $event)"></div>
-                  <!-- Bez przycisku usuwania (jak w Wordzie): przypis znika po skasowaniu
-                       odwołania w treści — syncFootnotesWithBody przycina osierocone wpisy. -->
+                  
                 </div>
               }
             </div>
           }
 
-          <!-- Prowadnice marginesów (przerywane linie jak w MS Word / Docs) -->
           @if (showMarginGuides) {
             <div class="margin-guides">
               <div class="margin-guide margin-guide-top" [style.top.px]="pageMarginPx($index, 'top')"></div>
@@ -211,7 +195,6 @@
           }
         </div>
 
-        <!-- Separator między stronami - styl Google Docs -->
         @if ($index < pageContents().length - 1) {
           <div class="page-separator"></div>
         }

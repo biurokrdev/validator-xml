@@ -6,12 +6,6 @@ import {
   DEFAULT_SINGLE_FACTOR,
 } from './word-line-spacing.util';
 
-/**
- * Kalibracja interlinii mnożnikowej Word ↔ CSS (PG-09) po stronie GUI — lustro
- * backendowego WordLineSpacing.cs. Mnożnik Worda (N × pojedynczy odstęp z metryk
- * fontu) ≠ bezjednostkowe CSS line-height (N × font-size); GUI ustawia wartość
- * skalibrowaną + marker --w-line-tw i odczytuje mnożnik z markera.
- */
 describe('word-line-spacing.util — kalibracja interlinii Worda (PG-09)', () => {
   let el: HTMLElement;
 
@@ -30,7 +24,7 @@ describe('word-line-spacing.util — kalibracja interlinii Worda (PG-09)', () =>
     });
 
     it('nieznany/firmowy krój i brak fontu → fallback 1.2', () => {
-      expect(wordSingleFactor('Qutas Me')).toBe(DEFAULT_SINGLE_FACTOR);
+      expect(wordSingleFactor('Doc2 Me')).toBe(DEFAULT_SINGLE_FACTOR);
       expect(wordSingleFactor(null)).toBe(DEFAULT_SINGLE_FACTOR);
       expect(wordSingleFactor('')).toBe(DEFAULT_SINGLE_FACTOR);
     });
@@ -41,8 +35,8 @@ describe('word-line-spacing.util — kalibracja interlinii Worda (PG-09)', () =>
       el.style.fontFamily = 'Calibri';
       applyWordLineSpacing(el, 1.08);
 
-      expect(el.style.lineHeight).toBe('1.319'); // 1.08 × 1.221
-      expect(el.style.getPropertyValue('--w-line-tw')).toBe('259'); // 1.08 × 240
+      expect(el.style.lineHeight).toBe('1.319'); 
+      expect(el.style.getPropertyValue('--w-line-tw')).toBe('259'); 
     });
 
     it('mnożnik 1,5 bez znanego fontu → fallback 1.2 (line-height 1.8, marker 360)', () => {
@@ -83,7 +77,7 @@ describe('word-line-spacing.util — kalibracja interlinii Worda (PG-09)', () =>
       el.style.fontFamily = 'Calibri';
       applyWordLineSpacing(el, 1.08);
 
-      expect(readWordLineMultiple(el)).toBe(1.08); // 259/240 ≈ 1.08, nie 1.319
+      expect(readWordLineMultiple(el)).toBe(1.08); 
     });
 
     it('round-trip apply → read zwraca zadany mnożnik dla typowych wartości', () => {
