@@ -31,37 +31,28 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
     private readonly Dictionary<string, Style> _rawStyles = new();
     private int _defaultTabStopTwips = 708;
     private readonly List<DocumentStyle> _documentStyles = new();
-    
     private readonly Dictionary<int, string> _picBulletDataUris = new();
     private int _imageCounter = 0;
     private NumberingDefinitionsPart? _numberingPart;
     private ThemePart? _themePart;
-    
     private string? _defaultFontFamily;
     private double? _defaultFontSizePt;
-    
     private string? _defaultSpacingBeforeTw;
     private string? _defaultSpacingAfterTw;
     private string? _defaultSpacingLine;
-    private string? _defaultSpacingLineRule; 
-    
+    private string? _defaultSpacingLineRule;
     private string? _defaultParagraphStyleId;
-    
     private ColumnLayout? _baseSectionColumns;
 
     private long? _availableContentWidthTwips;
-    
     private string _defaultParagraphSpacingCss = "";
-    
     private string? _tableParagraphDefaultCss;
-    
     private string? _themeMajorLatin;
     private string? _themeMinorLatin;
     private string? _themeMajorEastAsia;
     private string? _themeMinorEastAsia;
     private string? _themeMajorComplexScript;
     private string? _themeMinorComplexScript;
-    
     private bool _flexTabs;
 
     private long? _pageWidthTwips;
@@ -77,7 +68,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
     private HfBand _anchorBand = HfBand.None;
 
     private readonly Dictionary<(int abstractNumId, int level), int> _listCounters = new();
-    
     private readonly HashSet<int> _appliedStartOverrides = new();
 
     private readonly DocumentDefaultsOptions _defaults;
@@ -101,10 +91,9 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
     private (string dataUrl, bool isBlank)? WebGraphicForLegacy(byte[] bytes, string? contentType, long widthEmu, long heightEmu, string? sourcePath = null)
     {
-        
         var kind = _graphics.Detect(bytes, contentType);
         if (kind is not (GraphicKind.Emf or GraphicKind.Wmf or GraphicKind.Tiff or GraphicKind.Unknown))
-            return null; 
+            return null;
         var result = _graphics.ConvertForEditor(new GraphicSource
         {
             Data = bytes,
@@ -136,6 +125,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         }
         return result.Web != null ? (result.Web.ToDataUrl(), result.Web.IsBlankFallback) : null;
     }
+
 
     public DocumentContent Convert(Stream docxStream)
     {
@@ -265,7 +255,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
         if (page.HasPageMargin)
         {
-            
             if (page.TopMarginTwips is { } t)
                 sb.Append(string.Format(inv, " data-margin-top-cm=\"{0:0.##}\"", OoxmlUnits.TwipsToCm(Math.Abs(t))));
             if (page.BottomMarginTwips is { } b)
@@ -387,7 +376,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         long objectSize, long pageSize, long marginStart, long marginEnd, bool horizontal,
         long? bandParagraphBase = null)
     {
-        
         long baseStart;
         long extent;
         switch (relFrom)
@@ -408,9 +396,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 baseStart = 0;
                 extent = pageSize;
                 break;
-            
             default:
-                
                 if (!horizontal && bandParagraphBase is { } bandBase
                     && relFrom is null or "paragraph" or "line")
                 {
@@ -622,7 +608,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
         return new HeaderFooterContent
         {
-            
             Html = html ?? string.Empty,
             Height = Math.Max(0.8, Math.Min(8, height)),
             DifferentFirstPage = differentFirstPage,
@@ -757,7 +742,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             LoadImageFromPart(part, imagePart);
         }
         _anchorBand = HfBand.Header;
-        
         var prevAvail = _availableContentWidthTwips;
         _availableContentWidthTwips = FullContentWidthTwips();
         try { return ConvertHeaderFooterToHtml(part.Header, part, document); }
@@ -800,7 +784,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             }
             else if (element is SdtBlock sdt)
             {
-                
                 inner.Append(ConvertSdtBlockToHtml(sdt, document, part));
             }
         }
@@ -925,7 +908,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var containerCss = BuildDefaultContainerCss();
 
         var containerAttrs = new StringBuilder();
-        
         containerAttrs.Append($" data-default-before-tw=\"{_defaultSpacingBeforeTw ?? "0"}\"");
         containerAttrs.Append($" data-default-after-tw=\"{_defaultSpacingAfterTw ?? "0"}\"");
         if (_defaultSpacingLine != null)
@@ -946,7 +928,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
         var elements = body.Elements().ToList();
         var orderedSections = GetSectionPropertiesInDocumentOrder(body);
-        
         _availableContentWidthTwips = SectionColumnWidthTwips(orderedSections.FirstOrDefault());
         int i = 0;
         while (i < elements.Count)
@@ -955,12 +936,10 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
             if (element is Paragraph p && IsListParagraph(p))
             {
-                
                 html.Append(ConvertConsecutiveListItems(elements, ref i, document));
             }
             else
             {
-                
                 var endedSection = (element as Paragraph)?.ParagraphProperties
                     ?.GetFirstChild<SectionProperties>();
                 var isBareSectionMark = endedSection != null
@@ -974,7 +953,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 if (endedSection != null)
                 {
                     html.Append(BuildSectionBreakMarkerHtml(endedSection, orderedSections));
-                    
                     var endedIdx = orderedSections.IndexOf(endedSection);
                     if (endedIdx >= 0 && endedIdx + 1 < orderedSections.Count)
                         _availableContentWidthTwips = SectionColumnWidthTwips(orderedSections[endedIdx + 1]);
@@ -1022,7 +1000,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
     private bool IsListParagraph(Paragraph paragraph)
     {
-        
         var numPr = paragraph.ParagraphProperties?.NumberingProperties;
         if (numPr?.NumberingId?.Val?.Value != null && numPr.NumberingId.Val.Value > 0)
             return true;
@@ -1140,11 +1117,9 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             ? (int?)TwipsToPx(indHangTw)
             : null;
         var hangingCss = hangingPx is { } hp ? $"--ind-hanging:{hp}px;" : string.Empty;
-        
         var markerColorVarCss = firstInfo.MarkerColorCss != null
             ? $"--marker-color:{firstInfo.MarkerColorCss};"
             : string.Empty;
-        
         var markerSizeVarCss = MarkerSizeCssVar(firstInfo.MarkerSizeHalfPoints);
         var listStyleCss = $"margin:0;padding-left:{listPadding}px;list-style-type:{firstInfo.ListStyleType};{hangingCss}{markerColorVarCss}{markerSizeVarCss}";
 
@@ -1162,7 +1137,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             identityAttrs.Append($" data-lvl-text=\"{System.Net.WebUtility.HtmlEncode(firstInfo.LvlText)}\"");
         if (!string.IsNullOrEmpty(firstInfo.BulletFont))
             identityAttrs.Append($" data-bullet-font=\"{System.Net.WebUtility.HtmlEncode(firstInfo.BulletFont)}\"");
-        
         if (firstInfo.StartOverride > 0)
             identityAttrs.Append($" data-start-override=\"{firstInfo.StartOverride}\"");
         if (firstInfo.SuffixToken != null)
@@ -1201,7 +1175,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
             if (currentLevel > firstLevel)
             {
-                
                 var lastLi = "</li>";
                 html.Length -= lastLi.Length;
                 html.Append(ConvertConsecutiveListItems(elements, ref index, document, levelIndentPx));
@@ -1213,7 +1186,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             }
             else
             {
-                
                 NextListNumber(currentNumId, currentLevel);
 
                 var cssStyle = GetParagraphStyle(p.ParagraphProperties);
@@ -1222,7 +1194,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 {
                     cssStyle = styleCss + cssStyle;
                 }
-                
                 if (!string.IsNullOrEmpty(_tableParagraphDefaultCss) && p.Ancestors<TableCell>().Any())
                 {
                     cssStyle = _tableParagraphDefaultCss + cssStyle;
@@ -1468,7 +1439,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         {
             if (_defaultSpacingLineRule == "atLeast")
             {
-                
                 css.Append(string.Format(inv,
                     "line-height:max({0:0.##}pt, var(--w-line-single, 1.2em));",
                     OoxmlUnits.TwipsToPoints(lineTw)));
@@ -1480,13 +1450,11 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             }
             else
             {
-                
                 css.Append(WordLineSpacing.AutoCss(lineTw, _defaultFontFamily));
             }
         }
         else
         {
-            
             css.Append(WordLineSpacing.AutoCss((int)WordLineSpacing.LineUnitsPerSingle, _defaultFontFamily));
         }
         return css.ToString();
@@ -1520,7 +1488,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var paraProps = style.StyleParagraphProperties;
         if (paraProps != null)
         {
-            
             css.Append(ConvertParagraphPropertiesToCss(paraProps, GetStyleFontFamily(style)));
         }
 
@@ -1540,7 +1507,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             var val  = m.Groups[2].Value.Trim();
             if (!props.ContainsKey(name))
                 order.Add(name);
-            props[name] = val; 
+            props[name] = val;
         }
 
         return string.Concat(order.Select(p => $"{p}:{props[p]};"));
@@ -1775,10 +1742,9 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             });
             if (converted.Web is { IsBlankFallback: false } w && w.MimeType != "image/svg+xml")
             {
-                rawBytes = w.Data;       
+                rawBytes = w.Data;
                 contentType = w.MimeType;
             }
-            
             else if (converted.Diagnostics.Status is GraphicConversionStatus.Fallback
                      or GraphicConversionStatus.Unsupported or GraphicConversionStatus.Rejected)
             {
@@ -1820,7 +1786,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var ct = contentType.ToLowerInvariant();
         return ct.Contains("emf") || ct.Contains("wmf") || ct.Contains("metafile")
             || ct.Contains("tiff") || ct.Contains("tif")
-            || ct.Contains("emz") || ct.Contains("wmz");   
+            || ct.Contains("emz") || ct.Contains("wmz");
     }
 
     private void LoadNumberingPictureBullets()
@@ -1832,7 +1798,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
         foreach (var picBullet in _numberingPart.Numbering.Elements<NumberingPictureBullet>())
         {
-            
             int id;
             string? relId = null;
             try
@@ -1849,7 +1814,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             }
             catch
             {
-                
                 continue;
             }
 
@@ -1866,7 +1830,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                     var contentType = imagePart.ContentType;
                     if (IsNonBrowserNativeContentType(contentType))
                     {
-                        
                         var conv = _graphics.ConvertForEditor(new GraphicSource
                         {
                             Data = bytes, ContentType = contentType, Origin = GraphicOrigin.LegacyDocxPart
@@ -1883,7 +1846,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             }
             catch
             {
-                
             }
         }
     }
@@ -1901,7 +1863,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
     private string ConvertParagraphToHtml(Paragraph paragraph, WordprocessingDocument document, OpenXmlPart? sourcePart = null)
     {
-        
         if (IsPageBreakOnlyParagraph(paragraph))
             return "<div class=\"page-break\"></div>";
 
@@ -1982,7 +1943,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             || cssStyle.Contains("background-color", StringComparison.OrdinalIgnoreCase))
         {
             cssStyle = Regex.Replace(cssStyle, @"(?<![\w-])padding-bottom\s*:", "margin-bottom:");
-            
             if (!Regex.IsMatch(cssStyle, @"(?<![\w-])margin-bottom\s*:")
                 && _defaultSpacingAfterTw != null && int.TryParse(_defaultSpacingAfterTw, out var defAfterTw))
             {
@@ -2008,7 +1968,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             }
         }
         var classAttr = docClass != null ? $" class=\"{docClass}\"" : string.Empty;
-        
         var dataStyleAttr = !string.IsNullOrEmpty(styleId) && (docClass != null || IsTocParagraphStyleId(styleId))
             ? $" data-style-id=\"{System.Net.WebUtility.HtmlEncode(styleId)}\""
             : string.Empty;
@@ -2036,7 +1995,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         {
             html.Append(BuildPositionedTabContent(paragraph, effectiveTabStops, document, sourcePart));
         }
-        
         else if (hasComplexField)
         {
             html.Append(ConvertComplexFieldParagraphContent(paragraph, document, sourcePart));
@@ -2131,7 +2089,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 result.RemoveAll(x => x.PositionTwips == pos);
                 var val = t.Val?.Value;
                 if (val == TabStopValues.Clear) continue;
-                
                 if (val == TabStopValues.Bar) continue;
                 result.Add(new TabStopInfo(pos, MapTabAlignment(val), MapTabLeader(t.Leader?.Value)));
             }
@@ -2189,7 +2146,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var segmentStops = new List<TabStopInfo?> { null };
         var nextRealStop = 0;
         var lastStopTw = 0;
-        
         TabStopInfo NextRealStop()
         {
             if (nextRealStop < stops.Count)
@@ -2239,7 +2195,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             else if (child is Hyperlink hyperlink
                 && hyperlink.Descendants().Any(d => d is TabChar or PositionalTab))
             {
-                
                 var currentLink = (Hyperlink)hyperlink.CloneNode(false);
                 void FlushLink()
                 {
@@ -2303,7 +2258,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         }).ToList();
 
         var html = new StringBuilder();
-        
         html.Append(segments[0].Length > 0 ? segments[0].ToString() : "&#8203;");
 
         for (int k = 1; k < segments.Count; k++)
@@ -2358,7 +2312,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             return new TabStopInfo(lastStopTw, "left", null);
         }
 
-        double? segStartPx = 0; 
+        double? segStartPx = 0;
         double segWidthPx = 0;
         var overflow = false;
 
@@ -2441,11 +2395,10 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
     {
         var segments = new List<StringBuilder> { new() };
         var state = new ComplexFieldState();
-        string? openAnchor = null; 
+        string? openAnchor = null;
 
         void AppendRun(Run run)
         {
-            
             if (run.GetFirstChild<FieldChar>() != null
                 || (state.InField && run.GetFirstChild<FieldCode>() != null)
                 || (state.InField && state.Separated && state.ValueHandled))
@@ -2523,7 +2476,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var tabCount = segments.Count - 1;
         for (int k = 1; k < segments.Count; k++)
         {
-            
             var stopIndex = stops.Count - tabCount + (k - 1);
             var stop = stopIndex >= 0 && stopIndex < stops.Count ? stops[stopIndex] : null;
             if (stop?.Leader != null)
@@ -2545,7 +2497,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
     private string BuildAnchorOpenTag(Hyperlink hyperlink, WordprocessingDocument document)
     {
-        
         var relationshipId = hyperlink.Id?.Value;
         var relationshipUrl = relationshipId != null
             ? document.MainDocumentPart?.HyperlinkRelationships
@@ -2561,7 +2512,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
         if (!string.IsNullOrEmpty(anchor))
         {
-            
             var encoded = System.Net.WebUtility.HtmlEncode(anchor);
             return $"<a href=\"#{encoded}\" data-anchor=\"{encoded}\" " +
                    "title=\"Ctrl+klik, aby przejść do elementu\" " +
@@ -2641,9 +2591,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         public bool InField;
         public string Instruction = string.Empty;
         public bool Separated;
-        
         public bool ValueHandled;
-        
         public bool Locked;
     }
 
@@ -2658,7 +2606,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                     AppendComplexFieldRun(run, html, state, document, sourcePart);
                     break;
                 case Hyperlink hyperlink:
-                    
                     html.Append(ConvertHyperlinkToHtml(hyperlink, document, sourcePart, state));
                     break;
                 case SimpleField simpleField:
@@ -2683,7 +2630,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         html.Append($"<span class=\"sdt-inline\"{BuildSdtDataAttrs(sdtRun.SdtProperties)}>");
         var innerStart = html.Length;
         AppendComplexFieldContent(content.Elements(), html, state, document, sourcePart);
-        
         if (html.Length == innerStart) html.Append("&nbsp;");
         html.Append("</span>");
     }
@@ -2702,14 +2648,12 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 state.Separated = false;
                 state.ValueHandled = false;
                 state.Locked = fieldChar.FieldLock?.Value == true;
-                
                 _openFieldFrames.Add(false);
             }
             else if (fctVal == FieldCharValues.Separate)
             {
                 state.Separated = true;
                 state.ValueHandled = false;
-                
                 var instr = state.Instruction.Trim().ToUpperInvariant();
                 if (instr.Contains("PAGE") && !instr.Contains("PAGEREF")
                     && !instr.Contains("NUMPAGES") && !instr.Contains("SECTIONPAGES"))
@@ -2724,13 +2668,11 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 }
                 else if (!state.Locked && IsAutoDateFieldInstruction(state.Instruction))
                 {
-                    
                     html.Append(FieldDateSpan(state.Instruction, run));
                     state.ValueHandled = true;
                 }
                 else if (IsRoundTrippedFieldInstruction(state.Instruction))
                 {
-                    
                     html.Append(FieldMarkerBegin(state.Instruction));
                     if (_openFieldFrames.Count > 0) _openFieldFrames[^1] = true;
                 }
@@ -2739,7 +2681,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             {
                 if (!state.Separated)
                 {
-                    
                     var instrEnd = state.Instruction.Trim().ToUpperInvariant();
                     if (instrEnd.Contains("PAGE") && !instrEnd.Contains("PAGEREF") && !instrEnd.Contains("NUMPAGES"))
                     {
@@ -2751,12 +2692,10 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                     }
                     else if (!state.Locked && IsAutoDateFieldInstruction(state.Instruction))
                     {
-                        
                         html.Append(FieldDateSpan(state.Instruction, run));
                     }
                     else if (IsRoundTrippedFieldInstruction(state.Instruction))
                     {
-                        
                         html.Append(FieldMarkerBegin(state.Instruction));
                         if (_openFieldFrames.Count > 0) _openFieldFrames[^1] = true;
                     }
@@ -2923,7 +2862,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         int startOverride = levelOverrideElem?.StartOverrideNumberingValue?.Val?.Value ?? -1;
 
         Level? levelDef = levelOverrideElem?.GetFirstChild<Level>();
-        
         var fromInstanceOverride = levelDef != null;
         if (levelDef == null)
         {
@@ -2991,7 +2929,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             if (!_listCounters.ContainsKey((key, deeper))) continue;
             var (deeperDef, _, _) = FindLevelDefinition(numId, deeper);
             var lvlRestart = deeperDef?.LevelRestart?.Val?.Value;
-            if (lvlRestart == 0) continue; 
+            if (lvlRestart == 0) continue;
             _listCounters.Remove((key, deeper));
         }
         return next;
@@ -3008,7 +2946,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         if (fmt == NumberFormatValues.UpperRoman) return "upperRoman";
         if (fmt == NumberFormatValues.Bullet) return "bullet";
         if (fmt == NumberFormatValues.None) return "none";
-        
         var raw = levelDef?.NumberingFormat?.Val?.InnerText;
         return string.IsNullOrEmpty(raw) ? "decimal" : raw;
     }
@@ -3020,33 +2957,20 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         public string? BulletChar { get; init; }
         public string? BulletFont { get; init; }
         public string? BulletImageDataUri { get; init; }
-        
         public int Start { get; init; }
-        
         public string FmtToken { get; init; }
-        
         public string? LvlText { get; init; }
-        
         public int StartOverride { get; init; }
-        
         public string? SuffixToken { get; init; }
-        
         public bool IsLegal { get; init; }
-        
         public int LvlRestart { get; init; }
-        
         public int PicBulletId { get; init; }
-        
         public string? IndLeftTw { get; init; }
         public string? IndHangingTw { get; init; }
         public string? IndFirstLineTw { get; init; }
-        
         public bool FromInstanceOverride { get; init; }
-        
         public string? MarkerColorHex { get; init; }
-        
         public string? MarkerColorCss { get; init; }
-        
         public string? MarkerSizeHalfPoints { get; init; }
     }
 
@@ -3068,7 +2992,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
         var numFmt = levelDef.NumberingFormat?.Val?.Value;
         var levelText = levelDef.LevelText?.Val?.Value ?? string.Empty;
-        
         var bulletFontRun = levelDef.NumberingSymbolRunProperties?.GetFirstChild<RunFonts>();
         var bulletFont = bulletFontRun?.Ascii?.Value
                          ?? bulletFontRun?.HighAnsi?.Value
@@ -3078,7 +3001,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var markerColorCss = ResolveRunColorCss(markerColor);
         var markerColorHex = markerColor?.Val?.Value ?? markerColorCss?.TrimStart('#');
         var markerSizeHalfPoints = levelDef.NumberingSymbolRunProperties?.GetFirstChild<FontSize>()?.Val?.Value;
-        
         var start = levelDef.StartNumberingValue?.Val?.Value ?? 1;
 
         string? suffixToken = null;
@@ -3113,7 +3035,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         else if (numFmt == NumberFormatValues.Bullet)
         {
             tag = "ul";
-            
             int codePoint = 0;
             if (!string.IsNullOrEmpty(levelText))
             {
@@ -3134,18 +3055,15 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
             if (bulletImageDataUri != null)
             {
-                
                 listStyle = "none";
             }
             else if (isSymbolicFont)
             {
-                
                 listStyle = "none";
                 bulletChar = MapBulletChar(lookup, bulletFont);
             }
             else if (!isSingleCodePoint && codePoint != 0)
             {
-                
                 listStyle = "none";
                 bulletChar = levelText;
             }
@@ -3159,7 +3077,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                     default:
                         if (codePoint != 0)
                         {
-                            
                             listStyle = "none";
                             bulletChar = MapBulletChar(codePoint, bulletFont);
                         }
@@ -3173,7 +3090,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         }
         else
         {
-            
             if (!string.IsNullOrEmpty(levelText) && levelText.Contains("%"))
             { tag = "ol"; listStyle = "decimal"; }
         }
@@ -3227,13 +3143,12 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         {
             return low switch
             {
-                0xFE => "\u2611", 
-                0xA8 => "\u2610", 
-                0xFC => "\u2714", 
-                0xA7 => "\u25A0", 
-                0x6C => "\u2022", 
-                0xD8 => "\u2756", 
-                
+                0xFE => "\u2611",
+                0xA8 => "\u2610",
+                0xFC => "\u2714",
+                0xA7 => "\u25A0",
+                0x6C => "\u2022",
+                0xD8 => "\u2756",
                 _ => "\u2022"
             };
         }
@@ -3246,7 +3161,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 _ => "\u2022"
             };
         }
-        
         try { return char.ConvertFromUtf32(codePoint); }
         catch { return "\u2022"; }
     }
@@ -3312,7 +3226,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 css.Append($"text-indent:{TwipsToPx(firstLineVal)}px;");
             if (indentation.Hanging?.Value != null && int.TryParse(indentation.Hanging.Value, out var hangingVal))
             {
-                
                 css.Append($"text-indent:-{TwipsToPx(hangingVal)}px;");
             }
         }
@@ -3331,7 +3244,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                     css.Append(string.Format(inv, "margin-top:{0:0.##}pt;", OoxmlUnits.TwipsToPoints(beforeVal)));
                 else if (spacing.BeforeLines?.Value != null)
                 {
-                    
                     var pt = spacing.BeforeLines.Value / 100.0 * (_defaultFontSizePt ?? 11);
                     css.Append(string.Format(inv, "margin-top:{0:0.##}pt;", pt));
                 }
@@ -3339,7 +3251,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
             if (!afterAuto)
             {
-                
                 if (spacing.After?.Value != null && int.TryParse(spacing.After.Value, out var afterVal))
                     css.Append(string.Format(inv, "padding-bottom:{0:0.##}pt;", OoxmlUnits.TwipsToPoints(afterVal)));
                 else if (spacing.AfterLines?.Value != null)
@@ -3354,7 +3265,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 var lineRule = spacing.LineRule?.Value;
                 if (lineRule == LineSpacingRuleValues.AtLeast)
                 {
-                    
                     css.Append(string.Format(inv,
                         "line-height:max({0:0.##}pt, var(--w-line-single, 1.2em));",
                         OoxmlUnits.TwipsToPoints(lineVal)));
@@ -3366,7 +3276,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 }
                 else
                 {
-                    
                     css.Append(WordLineSpacing.AutoCss(lineVal, lineFontFamily ?? _defaultFontFamily));
                 }
             }
@@ -3379,7 +3288,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var contextualSpacing = props.Descendants<ContextualSpacing>().FirstOrDefault();
         if (contextualSpacing != null && (contextualSpacing.Val == null || contextualSpacing.Val.Value))
         {
-            
             css.Append("--w-contextual-spacing:1;");
         }
 
@@ -3484,7 +3392,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 return EscapeHtml(MapSymbolicTextRun(text));
             case Break br:
                 if (br.Type?.Value == BreakValues.Page) return "<div class=\"page-break\"></div>";
-                
                 if (br.Type?.Value == BreakValues.Column) return "<div class=\"docx-column-break\"></div>";
                 return "<br/>";
             case TabChar _:
@@ -3494,19 +3401,16 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             case Picture picture:
                 return ConvertPictureToHtml(picture, document, sourcePart);
             case EmbeddedObject embedded:
-                
                 return ConvertEmbeddedObjectToHtml(embedded, document, sourcePart);
             case AlternateContent alternate:
                 return ConvertAlternateContentToHtml(alternate, document, sourcePart);
             case FootnoteReference footnoteRef:
                 return RenderFootnoteReference(footnoteRef);
             case FootnoteReferenceMark _:
-                
                 return string.Empty;
             case EndnoteReference endnoteRef:
                 return RenderEndnoteReference(endnoteRef);
             case EndnoteReferenceMark _:
-                
                 return string.Empty;
             case NoBreakHyphen _:
                 return "&#8209;";
@@ -3586,7 +3490,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
         if (canonical == null)
         {
-            
             if (isPua) return false;
             try { mapped = char.ConvertFromUtf32(codePoint); return true; }
             catch { return false; }
@@ -3643,19 +3546,18 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
     private static readonly Dictionary<int, string> WingdingsFontMap = new()
     {
-        [0x4A] = "☺", [0x4C] = "☹",                                       
-        [0x6C] = "●", [0x6E] = "■", [0x6F] = "□", [0x75] = "◆", 
-        [0xA7] = "■", [0xA8] = "☐",                                       
-        [0xD8] = "❖",                                                          
-        [0xE8] = "➔",                                                          
-        [0xEF] = "⇦", [0xF0] = "⇨", [0xF1] = "⇧", [0xF2] = "⇩", 
-        [0xF3] = "⬄", [0xF4] = "⇳",                                       
-        [0xFB] = "✗", [0xFC] = "✔", [0xFD] = "☒", [0xFE] = "☑", 
+        [0x4A] = "☺", [0x4C] = "☹",
+        [0x6C] = "●", [0x6E] = "■", [0x6F] = "□", [0x75] = "◆",
+        [0xA7] = "■", [0xA8] = "☐",
+        [0xD8] = "❖",
+        [0xE8] = "➔",
+        [0xEF] = "⇦", [0xF0] = "⇨", [0xF1] = "⇧", [0xF2] = "⇩",
+        [0xF3] = "⬄", [0xF4] = "⇳",
+        [0xFB] = "✗", [0xFC] = "✔", [0xFD] = "☒", [0xFE] = "☑",
     };
 
     private string ConvertAlternateContentToHtml(AlternateContent alternate, WordprocessingDocument document, OpenXmlPart? sourcePart)
     {
-        
         string? placeholderOnly = null;
         foreach (var branch in alternate.ChildElements)
         {
@@ -3678,12 +3580,10 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 placeholderOnly ??= html.ToString();
                 continue;
             }
-            
             return placeholderOnly != null
                 ? SwapPreservedAttrsForAlternate(html.ToString(), alternate, sourcePart, document)
                 : html.ToString();
         }
-        
         foreach (var branch in alternate.ChildElements)
         {
             if (branch is not (AlternateContentChoice or AlternateContentFallback)) continue;
@@ -3695,7 +3595,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var acPart = sourcePart ?? (OpenXmlPart?)document.MainDocumentPart;
         var preservedAc = RenderPreservedPlaceholder(alternate, acPart, acW, acH, "alternate");
         if (!string.IsNullOrEmpty(preservedAc)) return preservedAc;
-        
         if (placeholderOnly != null) return placeholderOnly;
 
         _log.LogDebug("mc:AlternateContent bez konwertowalnego obrazu ani pola tekstowego — element pominięty.");
@@ -3915,7 +3814,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 }
                 catch (Exception ex)
                 {
-                    
                     _log.LogWarning(ex, "Nie udało się skonwertować treści przypisu o id {FootnoteId}.", id);
                     contentById[id] = string.Empty;
                 }
@@ -3927,7 +3825,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         {
             if (!contentById.TryGetValue(ooxmlId, out var html))
             {
-                
                 _log.LogWarning("Odwołanie do przypisu {FootnoteId} nie ma treści w footnotes.xml.", ooxmlId);
                 html = string.Empty;
             }
@@ -4003,7 +3900,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 }
                 catch (Exception ex)
                 {
-                    
                     _log.LogWarning(ex, "Nie udało się skonwertować treści przypisu końcowego o id {EndnoteId}.", id);
                     contentById[id] = string.Empty;
                 }
@@ -4062,15 +3958,13 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var isLine = preset == DocumentFormat.OpenXml.Drawing.ShapeTypeValues.Line
                      || preset == DocumentFormat.OpenXml.Drawing.ShapeTypeValues.StraightConnector1;
 
-        var pos = BuildTextBoxLayoutCss(drawing); 
-        
+        var pos = BuildTextBoxLayoutCss(drawing);
+
         var transformCss = BuildShapeTransformCss(((OpenXmlElement?)custom ?? presetGeom)?.Parent);
-        
         const string editGuard = " contenteditable=\"false\"";
 
         if (isLine)
         {
-            
             var w = widthPx > 0 ? $"{widthPx}px" : "100%";
             return $"<div class=\"docx-shape docx-line\" data-shape=\"line\"{editGuard}{preservedAttrs} "
                  + $"style=\"{StripSize(pos)}width:{w};height:{lineWidthPx}px;"
@@ -4079,12 +3973,10 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
         var noFill = ShapeHasExplicitNoFill(drawing, custom);
         var fillHex = noFill ? null : GetShapeFillHex(drawing, custom);
-        
         var strokeHex = outline?.Elements<DocumentFormat.OpenXml.Drawing.NoFill>().Any() == true ? null
             : HexColorOrNull(outline?.Elements<DocumentFormat.OpenXml.Drawing.SolidFill>()
                   .FirstOrDefault()?.RgbColorModelHex?.Val?.Value)
               ?? LineReferenceHex(drawing.Descendants<DocumentFormat.OpenXml.Drawing.LineReference>().FirstOrDefault());
-        
         var gradient = noFill ? null : GetShapeGradient(((OpenXmlElement?)custom ?? presetGeom)?.Parent);
 
         var cgW = widthPx;
@@ -4110,7 +4002,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             var bg = gradient != null
                 ? $"background:{BuildCssLinearGradient(gradient.Value)};"
                 : fillHex != null ? $"background:#{fillHex};" : string.Empty;
-            
             var border = strokeHex != null ? $"border:{lineWidthPx}px solid #{strokeHex};" : string.Empty;
             var radius = preset == DocumentFormat.OpenXml.Drawing.ShapeTypeValues.Ellipse
                 ? "border-radius:50%;"
@@ -4226,7 +4117,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         string F(double v) => v.ToString("0.##", inv);
 
         double hd = Math.Min(w, h) / 2.0;
-        
         double pt3 = Math.Min(w, h) / 3.0;
 
         string Pts(params (double x, double y)[] p)
@@ -4264,7 +4154,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             "chevron" => $"<polygon points=\"{Pts((0, 0), (w - hd, 0), (w, h / 2.0), (w - hd, h), (0, h), (hd, h / 2.0))}\"/>",
             "homePlate" => $"<polygon points=\"{Pts((0, 0), (w - hd, 0), (w, h / 2.0), (w - hd, h), (0, h))}\"/>",
             "plus" => $"<polygon points=\"{Pts(((w - pt3) / 2, 0), ((w + pt3) / 2, 0), ((w + pt3) / 2, (h - pt3) / 2), (w, (h - pt3) / 2), (w, (h + pt3) / 2), ((w + pt3) / 2, (h + pt3) / 2), ((w + pt3) / 2, h), ((w - pt3) / 2, h), ((w - pt3) / 2, (h + pt3) / 2), (0, (h + pt3) / 2), (0, (h - pt3) / 2), ((w - pt3) / 2, (h - pt3) / 2))}\"/>",
-            
             "rect" => $"<rect x=\"0\" y=\"0\" width=\"{w}\" height=\"{h}\"/>",
             "roundRect" => $"<rect x=\"0\" y=\"0\" width=\"{w}\" height=\"{h}\" rx=\"{F(Math.Min(w, h) * 0.16667)}\"/>",
             "ellipse" => $"<ellipse cx=\"{F(w / 2.0)}\" cy=\"{F(h / 2.0)}\" rx=\"{F(w / 2.0)}\" ry=\"{F(h / 2.0)}\"/>",
@@ -4308,7 +4197,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             contH = xfrmGrp?.Extents?.Cy != null ? (int)OoxmlUnits.EmuToPixels(xfrmGrp.Extents.Cy.Value) : 0;
         }
         if (contW <= 0 && contH <= 0) return string.Empty;
-        
         contW = Math.Max(contW, 1);
         contH = Math.Max(contH, 1);
 
@@ -4358,7 +4246,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                         scaleX, scaleY, chOffX, chOffY, groupFillHex, depth);
                     break;
                 case Wpg.GraphicFrame:
-                    
                     html = null;
                     break;
                 default:
@@ -4396,7 +4283,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var wPx = OoxmlUnits.EmuToPixels(xfrm.Extents.Cx.Value * scaleX);
         var hPx = OoxmlUnits.EmuToPixels(xfrm.Extents.Cy.Value * scaleY);
         if (wPx <= 0 && hPx <= 0) return string.Empty;
-        
         wPx = Math.Max(wPx, 1);
         hPx = Math.Max(hPx, 1);
 
@@ -4460,7 +4346,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         string? fillHex;
         if (spPr.Elements<A.GroupFill>().Any())
         {
-            
             fillHex = groupFillHex;
         }
         else
@@ -4470,7 +4355,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                   ?? FillReferenceHex(wsp.Descendants<A.FillReference>().FirstOrDefault());
         }
         var outline = spPr.GetFirstChild<A.Outline>();
-        
         var strokeHex = outline?.Elements<A.NoFill>().Any() == true ? null
             : HexColorOrNull(outline?.Elements<A.SolidFill>()
                   .FirstOrDefault()?.RgbColorModelHex?.Val?.Value)
@@ -4579,7 +4463,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
     {
         var geom = (OpenXmlElement?)custom
             ?? drawing.Descendants<DocumentFormat.OpenXml.Drawing.PresetGeometry>().FirstOrDefault();
-        var spPr = geom?.Parent; 
+        var spPr = geom?.Parent;
 
         var solid = spPr?.Elements<DocumentFormat.OpenXml.Drawing.SolidFill>().FirstOrDefault()
                     ?? drawing.Descendants<DocumentFormat.OpenXml.Drawing.SolidFill>()
@@ -4776,7 +4660,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             fill = gRef;
         }
         else fill = fillHex != null ? $"#{fillHex}" : "currentColor";
-        
         var stroke = strokeHex != null
             ? $" stroke=\"#{strokeHex}\" stroke-width=\"{Math.Max(1, strokeWidthPx)}\" vector-effect=\"non-scaling-stroke\""
             : string.Empty;
@@ -4784,11 +4667,9 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var svgPaths = new StringBuilder();
         foreach (var path in paths)
         {
-            
             var sx = (double)spaceW / PathW(path);
             var sy = (double)spaceH / PathH(path);
             var d = new StringBuilder();
-            
             double curX = 0, curY = 0;
 
             bool TryPt(DocumentFormat.OpenXml.Drawing.Point? p, out double x, out double y)
@@ -4839,7 +4720,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                     }
                     case DocumentFormat.OpenXml.Drawing.ArcTo arc:
                     {
-                        
                         if (TryVal(arc.WidthRadius?.Value, out var wr) && TryVal(arc.HeightRadius?.Value, out var hr)
                             && TryVal(arc.StartAngle?.Value, out var stRaw) && TryVal(arc.SwingAngle?.Value, out var swRaw)
                             && wr > 0 && hr > 0)
@@ -5163,6 +5043,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
     {
         if (fonts == null) return null;
 
+
         if (!string.IsNullOrEmpty(fonts.Ascii?.Value)) return fonts.Ascii!.Value;
 
         if (fonts.AsciiTheme?.Value != null)
@@ -5219,7 +5100,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         else if (themeColor == ThemeColorValues.Accent6) c2 = cs.Accent6Color;
         else if (themeColor == ThemeColorValues.Hyperlink) c2 = cs.Hyperlink;
         else if (themeColor == ThemeColorValues.FollowedHyperlink) c2 = cs.FollowedHyperlinkColor;
-        
         else if (themeColor == ThemeColorValues.Text1) c2 = cs.Dark1Color;
         else if (themeColor == ThemeColorValues.Text2) c2 = cs.Dark2Color;
         else if (themeColor == ThemeColorValues.Background1) c2 = cs.Light1Color;
@@ -5364,7 +5244,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var blip = drawing.Descendants<DocumentFormat.OpenXml.Drawing.Blip>().FirstOrDefault();
         if (blip?.Embed?.Value == null)
         {
-            
             var textBox = RenderTextBoxContent(drawing, document, sourcePart);
             if (!string.IsNullOrEmpty(textBox)) return HoistTextBox(textBox);
 
@@ -5448,11 +5327,9 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         if (anchor != null)
         {
             var behind = anchor.BehindDoc?.Value == true;
-            
             var (xEmu, yEmu) = ResolveAnchorPosition(anchor, widthEmu, heightEmu);
             posAttrs = $" data-pos-mode=\"{(behind ? "behind" : "front")}\""
                 + $" data-x-emu=\"{xEmu}\" data-y-emu=\"{yEmu}\"";
-            
             var wrap = ReadAnchorWrapMode(anchor);
             if (wrap != null) posAttrs += $" data-wrap=\"{wrap}\"";
         }
@@ -5493,7 +5370,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var altAttr = !string.IsNullOrEmpty(alt) ? $" alt=\"{EscapeHtml(alt)}\"" : string.Empty;
 
         var legacyAttr = legacySrc?.isBlank == true ? " data-legacy-graphic=\"blank\"" : string.Empty;
-        
         var originalAttr = legacySrc != null
             ? $" data-original-src=\"data:{contentType};base64,{base64Data}\""
             : string.Empty;
@@ -5504,8 +5380,9 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                $"{altAttr}{posAttrs}{borderAttrs}{cropAttrs}{legacyAttr}{originalAttr} />";
     }
 
-    internal const int MaxPreservedXmlBytes = 1024 * 1024;      
-    internal const int MaxPreservedRelsBytes = 4 * 1024 * 1024; 
+
+    internal const int MaxPreservedXmlBytes = 1024 * 1024;
+    internal const int MaxPreservedRelsBytes = 4 * 1024 * 1024;
     internal const string OoxmlRelationshipNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
     private string BuildPreservedXmlAttrs(OpenXmlElement element, OpenXmlPart? sourcePart)
@@ -5533,7 +5410,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                     try { target = sourcePart.GetPartById(rid); }
                     catch
                     {
-                        
                         _log.LogInformation("Grafika XML {Name}: relacja {RelId} nierozwiązywalna — bez pass-through.",
                             element.LocalName, rid);
                         return string.Empty;
@@ -5595,7 +5471,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         }
         _log.LogInformation("Grafika XML {Kind} ({Name}) zachowana pass-through jako niewidoczny placeholder {W}x{H}px.",
             kind, element.LocalName, widthPx, heightPx);
-        
         var size = widthPx > 0 && heightPx > 0 && !IsFloatingGraphicElement(element)
             ? $"width:{widthPx}px;height:{heightPx}px;"
             : "width:0;height:0;";
@@ -5690,7 +5565,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
     private string ConvertPictureToHtml(Picture picture, WordprocessingDocument document, OpenXmlPart? sourcePart = null)
     {
-        
         var hrRect = picture.Descendants<DocumentFormat.OpenXml.Vml.Rectangle>()
             .FirstOrDefault(r => GetOfficeVmlAttribute(r, "hr") is "t" or "true");
         if (hrRect != null) return ConvertVmlHorizontalRuleToHtml(hrRect);
@@ -5774,7 +5648,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             (long)(vmlWidth * 9525.0), (long)(vmlHeight * 9525.0));
         var vmlSrc = legacyVml?.dataUrl ?? $"data:{contentType};base64,{base64Data}";
         var vmlLegacyAttr = legacyVml?.isBlank == true ? " data-legacy-graphic=\"blank\"" : string.Empty;
-        
         var vmlOriginalAttr = legacyVml != null
             ? $" data-original-src=\"data:{contentType};base64,{base64Data}\""
             : string.Empty;
@@ -5828,7 +5701,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 && double.TryParse(w.Width.Value, System.Globalization.NumberStyles.Any,
                     System.Globalization.CultureInfo.InvariantCulture, out var pct50) && pct50 > 0)
             {
-                
                 tableWidth = string.Format(System.Globalization.CultureInfo.InvariantCulture, "{0:0.##}%", pct50 / 50.0);
                 hasExplicitWidth = true;
             }
@@ -6110,7 +5982,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
     {
         var hMerge = CellPropertyElement<HorizontalMerge>(cell);
         if (hMerge == null) return null;
-        
         return hMerge.Val?.Value ?? MergedCellValues.Continue;
     }
 
@@ -6214,7 +6085,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
 
         if (props != null)
         {
-            
             var w = props.TableCellWidth;
             if (w?.Width?.Value != null)
             {
@@ -6256,7 +6126,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         BorderType? tableFallback,
         TableRenderContext ctx)
     {
-        
         if (directBorder != null)
         {
             var v = directBorder.Val?.Value;
@@ -6358,14 +6227,12 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         public bool FirstRow, LastRow, FirstColumn, LastColumn, RowBands = true, ColumnBands;
         public int RowBandSize = 1, ColBandSize = 1;
         public EffectiveTableBorders Borders = new();
-        public Shading? TableShading;            
-        public Shading? WholeTableCellShading;   
-        public TableCellBorders? WholeTableCellBorders; 
-        public TableVerticalAlignmentValues? WholeTableCellVerticalAlignment; 
+        public Shading? TableShading;
+        public Shading? WholeTableCellShading;
+        public TableCellBorders? WholeTableCellBorders;
+        public TableVerticalAlignmentValues? WholeTableCellVerticalAlignment;
         public string DefaultCellPaddingCss = "";
-        
         public int DefaultCellPadTopTw, DefaultCellPadBottomTw, DefaultCellPadLeftTw, DefaultCellPadRightTw;
-        
         public string ParagraphDefaultCss = "";
         public Dictionary<TableStyleOverrideValues, TableStyleProperties> Conditional = new();
     }
@@ -6462,7 +6329,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             }
         }
 
-        const int wordDefaultCellMarginTwips = 108; 
+        const int wordDefaultCellMarginTwips = 108;
         var cellMars = new List<TableCellMarginDefault>();
         if (tblPr?.TableCellMarginDefault != null) cellMars.Add(tblPr.TableCellMarginDefault);
         foreach (var st in chain)
@@ -6517,7 +6384,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             }
             else
             {
-                
                 css.Append(WordLineSpacing.AutoCss(lineVal, _defaultFontFamily));
             }
         }
@@ -6601,12 +6467,10 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
     {
         if (val == null) return null;
         if (val == ShadingPatternValues.Solid) return 100;
-        
         var literal = ((DocumentFormat.OpenXml.IEnumValue)val.Value).Value;
         var m = Regex.Match(literal, @"^pct(\d+)$");
         if (!m.Success) return null;
         var n = double.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
-        
         if (n == 12 || n == 37 || n == 62 || n == 87) n += 0.5;
         return n;
     }
@@ -6675,7 +6539,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         var content = sdtBlock.SdtContentBlock;
         if (content != null)
         {
-            
             var props = sdtBlock.SdtProperties;
             html.Append($"<div class=\"sdt-block\"{BuildSdtDataAttrs(props)}>");
 
@@ -6690,7 +6553,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 }
                 else
                 {
-                    
                     switch (el)
                     {
                         case Paragraph para:
@@ -6761,10 +6623,9 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         OpenXmlPart? sourcePart)
     {
         var cellProps = EffectiveCellProps(cell);
-        
         var gridSpan = GetGridSpan(cell) + Math.Max(0, extraColspan);
         var gridColStart = gridCursor;
-        gridCursor += gridSpan; 
+        gridCursor += gridSpan;
 
         var colspan = "";
         if (gridSpan > 1)
@@ -6781,7 +6642,6 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
         }
         else if (vMerge != null && (vMerge.Val == null || vMerge.Val.Value == MergedCellValues.Continue))
         {
-            
             return;
         }
 
@@ -6799,7 +6659,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             if (inner is Paragraph listPara && IsListParagraph(listPara))
             {
                 html.Append(ConvertConsecutiveListItems(innerElements, ref innerIndex, document));
-                continue; 
+                continue;
             }
 
             switch (inner)

@@ -89,11 +89,8 @@ export interface PageGeometry {
   heightCm: number;
   orientation: 'portrait' | 'landscape';
   margins: PageMargins;
-  
   headerDistanceCm?: number;
-  
   footerDistanceCm?: number;
-  
   columns?: ColumnLayoutGeo;
 }
 
@@ -101,7 +98,6 @@ export interface EndnotePageRegion {
   pageIndex: number;
   topPx: number;
   ids: string[];
-  
   continuation: boolean;
 }
 
@@ -109,7 +105,6 @@ export interface FootnotePageRegion {
   pageIndex: number;
   bottomPx: number;
   ids: string[];
-  
   continuation: boolean;
 }
 
@@ -153,7 +148,6 @@ interface PageColumnBand {
   encapsulation: ViewEncapsulation.None
 })
 export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
-  
   editorContent!: ElementRef<HTMLDivElement>;
 
   @ViewChildren('pageEditor') pageEditorRefs!: QueryList<ElementRef<HTMLDivElement>>;
@@ -172,7 +166,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
   
   @Input() set content(value: string) {
-    
     if (this._content() === value) {
       return;
     }
@@ -180,18 +173,14 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this._content.set(value);
     if (!this._isInternalUpdate) {
       const unwrapped = this._captureDocumentDefaults(value);
-      
       const splitPages = this._splitHtmlIntoPages(unwrapped ?? value ?? '<p></p>');
       const pages = splitPages.length ? splitPages : ['<p></p>'];
       this.pageContents.set(pages);
       this.pageGeometries.set(this._deriveGeometriesForPages(pages));
-      
       this._schedulePaginate('content-input');
-      
       setTimeout(() => {
         this.refreshListLabels();
         this._syncInitialFormatting();
-        
         this.syncFootnotesWithBody();
         this.syncEndnotesWithBody();
       }, 0);
@@ -199,7 +188,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
   
   pageMargins = input<PageMargins>({ top: 2.5, bottom: 2.5, left: 2.5, right: 2.5 });
-  
   private readonly _orientationSig = signal<'portrait' | 'landscape'>('portrait');
   @Input() set pageOrientation(value: 'portrait' | 'landscape') {
     this._orientationSig.set(value === 'landscape' ? 'landscape' : 'portrait');
@@ -207,7 +195,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   get pageOrientation(): 'portrait' | 'landscape' {
     return this._orientationSig();
   }
-  
   private readonly _pageSizeSig = signal<PageSize | null>(null);
   @Input() set pageSize(value: PageSize | undefined) {
     this._pageSizeSig.set(value ?? null);
@@ -263,22 +250,18 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   pageMarginPx(index: number, side: 'top' | 'bottom' | 'left' | 'right'): number {
     return this.geometryFor(index).margins[side] * CSS_PX_PER_CM;
   }
-  
   pageColumnCount(index: number): number | null {
     const c = this.geometryFor(index).columns;
     return c && c.count > 1 ? c.count : null;
   }
-  
   pageColumnGapPx(index: number): number | null {
     const c = this.geometryFor(index).columns;
     return c && c.count > 1 ? Math.max(0, c.spaceCm) * CSS_PX_PER_CM : null;
   }
-  
   pageColumnRule(index: number): string | null {
     const c = this.geometryFor(index).columns;
     return c && c.count > 1 && c.separator ? '1px solid #bbb' : null;
   }
-  
   private _bandCmFor(geo: PageGeometry, side: 'header' | 'footer'): number {
     const margin = side === 'header' ? geo.margins.top : geo.margins.bottom;
     const dist = side === 'header' ? geo.headerDistanceCm : geo.footerDistanceCm;
@@ -296,7 +279,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   footerOffsetPx(index: number): number { return this._distanceCmFor(this.geometryFor(index), 'footer') * CSS_PX_PER_CM; }
   headerBandPx(index: number): number { return this._bandCmFor(this.geometryFor(index), 'header') * CSS_PX_PER_CM; }
   footerBandPx(index: number): number { return this._bandCmFor(this.geometryFor(index), 'footer') * CSS_PX_PER_CM; }
-  
   @Input() readOnly = false;
   @Input() showMarginGuides = false;
   
@@ -359,9 +341,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   @Output() pagesChange = new EventEmitter<number>();
   @Output() headerChange = new EventEmitter<HeaderFooterContent>();
   @Output() footerChange = new EventEmitter<HeaderFooterContent>();
-  
   @Output() editingSectionChange = new EventEmitter<'header' | 'footer' | 'body'>();
-  
   @Output() imageSelectionChange = new EventEmitter<{
     widthPx: number;
     heightPx: number;
@@ -371,7 +351,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     border: { enabled: boolean; color: string; widthPx: number; style: 'solid' | 'dashed' | 'dotted' };
     crop: { left: number; right: number; top: number; bottom: number };
   } | null>();
-  
   @Output() sectionGeometryChange = new EventEmitter<{ section: 'header' | 'footer'; topCm: number; bottomCm: number }>();
 
   private _sectionResizeObserver?: ResizeObserver;
@@ -384,12 +363,9 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   private _content = signal<string>('');
   private _isInternalUpdate = false;
-  
   private _isDirty = false;
-  
   private _persistTimer: ReturnType<typeof setTimeout> | null = null;
   private undoStack: string[] = [];
-  
   private redoStack: { html: string; caret: { block: number; offset: number } | null }[] = [];
   private lastSavedContent = '';
   private pageCheckInterval?: ReturnType<typeof setInterval>;
@@ -412,11 +388,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   } | null = null;
 
   private selectedTextBox: HTMLElement | null = null;
-  
   private edgeCursorTextBox: HTMLElement | null = null;
-  
   private anchorBadge: HTMLElement | null = null;
-  
   private anchorBadgeTarget: HTMLElement | null = null;
   private _anchorBadgeRafHandle: number | null = null;
 
@@ -425,26 +398,21 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     table: HTMLTableElement;
     startX: number;
     startY: number;
-    
     boundaryCol: number;
     rowIndex: number;
     grid: TableGrid;
-    
     startColumnWidths: number[];
-    
     columnWidths: number[];
     startHeight: number;
     startTableWidth: number;
   } | null = null;
 
   pageContents = signal<string[]>(['<p></p>']);
-  
   activePageIndex = signal<number>(0);
 
   private _sanitizer = inject(DomSanitizer);
   private _hostRef = inject(ElementRef<HTMLElement>);
   private _cdr = inject(ChangeDetectorRef);
-  
   private _safeHtmlCache: Array<{ html: string; safe: SafeHtml }> = [];
   getPageContentSafe(index: number): SafeHtml {
     const html = this.pageContents()[index] ?? '';
@@ -461,7 +429,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   private _safeFooterCache = new Map<number, { html: string; safe: SafeHtml }>();
 
   getHeaderContentSafe(pageIndex: number): SafeHtml {
-    
     const html = this._positionBandAnchors(this.getHeaderContent(pageIndex) ?? '', pageIndex, 'header');
     const cached = this._safeHeaderCache.get(pageIndex);
     if (cached && cached.html === html) return cached.safe;
@@ -513,7 +480,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     tpl.innerHTML = html;
     const anchored = tpl.content.querySelectorAll<HTMLElement>(
       'img[data-pos-mode="front"], img[data-pos-mode="behind"]');
-    
     const floated = Array.from(
       tpl.content.querySelectorAll<HTMLElement>('.docx-shape, .docx-textbox'),
     ).filter(el => el.style.position === 'absolute');
@@ -544,6 +510,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this._safeHeaderCache.clear();
     this._safeFooterCache.clear();
   }
+
 
   private readonly _footnotes = signal<Footnote[]>([]);
   readonly footnoteList = computed(() => this._footnotes());
@@ -582,7 +549,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   footnoteRegionFor(pageIndex: number): FootnotePageRegion | null {
     const region = this._footnoteLayout().find(r => r.pageIndex === pageIndex);
     if (!region) return null;
-    
     return this.footnoteEntriesFor(region).length > 0 ? region : null;
   }
 
@@ -593,16 +559,13 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     for (const id of region.ids) {
       const idx = indexById.get(id);
       if (idx === undefined) continue;
-      
       entries.push({ fn: list[idx], number: idx + 1, label: this._formatNoteLabel(idx + 1, this._footnoteNumberFormat(), false) });
     }
     return entries;
   }
 
   @Input() set footnotes(value: Footnote[] | undefined) {
-    
     this._footnotes.set(value ? value.map(f => ({ ...f })) : []);
-    
     this._schedulePaginate('footnotes-input');
   }
 
@@ -654,13 +617,11 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const updated = current.map(f => (f.id === id ? { ...f, html } : f));
     this._footnotes.set(updated);
     this.footnotesChange.emit(this.getFootnotes());
-    
     this._schedulePaginate('footnote-edit');
   }
 
   private _footnoteIdsIn(block: HTMLElement): string[] {
     const ids: string[] = [];
-    
     if (block.matches?.('sup.footnote-ref[data-footnote-id]')) {
       const id = block.getAttribute('data-footnote-id');
       if (id) ids.push(id);
@@ -700,7 +661,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const id = el.getAttribute('data-footnote-id') ?? '';
       const number = numberById.get(id);
       if (!number) continue;
-      
       const label = this._formatNoteLabel(number, this._footnoteNumberFormat(), false);
       if (el.textContent !== label) el.textContent = label;
       el.setAttribute('aria-label', `Przypis ${label}`);
@@ -770,6 +730,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (removedFromDom) this.contentChange.emit(this.getContent());
   }
 
+
   private readonly _endnotes = signal<Endnote[]>([]);
   readonly endnoteList = computed(() => this._endnotes());
 
@@ -778,7 +739,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   endnoteRegionFor(pageIndex: number): EndnotePageRegion | null {
     const region = this._endnoteLayout().find(r => r.pageIndex === pageIndex);
     if (!region) return null;
-    
     return this.endnoteEntriesFor(region).length > 0 ? region : null;
   }
 
@@ -789,7 +749,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     for (const id of region.ids) {
       const idx = indexById.get(id);
       if (idx === undefined) continue;
-      
       entries.push({ en: list[idx], number: idx + 1, label: this._formatNoteLabel(idx + 1, this._endnoteNumberFormat(), true) });
     }
     return entries;
@@ -797,7 +756,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   @Input() set endnotes(value: Endnote[] | undefined) {
     this._endnotes.set(value ? value.map(e => ({ ...e })) : []);
-    
     this._schedulePaginate('endnotes-input');
   }
 
@@ -832,7 +790,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const updated = current.map(e => (e.id === id ? { ...e, html } : e));
     this._endnotes.set(updated);
     this.endnotesChange.emit(this.getEndnotes());
-    
     this._schedulePaginate('endnote-edit');
   }
 
@@ -864,7 +821,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const id = el.getAttribute('data-endnote-id') ?? '';
       const number = numberById.get(id);
       if (!number) continue;
-      
       const label = this._formatNoteLabel(number, this._endnoteNumberFormat(), true);
       if (el.textContent !== label) el.textContent = label;
       el.setAttribute('aria-label', `Przypis końcowy ${label}`);
@@ -952,6 +908,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (removedFromDom) this.contentChange.emit(this.getContent());
   }
 
+
   onEditorClick(ev: MouseEvent): void {
     this._navigateToNoteFromRef(ev);
     this._navigateFromInternalAnchor(ev);
@@ -1029,7 +986,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   private _flashNoteItem(item: HTMLElement): void {
     item.classList.remove('note-item-flash');
-    
     void item.offsetWidth;
     item.classList.add('note-item-flash');
     setTimeout(() => item.classList.remove('note-item-flash'), 1300);
@@ -1038,7 +994,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   private _paginateTimer: ReturnType<typeof setTimeout> | null = null;
   private _paginateRafHandle: number | null = null;
   private _isRepaginating = false;
-  
   private _isDestroyed = false;
   private _resourceRepaginateGen = 0;
 
@@ -1055,18 +1010,13 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   private _headerEvenHtml = signal<string>('');
   private _footerOddHtml = signal<string>('');
   private _footerEvenHtml = signal<string>('');
-  private _headerHeight = signal<number>(1.27); 
-  private _footerHeight = signal<number>(1.27); 
-  
+  private _headerHeight = signal<number>(1.27);
+  private _footerHeight = signal<number>(1.27);
   documentDefaultFontSize = signal<string | null>(null);
   documentDefaultFontFamily = signal<string | null>(null);
-  
   documentDefaultLineHeight = signal<string | null>(null);
-  
   documentDefaultParagraphSpacing = signal<string | null>(null);
-  
   documentDefaultParagraphSpacingBefore = signal<string | null>(null);
-  
   documentDefaultLineTw = signal<string | null>(null);
 
   documentDefaultLineSingle(): string {
@@ -1074,13 +1024,11 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private _documentContainerAttrs: { name: string; value: string }[] | null = null;
-  
   private _headerDifferentFirstPage = signal<boolean>(false);
   private _footerDifferentFirstPage = signal<boolean>(false);
   private _headerDifferentOddEven = signal<boolean>(false);
   private _footerDifferentOddEven = signal<boolean>(false);
   editingSection = signal<'header' | 'footer' | 'body'>('body');
-  
   editingHfPageIndex = signal<number>(0);
   
   showHeaderOptionsMenu = signal<boolean>(false);
@@ -1099,6 +1047,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const pagesArr = this.pageContents();
     return pagesArr.map((_, i) => this._computeFooterContent(i));
   });
+
 
   editorState = signal<EditorState>({
     isModified: false,
@@ -1119,7 +1068,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   private lastEmittedPageCount = 1;
 
   ngAfterViewInit(): void {
-    
     const syncActiveEditor = () => {
       const refs = this.pageEditorRefs?.toArray() ?? [];
       const idx = Math.min(this.activePageIndex(), Math.max(0, refs.length - 1));
@@ -1130,9 +1078,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     syncActiveEditor();
     this.pageEditorRefs?.changes.subscribe(() => {
       syncActiveEditor();
-      
       this.setupEventListeners();
-      
       this.refreshListLabels();
     });
 
@@ -1142,7 +1088,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     setTimeout(() => {
       this.calculatePages();
       this._schedulePaginate('init');
-      
       this._repaginateAfterResources();
     }, 100);
     
@@ -1190,7 +1135,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!page) return;
     const pr = page.getBoundingClientRect();
     const br = band.getBoundingClientRect();
-    
     const pageIndex = Math.max(0, Number(page.getAttribute('data-page-number') ?? '1') - 1);
     const expectedWidthPx = this.pageWidthPx(pageIndex);
     const scale = pr.width > 0 ? pr.width / expectedWidthPx : 1;
@@ -1217,7 +1161,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private initializeEditor(): void {
-    
     const editor = this.editorContent?.nativeElement;
     if (!editor) return;
 
@@ -1229,7 +1172,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   private setupEventListeners(): void {
     const refs = this.pageEditorRefs?.toArray() ?? [];
-    
     if (!(document as any).__wysiwygSelListener) {
       document.addEventListener('selectionchange', () => {
         this.onSelectionChange();
@@ -1288,7 +1230,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const imageWrapper = target.closest('.editor-image-wrapper') as HTMLElement | null;
 
     if (imageWrapper) {
-      
       return;
     }
 
@@ -1369,7 +1310,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         if (!currentImg) return;
 
         if (st.axis === 'x') {
-          
           const deltaX = moveEvent.clientX - st.startX;
           const newWidth = Math.max(60, Math.min(editorMaxWidth, st.startWidth + deltaX));
           st.wrapper.style.width = `${newWidth}px`;
@@ -1377,7 +1317,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           currentImg.style.width = '100%';
           currentImg.style.height = `${st.startHeight}px`;
         } else if (st.axis === 'y') {
-          
           const deltaY = moveEvent.clientY - st.startY;
           const newHeight = Math.max(30, st.startHeight + deltaY);
           st.wrapper.style.width = `${st.startWidth}px`;
@@ -1385,7 +1324,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           currentImg.style.width = '100%';
           currentImg.style.height = `${newHeight}px`;
         } else {
-          
           const deltaX = moveEvent.clientX - st.startX;
           const newWidth = Math.max(60, Math.min(editorMaxWidth, st.startWidth + deltaX));
           st.wrapper.style.width = `${newWidth}px`;
@@ -1408,7 +1346,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
             if (widthPx > 0 && heightPx > 0) {
               finalImg.style.width = `${widthPx}px`;
               finalImg.style.height = `${heightPx}px`;
-              
               const EMU_PER_PX = 9525;
               finalImg.setAttribute('data-width-emu', String(widthPx * EMU_PER_PX));
               finalImg.setAttribute('data-height-emu', String(heightPx * EMU_PER_PX));
@@ -1420,7 +1357,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
         this.onContentChange();
-        
         this.emitImageSelectionState();
       };
 
@@ -1440,7 +1376,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (isFloating) {
       const startLeft = parseInt(wrapper.style.left || '0', 10);
       const startTop = parseInt(wrapper.style.top || '0', 10);
-      
       const floatPage = wrapper.closest('.page') as HTMLElement | null;
       const floatScale = floatPage ? this._pageVisualScale(floatPage) : 1;
       const onFloatingMove = (moveEvent: MouseEvent) => {
@@ -1466,7 +1401,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           const img = wrapper.querySelector('img') as HTMLImageElement | null;
           if (img) {
             const EMU_PER_PX = 9525;
-            
             const bandGeo = this._bandGeoForElement(wrapper);
             const c = bandGeo ? bandToContract(xPx, yPx, bandGeo) : { xPx, yPx };
             img.setAttribute('data-x-emu', String(Math.round(c.xPx) * EMU_PER_PX));
@@ -1493,9 +1427,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         this.imageMoveState.isDragging = true;
         document.body.classList.add('image-moving');
         wrapper.classList.add('image-dragging');
-        
         wrapper.style.pointerEvents = 'none';
-        
         this.imageDragCaret = document.createElement('div');
         this.imageDragCaret.className = 'image-drop-caret';
         document.body.appendChild(this.imageDragCaret);
@@ -1522,7 +1454,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     const onImageMouseUp = (upEvent: MouseEvent) => {
       if (this.imageMoveState?.isDragging) {
-        
         wrapper.style.pointerEvents = '';
         this.imageDragCaret?.remove();
         this.imageDragCaret = null;
@@ -1536,12 +1467,10 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
             dropRange.insertNode(wrapper);
             this.selectImageWrapper(wrapper);
             this.onContentChange();
-            
             this.emitImageSelectionState();
           }
         }
       }
-      
       document.body.classList.remove('image-moving');
       wrapper.classList.remove('image-dragging');
       wrapper.style.pointerEvents = '';
@@ -1556,7 +1485,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     document.addEventListener('mouseup', onImageMouseUp);
   }
 
-  private readonly TABLE_EDGE_THRESHOLD = 6; 
+
+  private readonly TABLE_EDGE_THRESHOLD = 6;
 
   private detectTableResizeHit(event: MouseEvent): {
     type: 'col' | 'row' | 'table';
@@ -1605,7 +1535,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private handleTableResizeCursor(event: MouseEvent): void {
-    
     if (this.tableResizeState || this.imageResizeState || this.imageMoveState) return;
 
     const target = event.target as HTMLElement;
@@ -1613,7 +1542,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const table = target.closest('table') as HTMLTableElement | null;
 
     if (!table || !td) {
-      
       if (this._lastCursorCell) {
         this._lastCursorCell.style.cursor = '';
         this._lastCursorCell = null;
@@ -1719,7 +1647,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       }
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
-      
       if (finished && (finished.type === 'col' || finished.type === 'table')) {
         writeColgroupWidths(
           finished.table,
@@ -1747,18 +1674,15 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const widths = [...st.startColumnWidths];
 
     if (b < columnCount - 1) {
-      
       const available = st.startColumnWidths[b] + st.startColumnWidths[b + 1];
       const newLeft = Math.min(Math.max(minW, st.startColumnWidths[b] + deltaX), available - minW);
       widths[b] = newLeft;
       widths[b + 1] = available - newLeft;
     } else {
-      
       widths[b] = Math.max(minW, st.startColumnWidths[b] + deltaX);
     }
 
     st.columnWidths = widths;
-    
     applyColumnWidths(st.table, st.grid, widths);
   }
 
@@ -1771,7 +1695,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const row = st.table.rows[st.rowIndex];
     if (row) {
       row.style.height = `${newHeight}px`;
-      
       row.removeAttribute('data-row-height-tw');
       row.removeAttribute('data-row-hrule');
     }
@@ -1793,14 +1716,13 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (widths.some(w => w > 0)) {
       applyColumnWidths(st.table, st.grid, widths);
     } else {
-      
       st.table.style.width = `${newTableWidth}px`;
     }
   }
 
+
   private handleEditorDragStart(event: DragEvent): void {
     const rawTarget = event.target as Node | null;
-    
     const target: HTMLElement | null = rawTarget instanceof HTMLElement
       ? rawTarget
       : (rawTarget?.parentElement ?? null);
@@ -1856,6 +1778,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+
   private handleTextBoxMouseDown(event: MouseEvent, target: HTMLElement): void {
     const textbox = target.closest('.docx-textbox') as HTMLElement | null;
     if (!textbox) return;
@@ -1893,6 +1816,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       this.selectedTextBox = null;
     }
   }
+
 
   private selectedShape: HTMLElement | null = null;
 
@@ -1952,7 +1876,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const startW = parseFloat(shape.style.width || '0') || shape.getBoundingClientRect().width / scale;
     const startH = parseFloat(shape.style.height || '0') || shape.getBoundingClientRect().height / scale;
     if (startW <= 0 || startH <= 0) return;
-    
     const snapshot = shape.cloneNode(true) as HTMLElement;
     let factor = 1;
 
@@ -1994,7 +1917,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const c = bandToContract(contractLeft, contractTop, this._bandGeoFor(pageIndex, band));
       contractLeft = c.xPx;
       contractTop = c.yPx;
-      
       shape.setAttribute('data-band-orig-left', `${Math.round(contractLeft)}px`);
       shape.setAttribute('data-band-orig-top', `${Math.round(contractTop)}px`);
     }
@@ -2090,6 +2012,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     textbox.classList.toggle('tb-edge', onEdge);
     this.edgeCursorTextBox = textbox;
   }
+
 
   private _pageVisualScale(page: HTMLElement): number {
     const rect = page.getBoundingClientRect();
@@ -2221,26 +2144,22 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       delete wrapper.dataset['posMode'];
       delete img.dataset['posMode'];
     } else if (mode === 'square') {
-      
       wrapper.dataset['posMode'] = 'square';
       img.dataset['posMode'] = 'square';
       wrapper.style.float = 'left';
       wrapper.style.margin = '0 12px 8px 0';
     } else if (mode === 'topBottom') {
-      
       wrapper.dataset['posMode'] = 'topBottom';
       img.dataset['posMode'] = 'topBottom';
       wrapper.style.display = 'block';
       wrapper.style.clear = 'both';
       wrapper.style.margin = '8px auto';
     } else {
-      
       const page = wrapper.closest('.page, .editor-content, .header-editor-content, .footer-editor-content') as HTMLElement | null;
       const pageRect = page?.getBoundingClientRect();
       const rect = wrapper.getBoundingClientRect();
       const xPx = Math.max(0, Math.round(rect.left - (pageRect?.left ?? 0)));
       const yPx = Math.max(0, Math.round(rect.top - (pageRect?.top ?? 0)));
-      
       const bandGeo = this._bandGeoForElement(img);
       const contract = bandGeo ? bandToContract(xPx, yPx, bandGeo) : undefined;
       this.applyFloatingPosition(wrapper, img, mode as 'front' | 'behind', xPx, yPx,
@@ -2323,7 +2242,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     wrapper.style.top = `${yPx}px`;
     if (mode === 'behind') {
       wrapper.style.zIndex = '-1';
-      
       wrapper.style.pointerEvents = 'auto';
     } else {
       wrapper.style.zIndex = '10';
@@ -2396,7 +2314,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   ): void {
     img.style.width = `${widthPx}px`;
     img.style.height = `${heightPx}px`;
-    
     const EMU_PER_PX = 9525;
     img.setAttribute('data-width-emu', String(widthPx * EMU_PER_PX));
     img.setAttribute('data-height-emu', String(heightPx * EMU_PER_PX));
@@ -2460,8 +2377,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this._isInternalUpdate = false;
     this.saveToUndoStack();
     this.updateState();
-    this.updateFormattingState(); 
-    
+    this.updateFormattingState();
     this._scheduleAnchorBadgeRefresh();
   }
 
@@ -2469,7 +2385,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const selection = window.getSelection();
 
     if (selection && this.isSelectionInEditor(selection)) {
-      
       this.saveSelection();
       this.updateFormattingState();
       this.selectionChange.emit(selection);
@@ -2521,13 +2436,9 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private sanitizeHtml(html: string): string {
-    
     html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-    
     html = html.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-    
     html = html.replace(/<!--[\s\S]*?-->/g, '');
-    
     html = html.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '');
     
     return html;
@@ -2562,7 +2473,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
 
     if (e.ctrlKey || e.metaKey) {
-      
       if (e.shiftKey && e.key.toLowerCase() === 'v') {
         this.plainTextPasteUntil = Date.now() + 1000;
         return;
@@ -2601,7 +2511,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           break;
         case 's':
           e.preventDefault();
-          
           break;
       }
     }
@@ -2617,7 +2526,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
 
     if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      
       const carry = this.readOnly ? null : this._captureInlineTextStyleAtCaret();
       this._flushPaginateSoon();
       if (carry) {
@@ -2664,7 +2572,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const prevFragment = this._siblingTableFragment(table, -1);
     const lastRow = prevFragment?.rows[prevFragment.rows.length - 1];
     if (lastRow?.cells.length) { this._focusTableCell(lastRow.cells[lastRow.cells.length - 1]); return true; }
-    return true; 
+    return true;
   }
 
   private _siblingTableFragment(table: HTMLTableElement, direction: 1 | -1): HTMLTableElement | null {
@@ -2719,7 +2627,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const el = node as HTMLElement;
       node = range.startOffset > 0 ? el.childNodes[range.startOffset - 1] ?? el : el;
     }
-    
     if (node && node.nodeType === Node.ELEMENT_NODE) {
       let deepest = node as HTMLElement;
       while (deepest.lastElementChild) deepest = deepest.lastElementChild as HTMLElement;
@@ -2829,7 +2736,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   executeCommand(command: EditorCommand, value?: string): void {
-    
     if (command === 'toggleFormattingMarks') {
       this.toggleFormattingMarks();
       return;
@@ -2957,7 +2863,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
 
     if (!selection || selection.rangeCount === 0) {
-      
       this.pendingFontSize = size;
       return;
     }
@@ -2965,7 +2870,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const range = selection.getRangeAt(0);
 
     if (range.collapsed) {
-      
       this.pendingFontSize = size;
 
       const containerEl = range.startContainer.nodeType === Node.TEXT_NODE
@@ -2976,9 +2880,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         && containerEl.style.fontSize !== '';
 
       if (isInZwsSpan && containerEl) {
-        
         containerEl.style.fontSize = `${size}pt`;
-        
         const newRange = document.createRange();
         newRange.setStart(containerEl.firstChild!, Math.min(1, containerEl.firstChild!.textContent!.length));
         newRange.setEnd(containerEl.firstChild!, Math.min(1, containerEl.firstChild!.textContent!.length));
@@ -2991,7 +2893,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
       const span = document.createElement('span');
       span.style.fontSize = `${size}pt`;
-      span.innerHTML = '\u200B'; 
+      span.innerHTML = '\u200B';
 
       range.insertNode(span);
 
@@ -3027,10 +2929,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const processNode = (node: Node, insideStyledSpan = false): Node => {
       if (node.nodeType === Node.TEXT_NODE) {
         if (insideStyledSpan) {
-          
           return node.cloneNode(true);
         }
-        
         const span = document.createElement('span');
         span.style.fontSize = `${size}pt`;
         span.textContent = node.textContent;
@@ -3124,7 +3024,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const range = selection.getRangeAt(0);
     
     if (range.collapsed) {
-      
       this.pendingFontFamily = fontFamily;
 
       const zwsChar = String.fromCharCode(0x200b);
@@ -3159,7 +3058,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       newRange.setEnd(span.firstChild!, 1);
       selection.removeAllRanges();
       selection.addRange(newRange);
-      
       this.savedSelection = newRange.cloneRange();
       this.updateFormattingState();
 
@@ -3177,7 +3075,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private removeStaleZwsSpans(keepSpan: HTMLElement): void {
-    
     let block: HTMLElement | null = keepSpan.parentElement;
     while (block && !['P', 'LI', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'TD', 'TH'].includes(block.tagName)) {
       block = block.parentElement;
@@ -3382,7 +3279,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0) {
       const range = selection.getRangeAt(0);
-      
       if (this.isSelectionInEditor(selection) && this.editorHasFocus()) {
         this.savedSelection = range.cloneRange();
       }
@@ -3444,7 +3340,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     
     if (selection && selection.rangeCount > 0) {
       range = selection.getRangeAt(0);
-      
       if (!editor.contains(range.commonAncestorContainer) || range.collapsed) {
         range = null;
       }
@@ -3554,7 +3449,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   insertText(text: string): void {
-    
     const editor = this.getActiveEditor();
     if (editor) {
       const live = window.getSelection();
@@ -3581,15 +3475,13 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!text) return;
 
     const editor = this.getActiveEditor();
-    
     if (!editor || !bookmark || !editor.contains(bookmark.startContainer)) return;
 
     const range = bookmark.cloneRange();
-    range.deleteContents(); 
+    range.deleteContents();
 
     const fragment = this.buildPlainTextFragment(text);
     const lastNode = fragment.lastChild;
-    
     this.insertFragmentOutsideInlineFormatting(range, fragment);
 
     const sel = window.getSelection();
@@ -3775,7 +3667,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       if (editor.contains(range.commonAncestorContainer)) {
         range.deleteContents();
         range.insertNode(wrapper);
-        
         range.setStartAfter(wrapper);
         range.collapse(true);
         selection.removeAllRanges();
@@ -3917,7 +3808,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       for (let j = 0; j < cols; j++) {
         const td = document.createElement('td');
         td.style.cssText = `border:1px solid #ccc;padding:8px;min-width:30px;width:${colWidth}%;`;
-        
         td.innerHTML = '<br>';
         tr.appendChild(td);
       }
@@ -3975,7 +3865,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
 
     this.savedSelection = null;
-    
     const firstCell = table.rows[0]?.cells[0];
     if (firstCell) this._focusTableCell(firstCell);
     this.onContentChange();
@@ -3986,7 +3875,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!editor) return;
 
     const normalized = this.normalizeLinkUrl(url);
-    if (!normalized) return; 
+    if (!normalized) return;
 
     const live = window.getSelection();
     const liveInEditor = !!live && live.rangeCount > 0 && this.isSelectionInEditor(live);
@@ -4000,10 +3889,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       && !selection.isCollapsed && this.isSelectionInEditor(selection);
 
     if (hasEditorSelection) {
-      
       document.execCommand('createLink', false, normalized);
     } else {
-      
       const label = (text && text.trim().length > 0) ? text : normalized;
       const safeUrl = normalized.replace(/"/g, '&quot;');
       this.insertHtml(`<a href="${safeUrl}" target="_blank" rel="noopener">${this.escapeHtml(label)}</a>`);
@@ -4041,21 +3928,16 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   toggleFormattingMarks(force?: boolean): void {
     this.showFormattingMarks.update(v => (force === undefined ? !v : force));
-    
     this.editorState.update(s => ({ ...s, formattingMarks: this.showFormattingMarks() }));
     this.stateChange.emit(this.editorState());
-    
     this._scheduleFormattingMarksRender();
   }
 
   undo(): void {
-    
     this._flushPendingPersist();
     if (this.undoStack.length > 1) {
-      
       const caret = this._captureCaretForHistory();
       const current = this.undoStack.pop()!;
-      
       this.redoStack.push({ html: current, caret });
 
       const previous = this.undoStack[this.undoStack.length - 1];
@@ -4066,10 +3948,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       this._schedulePaginate('undo');
 
       this.updateState();
-      
       setTimeout(() => {
         this.refreshListLabels();
-        
         this._restoreGlobalCaret(
           caret ?? { block: Number.MAX_SAFE_INTEGER, offset: Number.MAX_SAFE_INTEGER });
         this.updateFormattingState();
@@ -4078,7 +3958,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   redo(): void {
-    
     this._flushPendingPersist();
     if (this.redoStack.length > 0) {
       const entry = this.redoStack.pop()!;
@@ -4094,7 +3973,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       this.updateState();
       setTimeout(() => {
         this.refreshListLabels();
-        
         this._restoreGlobalCaret(
           entry.caret ?? { block: Number.MAX_SAFE_INTEGER, offset: Number.MAX_SAFE_INTEGER });
         this.updateFormattingState();
@@ -4130,13 +4008,11 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private updateFormattingState(): void {
-    
     const selection = window.getSelection();
     let fontSize = 11;
     let fontFamily = 'Calibri';
     let textColor = '#000000';
     let currentBlockFormat = 'p';
-    
     let alignment: 'left' | 'center' | 'right' | 'justify' = 'left';
     let bulletList = false;
     let numberedList = false;
@@ -4150,15 +4026,12 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     let element: HTMLElement | null = null;
     if (fromSelection) {
-      
       const range = selection!.getRangeAt(0);
       let node: Node | null = range.startContainer;
       if (node && node.nodeType === Node.ELEMENT_NODE) {
         const el = node as HTMLElement;
-        
         const idx = Math.min(range.startOffset, el.childNodes.length - 1);
         node = el.childNodes[Math.max(idx, 0)] ?? el.lastChild ?? el;
-        
         while (node && node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).firstChild) {
           node = (node as HTMLElement).firstChild;
         }
@@ -4176,7 +4049,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const computedStyle = window.getComputedStyle(element);
 
       const fontSizePx = parseFloat(computedStyle.fontSize);
-      fontSize = Math.round(fontSizePx * 0.75); 
+      fontSize = Math.round(fontSizePx * 0.75);
 
       fontFamily = computedStyle.fontFamily.replace(/['"]/g, '').split(',')[0].trim();
 
@@ -4249,7 +4122,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           : NodeFilter.FILTER_REJECT,
     });
     const textNode = walker.nextNode();
-    
     return (textNode?.parentElement as HTMLElement | null) ?? firstBlock;
   }
 
@@ -4333,7 +4205,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     } else if (fallback) {
       text = fallback.innerText || '';
     }
-    
     const headerText = this.headerContentEl?.nativeElement?.innerText || '';
     const footerText = this.footerContentEl?.nativeElement?.innerText || '';
     if (headerText) text += '\n' + headerText;
@@ -4367,7 +4238,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this.editorState.update(state => ({
       ...state,
       isModified: this._isDirty,
-      
       canUndo: this.undoStack.length > 1 || (this._persistTimer !== null && this.undoStack.length >= 1),
       canRedo: this.redoStack.length > 0,
       wordCount
@@ -4375,6 +4245,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     this.stateChange.emit(this.editorState());
   }
+
 
   setActivePage(index: number, _ev: Event): void {
     const refs = this.pageEditorRefs?.toArray() ?? [];
@@ -4389,7 +4260,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this._isDirty = true;
     this._schedulePaginate('input');
     this._schedulePersist();
-    
     this.updateState();
     this.updateFormattingState();
   }
@@ -4422,7 +4292,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
     if (roots.length === 0) return;
     applyListLabels(roots);
-    
     ensureBulletMarkers(roots);
   }
 
@@ -4442,17 +4311,14 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private _persistNow(): void {
-    
     this.syncFootnotesWithBody();
     this.syncEndnotesWithBody();
-    
     this.refreshListLabels();
     const html = this.getContent();
     this._isInternalUpdate = true;
     this._content.set(html);
     this.contentChange.emit(html);
     this._isInternalUpdate = false;
-    
     if (this.undoStack.length === 0 || this.undoStack[this.undoStack.length - 1] !== html) {
       this.undoStack.push(html);
       if (this.undoStack.length > 100) this.undoStack.shift();
@@ -4467,9 +4333,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const container = tmp.querySelector('.document-content') as HTMLElement | null;
     if (!container) {
       this._documentContainerAttrs = null;
-      
       this._baseColumns.set(null);
-      
       this.documentDefaultFontSize.set(null);
       this.documentDefaultFontFamily.set(null);
       this.documentDefaultLineHeight.set(null);
@@ -4489,7 +4353,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this.documentDefaultParagraphSpacingBefore.set(
       Number.isFinite(beforeTw) && beforeTw >= 0 ? `${beforeTw / 20}pt` : null
     );
-    
     const lineTw = parseInt(container.getAttribute('data-default-line') ?? '', 10);
     const lineRule = container.getAttribute('data-default-line-rule');
     this.documentDefaultLineTw.set(
@@ -4497,7 +4360,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         ? String(lineTw)
         : null
     );
-    
     this._baseColumns.set(parseColumnDataAttributes(container) ?? null);
 
     this._documentContainerAttrs = Array.from(container.attributes).map(a => ({
@@ -4517,7 +4379,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       try {
         div.setAttribute(name, value);
       } catch {
-        
       }
     }
     div.innerHTML = html;
@@ -4578,7 +4439,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       },
       headerDistanceCm: margin('data-header-distance-cm') ?? current.headerDistanceCm,
       footerDistanceCm: margin('data-footer-distance-cm') ?? current.footerDistanceCm,
-      
       columns: parseColumnDataAttributes(el),
     };
   }
@@ -4653,20 +4513,17 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   private _repaginateAfterResources(): void {
     const gen = ++this._resourceRepaginateGen;
-    
     const fontSet = (document as unknown as { fonts?: { ready?: Promise<unknown> } }).fonts;
     const fontsReady: Promise<unknown> =
       fontSet && typeof fontSet.ready?.then === 'function' ? fontSet.ready : Promise.resolve();
     Promise.all([fontsReady, this._pendingImagesSettled()])
       .then(() => {
         if (this._isDestroyed || gen !== this._resourceRepaginateGen) return;
-        
         this._tableMeasureCache.clear();
         this._blockRunMeasureCache.clear();
         this._flushPaginateNow();
       })
       .catch(() => {
-        
       });
   }
 
@@ -4702,11 +4559,9 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const caret = this._saveGlobalCaret(refs);
 
       const allBlocks: HTMLElement[] = [];
-      
       const livePageContents: string[] = [];
       const liveTmp = document.createElement('div');
       for (const ref of refs) {
-        
         const kids = this._flattenTopBlocks(ref.nativeElement);
         kids.forEach(child => {
           allBlocks.push(child.cloneNode(true) as HTMLElement);
@@ -4717,7 +4572,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         });
         livePageContents.push(liveTmp.innerHTML);
       }
-      
       const mergedInput: HTMLElement[] = [];
       for (const b of allBlocks) {
         const prev = mergedInput[mergedInput.length - 1];
@@ -4726,13 +4580,11 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           continue;
         }
         if (b.getAttribute('data-split-para') === 'cont') {
-          
           b.removeAttribute('data-split-para');
           b.style.marginTop = '';
         }
         mergedInput.push(b);
       }
-      
       const premerged: HTMLElement[] = [];
       for (const b of mergedInput) {
         const prev = premerged[premerged.length - 1];
@@ -4757,7 +4609,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       }
 
       const measuredBands = this._measureBandHeightsPx(refs);
-      
       const prevBands = this._measuredBandHeights;
       this._measuredBandHeights = measuredBands;
       if ((prevBands?.footerFirst ?? 0) !== measuredBands.footerFirst
@@ -4789,12 +4640,10 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
       const probeEd = refs[0].nativeElement;
       const cs = getComputedStyle(probeEd);
-      
       const innerW = probeEd.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
       const baseContentPx = contentWidthPx(baseGeo);
       const widthScale = innerW > 0 && baseContentPx > 0 ? innerW / baseContentPx : 1;
       const measurerWidthFor = (geo: PageGeometry): number => columnWidthPx(geo) * widthScale;
-      
       const lineHeightPx =
         parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2 || 16;
       const capacityFor = (geo: PageGeometry, pageIdx: number): number => {
@@ -4815,9 +4664,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const pageGeos: PageGeometry[] = [curGeo];
       let curSection = 0;
       const pageSections: number[] = [0];
-      
       const pageBands: (PageColumnBand | null)[] = [null];
-      
       let currentHeight = 0;
       let columnBase = 0;
       let columnHeight = availableFor(curGeo, 0);
@@ -4892,10 +4739,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       };
 
       const pushMeasured = (block: HTMLElement, h: number) => {
-        
         let blk = block;
         let bh = h;
-        
         let blkExtra = fnProspectiveReserve(this._footnoteIdsIn(blk));
         while (currentHeight + bh > fnEffAvail(blkExtra)) {
           const pageHasContent = pages[pages.length - 1].length > 0;
@@ -4907,7 +4752,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
             blkExtra = fnProspectiveReserve(this._footnoteIdsIn(blk));
             continue;
           }
-          
           commitFootnotes(parts[0]);
           pages[pages.length - 1].push(parts[0]);
           openPage();
@@ -4924,7 +4768,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       while (bi < allBlocks.length) {
         const block = allBlocks[bi];
         if (this._isSectionBreakMarker(block)) {
-          
           curGeo = this._parseSectionGeometry(block, curGeo);
           curSection++;
           if (pages[pages.length - 1].length === 0) {
@@ -4935,7 +4778,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
             columnHeight = availableFor(curGeo, pages.length - 1);
             availableHeight = capacityFor(curGeo, pages.length - 1);
           } else {
-            
             const newCols = columnCountFor(curGeo);
             const prevCols = columnCountFor(pageGeos[pageGeos.length - 1]);
             const remainingPx = columnHeight - (currentHeight - columnBase);
@@ -4943,7 +4785,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
               newCols > 1 && prevCols === 1 && !pageBands[pageBands.length - 1] &&
               remainingPx >= 2 * lineHeightPx
             ) {
-              
               pages[pages.length - 1].push(block);
               pageBands[pageBands.length - 1] = {
                 start: pages[pages.length - 1].length,
@@ -4954,11 +4795,9 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
               columnHeight = remainingPx;
               availableHeight = currentHeight + newCols * remainingPx - (newCols - 1) * lineHeightPx;
             } else if (newCols !== prevCols || pageBands[pageBands.length - 1]) {
-              
               openPage();
               pages[pages.length - 1].push(block);
             } else {
-              
               pages[pages.length - 1].push(block);
             }
           }
@@ -4967,14 +4806,12 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           continue;
         }
         if (this._isPageBreakBlock(block)) {
-          
           pages[pages.length - 1].push(block);
           openPage();
           bi++;
           continue;
         }
         if (this._hasPageBreakBeforeStyle(block)) {
-          
           if (pages[pages.length - 1].length > 0 || currentHeight > 0) {
             openPage();
           }
@@ -4983,7 +4820,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           continue;
         }
         if (this._isColumnBreakBlock(block)) {
-          
           const nextColumnTop = columnBase
             + (Math.floor((currentHeight - columnBase) / columnHeight) + 1) * columnHeight;
           if (nextColumnTop >= availableHeight && pages[pages.length - 1].length > 0) {
@@ -4996,7 +4832,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           continue;
         }
         if (block.tagName === 'TABLE') {
-          
           const usedInColumn = columnHeight > 0 ? (currentHeight - columnBase) % columnHeight : 0;
           const split = this._splitTableForPagination(
             block as HTMLTableElement,
@@ -5019,7 +4854,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
             if (i > 0) {
               advanceColumnOrPage();
             } else {
-              
               const used = columnHeight > 0 ? (currentHeight - columnBase) % columnHeight : 0;
               const remaining = columnHeight - used;
               if (h > remaining + 0.5 && pages[pages.length - 1].length > 0) {
@@ -5033,7 +4867,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           bi++;
           continue;
         }
-        
         let runEnd = bi;
         while (
           runEnd < allBlocks.length &&
@@ -5085,7 +4918,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         };
 
         let enPageIdx = pages.length - 1;
-        
         let enUsed = Math.min(currentHeight, columnHeight);
         let enAvail = columnHeight;
         let curRegion: EndnotePageRegion = {
@@ -5115,7 +4947,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
         for (let i = 0; i < endnotesForLayout.length; i++) {
           const needed = sepPending + (itemHs[i] ?? 0);
-          
           if (enUsed + needed > enAvail && (curRegion.ids.length > 0 || !curRegion.continuation)) {
             openEndnotePage();
             i--;
@@ -5160,12 +4991,10 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         const bandStart = band ? Math.min(band.start, blocks.length) : blocks.length;
         blocks.slice(0, bandStart).forEach(b => tmp.appendChild(b));
         if (band && blocks.length > bandStart) {
-          
           const wrap = document.createElement('div');
           wrap.className = 'docx-col-band';
           const round2 = (v: number) => Math.round(v * 100) / 100;
           const gapPx = round2(Math.max(0, band.columns.spaceCm) * CSS_PX_PER_CM);
-          
           wrap.setAttribute('style',
             `column-count:${band.columns.count};column-gap:${gapPx}px;` +
             (band.columns.separator ? 'column-rule:1px solid #bbb;' : '') +
@@ -5175,7 +5004,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         }
         return tmp.innerHTML || '<p></p>';
       });
-      
       for (let i = 0; i < endnoteExtraPages; i++) newPageContents.push('');
 
       this._endnoteLayout.set(endnoteRegions);
@@ -5183,24 +5011,19 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       this.pageGeometries.set(pageGeos);
       this.pageBodyHeights.set(pageGeos.map((g, i) => availableFor(g, i)));
       this.pageSectionIndexes.set(pageSections);
-      
       const domAlreadyCorrect = newPageContents.length === this.pageContents().length
         && newPageContents.length === livePageContents.length
         && newPageContents.every((v, i) => v === livePageContents[i]);
       if (!domAlreadyCorrect) {
         this.pageContents.set(newPageContents);
-        
         this._cdr.detectChanges();
-        
         this._syncPageEditorDom(newPageContents);
         this._restoreGlobalCaret(caret);
       }
       this.calculatePages();
-      
       this._scheduleAnchorBadgeRefresh();
     } finally {
       this._isRepaginating = false;
-      
       this._scheduleFormattingMarksRender();
     }
   }
@@ -5221,7 +5044,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!this.showFormattingMarks()) return;
 
     const pages = Array.from(host.querySelectorAll<HTMLElement>('.page'));
-    let budget = 20000; 
+    let budget = 20000;
 
     const CONTAINERS = '.editor-content, .page-overflow-content, .header-display, .footer-display,'
       + ' .header-editor-content, .footer-editor-content, .footnote-item-content';
@@ -5259,7 +5082,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         mark.style.width = `${Math.max(rect.width / scale, 4)}px`;
         mark.style.height = `${rect.height / scale}px`;
         mark.style.color = color;
-        
         mark.style.fontSize = fontSize;
         layer.appendChild(mark);
         budget--;
@@ -5274,7 +5096,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           const text = node.nodeValue ?? '';
           if (!/[ \u00A0\t\u00AD]/.test(text)) continue;
           const parent = node.parentElement;
-          
           for (let i = 0; i < text.length && budget > 0; i++) {
             const ch = text[i];
             if (ch !== ' ' && ch !== '\u00A0' && ch !== '\t' && ch !== '\u00AD') continue;
@@ -5295,7 +5116,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
         container.querySelectorAll<HTMLTableCellElement>('td, th').forEach(cell => {
           if (budget <= 0 || cell.hasAttribute('data-grid-spacer')) return;
-          
           range.selectNodeContents(cell);
           const rects = range.getClientRects();
           const last = rects.length ? rects[rects.length - 1] : null;
@@ -5335,7 +5155,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private _measureBlockRunHeights(measurer: HTMLElement, blocks: HTMLElement[]): number[] {
-    
     let key = measurer.style.cssText + '|';
     for (const b of blocks) key += b.outerHTML;
     const cached = this._blockRunMeasureCache.get(key);
@@ -5366,15 +5185,12 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     lineHeightPx: number
   ): [HTMLElement, HTMLElement] | null {
     if (budgetPx < lineHeightPx) return null;
-    
     if (block.tagName === 'UL' || block.tagName === 'OL') {
       return this._splitListBetweenItems(block, budgetPx, measurer);
     }
-    
     if (block.tagName === 'DIV' && block.classList.contains('sdt-block')) {
       return this._splitSdtBetweenChildren(block, budgetPx, measurer, lineHeightPx);
     }
-    
     if (block.querySelector('.docx-tab-seg, .docx-tab-leader, .docx-textbox, [data-pos-mode], [data-docx-xml]')) return null;
     if (block.tagName !== 'P' && !/^H[1-6]$/.test(block.tagName)) return null;
 
@@ -5398,7 +5214,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       tailRange.setStart(split.node, split.offset);
       const tail = tailRange.extractContents();
       if (!hasContent(tail)) {
-        
         block.appendChild(tail);
         return null;
       }
@@ -5494,7 +5309,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     cont.setAttribute('data-split-para', 'cont');
     cont.style.marginTop = '0';
     if (boundaryParts) {
-      
       cont.appendChild(boundaryParts[1]);
       if (boundary.parentNode !== sdt) sdt.appendChild(boundaryParts[0]);
     } else {
@@ -5507,13 +5321,11 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   private _findLineSplitPoint(block: HTMLElement, limitY: number): { node: Node; offset: number } | null {
     const EPS = 0.5;
     const probe = document.createRange();
-    
     if (typeof probe.getClientRects !== 'function') return null;
     const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
       acceptNode: (n: Node) => {
         if (n.nodeType === Node.TEXT_NODE) return NodeFilter.FILTER_ACCEPT;
         const el = n as HTMLElement;
-        
         if (el.tagName === 'IMG' || el.classList.contains('editor-image-wrapper')) {
           return NodeFilter.FILTER_ACCEPT;
         }
@@ -5540,7 +5352,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       let nodeBottom = 0;
       const nodeRects = probe.getClientRects();
       for (let i = 0; i < nodeRects.length; i++) nodeBottom = Math.max(nodeBottom, nodeRects[i].bottom);
-      if (nodeRects.length === 0 || nodeBottom <= limitY + EPS) continue; 
+      if (nodeRects.length === 0 || nodeBottom <= limitY + EPS) continue;
 
       for (let i = 0; i < len; i++) {
         probe.setStart(text, i);
@@ -5632,7 +5444,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (budgetPx < 2 * lineHeightPx) return null;
     const cells = Array.from(row.cells);
     if (cells.length === 0) return null;
-    
     for (const cell of cells) {
       for (const n of Array.from(cell.childNodes)) {
         if (n.nodeType === Node.TEXT_NODE && (n.textContent ?? '').trim()) return null;
@@ -5727,7 +5538,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     let avail = firstAvail;
     for (let ri = 0; ri < rows.length; ri++) {
       let row = rows[ri];
-      
       for (let guard = 0; guard < 100; guard++) {
         const tentative = [...bucket, row];
         const h = measureRows(tentative);
@@ -5735,7 +5545,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           bucket = tentative;
           break;
         }
-        
         const bucketH = bucket.length > 0 ? measureRows(bucket) : 0;
         const parts = this._rowCanSplit(table, row)
           ? this._splitRowAtBudget(table, row, avail - bucketH, measurer, lineHeightPx)
@@ -5748,13 +5557,11 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           continue;
         }
         if (bucket.length > 0) {
-          
           chunks.push(bucket);
           bucket = [];
           avail = fullAvail;
           continue;
         }
-        
         bucket = [row];
         break;
       }
@@ -5779,7 +5586,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   private _splitTableSeq = 0;
 
   private _hasPageBreakBeforeStyle(el: HTMLElement): boolean {
-    
     const style = el.getAttribute?.('style') ?? '';
     return /(?:page-)?break-before\s*:\s*(always|page)\b/i.test(style);
   }
@@ -5876,7 +5682,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   private _removeTrailingPageBreak(editor: HTMLElement): boolean {
     let last = editor.lastChild;
-    
     while (last && last.nodeType === Node.TEXT_NODE && (last.textContent ?? '').trim() === '') {
       const prev = last.previousSibling;
       last.parentNode?.removeChild(last);
@@ -5913,12 +5718,10 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     const range = document.createRange();
     if (isEmptyTextBlock) {
-      
       firstBlock.remove();
       range.selectNodeContents(lastBlock);
       range.collapse(false);
     } else if (canMerge) {
-      
       const joinNode = lastBlock.lastChild;
       while (firstBlock.firstChild) lastBlock.appendChild(firstBlock.firstChild);
       firstBlock.remove();
@@ -5930,7 +5733,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         range.collapse(true);
       }
     } else {
-      
       this._placeCaretAtEditorEdge(prevEd, 'end', idx - 1);
       return true;
     }
@@ -5979,14 +5781,12 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private _flattenTopBlocks(el: HTMLElement, depth = 0): HTMLElement[] {
-    
     const kids = (Array.from(el.children) as HTMLElement[]).flatMap(c =>
       c.classList.contains('docx-col-band') ? (Array.from(c.children) as HTMLElement[]) : [c]
     );
     if (depth >= 3) return kids;
     if (kids.length === 1) {
       const c = kids[0];
-      
       if (
         (c.tagName === 'DIV' || c.tagName === 'SECTION' || c.tagName === 'ARTICLE') &&
         !c.classList.contains('page-break') &&
@@ -6036,7 +5836,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (hit >= all.length) {
       return all.length === 0 ? { block: 0, offset: 0 } : null;
     }
-    
     let gi = hit;
     while (gi > 0 && this._isContinuationBlock(all[gi - 1], all[gi])) {
       gi--;
@@ -6082,7 +5881,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       if (g > 0 && this._isContinuationBlock(all[g - 1].el, all[g].el)) continue;
       logical++;
       if (logical !== caret.block) continue;
-      
       let idx = g;
       let off = caret.offset;
       while (
@@ -6094,16 +5892,13 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         idx++;
       }
       const target = all[idx].el;
-      
       refs[all[idx].page].nativeElement.focus();
       this._placeCaretAtTextOffset(target, off);
-      
       target.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
       this.editorContent = refs[all[idx].page];
       this.activePageIndex.set(all[idx].page);
       return;
     }
-    
     for (let i = refs.length - 1; i >= 0; i--) {
       const blocks = this._flattenTopBlocks(refs[i].nativeElement);
       if (blocks.length === 0) continue;
@@ -6137,7 +5932,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       r -= nl;
       lastNode = node;
     }
-    
     if (lastNode) {
       range.setStart(lastNode, lastNode.textContent?.length ?? 0);
     } else {
@@ -6157,7 +5951,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     const parts = refs.map(r => this._serializeSingleEditor(r.nativeElement));
     const merged = parts.filter(p => p && p.trim().length > 0).join('');
-    
     return this._wrapWithDocumentContainer(this._mergeSplitParagraphs(this._mergeSplitTables(merged)));
   }
 
@@ -6173,7 +5966,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     root.querySelectorAll('[data-split-para="cont"]').forEach(cont => {
       const el = cont as HTMLElement;
       const prev = el.previousElementSibling;
-      
       const sdtSafe = !el.classList.contains('sdt-block') || !!prev?.classList.contains('sdt-block');
       if (prev && prev.tagName === el.tagName && sdtSafe) {
         while (el.firstChild) prev.appendChild(el.firstChild);
@@ -6227,7 +6019,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     clone.querySelectorAll('.docx-textbox').forEach(tb => {
       tb.classList.remove('tb-selected', 'tb-dragging', 'tb-edge');
     });
-    
     clone.querySelectorAll('.anchor-badge').forEach(b => b.remove());
 
     stripListLabelAttributes(clone);
@@ -6238,7 +6029,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private _unwrapImageWrappers(root: HTMLElement): void {
-    
     root.querySelectorAll('.shape-resize-handle').forEach(h => h.remove());
     root.querySelectorAll('.shape-selected').forEach(s => (s as HTMLElement).classList.remove('shape-selected'));
     root.querySelectorAll('.editor-image-wrapper').forEach(wrapperEl => {
@@ -6261,7 +6051,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           imgEl.style.height = 'auto';
         }
         imgEl.removeAttribute('draggable');
-        
         imgEl.style.removeProperty('position');
         imgEl.style.removeProperty('left');
         imgEl.style.removeProperty('top');
@@ -6277,10 +6066,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const unwrapped = this._captureDocumentDefaults(html);
     const pages = this._splitHtmlIntoPages(unwrapped ?? html ?? '<p></p>');
     this.pageContents.set(pages);
-    
     this._content.set(pages.join(''));
     this._isDirty = false;
-    
     setTimeout(() => {
       this.wrapExistingImages();
       this.refreshListLabels();
@@ -6291,7 +6078,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       this.updateState();
       this._schedulePaginate('setContent');
       this._syncInitialFormatting();
-      
       this._repaginateAfterResources();
     }, 0);
   }
@@ -6302,7 +6088,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     const images = editor.querySelectorAll('img');
     images.forEach((img: HTMLImageElement) => {
-      
       if (img.parentElement?.classList.contains('editor-image-wrapper')) {
         return;
       }
@@ -6326,7 +6111,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       if (posMode === 'front' || posMode === 'behind') {
         const xPx = Math.round((Number(img.getAttribute('data-x-emu') ?? 0)) / 9525);
         const yPx = Math.round((Number(img.getAttribute('data-y-emu') ?? 0)) / 9525);
-        
         const bandGeo = this._bandGeoForElement(img);
         if (bandGeo) {
           const { leftPx, topPx } = contractToBand(xPx, yPx, bandGeo);
@@ -6423,7 +6207,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       document.execCommand('fontName', false, format.fontFamily);
     }
     if (format.fontSize) {
-      
       const range = selection.getRangeAt(0);
       const span = document.createElement('span');
       span.style.fontSize = format.fontSize + 'px';
@@ -6434,7 +6217,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         range.insertNode(span);
         selection.selectAllChildren(span);
       } catch (e) {
-        
         document.execCommand('fontSize', false, '7');
         const fontElements = this.editorContent?.nativeElement.querySelectorAll('font[size="7"]');
         fontElements?.forEach((el: Element) => {
@@ -6471,10 +6253,9 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     return `#${r}${g}${b}`;
   }
 
+
   startEditingHeader(event?: MouseEvent): void {
-    
     if (this.readOnly) return;
-    
     if (this.editingSection() === 'header') return;
     const clickX = event?.clientX;
     const clickY = event?.clientY;
@@ -6484,7 +6265,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     setTimeout(() => {
       const el = this.headerContentEl?.nativeElement;
       if (el) {
-        
         el.innerHTML = this._editableHeaderHtml(this.editingHfPageIndex());
         this.wrapExistingImages(el);
         this._positionBandShapesForEditing(el, this.editingHfPageIndex(), 'header');
@@ -6497,7 +6277,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   startEditingFooter(event?: MouseEvent): void {
-    
     if (this.readOnly) return;
     if (this.editingSection() === 'footer') return;
     const clickX = event?.clientX;
@@ -6580,9 +6359,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   onHeaderBlur(): void {
     const content = this.headerContentEl?.nativeElement?.innerHTML || '';
     this._applyEditedHeaderHtml(content);
-    
     this.emitHeaderFooterChanges();
-    
   }
 
   private _applyEditedHeaderHtml(content: string): void {
@@ -6594,7 +6371,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private _applyEditedHfHtml(content: string, kind: 'header' | 'footer'): void {
-    
     content = this._cleanBandHtml(content);
     const pageIndex = this.editingHfPageIndex();
     const { variant, ownerEntry } = this._resolveHfVariant(pageIndex, kind);
@@ -6619,7 +6395,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const tmp = document.createElement('div');
     tmp.innerHTML = html;
     this._unwrapImageWrappers(tmp);
-    
     tmp.querySelectorAll<HTMLElement>('[data-band-orig-left]').forEach(el => {
       el.style.left = el.getAttribute('data-band-orig-left') ?? el.style.left;
       el.style.top = el.getAttribute('data-band-orig-top') ?? el.style.top;
@@ -6736,7 +6511,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   private _computeFooterContent(pageIndex: number): string {
     let content = this._resolveHfVariant(pageIndex, 'footer').html;
-    
     content = content.replace(/\{page\}/gi, String(pageIndex + 1));
     content = content.replace(/\{pages\}/gi, String(this.pageContents().length));
     return content;
@@ -6788,6 +6562,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     };
   }
 
+
   onHeaderFooterToolbarMouseDown(event: MouseEvent): void {
     const target = event.target as HTMLElement;
     if (target.tagName !== 'INPUT' && target.tagName !== 'SELECT' && target.tagName !== 'TEXTAREA') {
@@ -6801,7 +6576,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this.showFooterOptionsMenu.set(false);
     
     if (this.showHeaderOptionsMenu()) {
-      
       setTimeout(() => {
         const closeHandler = () => {
           this.showHeaderOptionsMenu.set(false);
@@ -6829,7 +6603,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   toggleDifferentFirstPage(): void {
-    
     const next = !this.differentFirstPage();
     this._headerDifferentFirstPage.set(next);
     this._footerDifferentFirstPage.set(next);
@@ -6848,7 +6621,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   openHeaderFooterFormatDialog(): void {
-    
     this.openHeaderFooterSettings.emit({
       headerMargin: this._headerHeight(),
       footerMargin: this._footerHeight(),
@@ -6865,7 +6637,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }): void {
     this._headerHeight.set(settings.headerMargin);
     this._footerHeight.set(settings.footerMargin);
-    
     this._headerDifferentFirstPage.set(settings.differentFirstPage);
     this._footerDifferentFirstPage.set(settings.differentFirstPage);
     this._headerDifferentOddEven.set(settings.differentOddEven);
@@ -6894,7 +6665,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       reader.onload = (ev) => {
         const base64 = ev.target?.result as string;
         if (!base64) return;
-        
         const editor2 = this.getActiveEditor();
         if (editor2) {
           editor2.focus();
@@ -7009,13 +6779,13 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (pages.length === 0) return [];
     const scrollEl = pages[0].closest('.editor-scroll-container') as HTMLElement | null;
     if (!scrollEl) return [];
-    
     const base = scrollEl.getBoundingClientRect().top - scrollEl.scrollTop;
     return pages.map(p => {
       const r = p.getBoundingClientRect();
       return { top: r.top - base, height: r.height };
     });
   }
+
 
   private searchHighlights: HTMLElement[] = [];
   private currentHighlightIndex = -1;
@@ -7064,7 +6834,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         range.surroundContents(highlight);
         this.searchHighlights.unshift(highlight);
       } catch {
-        
       }
     }
 
@@ -7182,7 +6951,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private emitContentChange(): void {
-    
     const html = this.getContent();
     if (!html && !this.editorContent?.nativeElement) return;
     this._isInternalUpdate = true;

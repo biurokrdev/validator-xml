@@ -42,6 +42,7 @@ public class TextBoxAnchorRoundTripTests
 </w:r></w:p>
 <w:p><w:r><w:t>Nastepny akapit</w:t></w:r></w:p>";
 
+
     [Test]
     public void Reader_AnchoredTextBox_EmitsAnchorMetadata()
     {
@@ -50,7 +51,6 @@ public class TextBoxAnchorRoundTripTests
         var html = _reader.Convert(ms).Html;
 
         html.Should().Contain("data-pos-mode=\"front\"");
-        
         html.Should().Contain("data-x-emu=\"914400\"");
         html.Should().Contain("data-y-emu=\"457200\"");
         html.Should().Contain("data-width-emu=\"1828800\"");
@@ -125,7 +125,6 @@ public class TextBoxAnchorRoundTripTests
         html.Should().Contain("data-tb-anchor=\"ctr\"");
         html.Should().Contain("justify-content:center",
             "a:bodyPr@anchor=ctr = treść wyśrodkowana w pionie");
-        
         html.Should().Contain("padding:9.6px 19.2px 9.6px 19.2px");
         html.Should().Contain("data-tb-ins=\"182880 91440 182880 91440\"");
     }
@@ -165,6 +164,7 @@ public class TextBoxAnchorRoundTripTests
         bodyPr.RightInset!.Value.Should().Be(182880);
         bodyPr.BottomInset!.Value.Should().Be(91440);
     }
+
 
     [Test]
     public void Writer_FloatingTextBox_EmitsAnchoredShapeInNextParagraph()
@@ -211,6 +211,7 @@ public class TextBoxAnchorRoundTripTests
         var inline = body.Descendants<Wp.Inline>().Single();
         inline.Descendants<TextBoxContent>().Single().InnerText.Should().Contain("Pole w tekscie");
     }
+
 
     [Test]
     public void RoundTrip_FloatingTextBox_PreservesAnchorParagraphOffsetsAndContent()
@@ -273,6 +274,7 @@ public class TextBoxAnchorRoundTripTests
         roundTripped.Should().Contain("data-border-color=\"#FF0000\"");
     }
 
+
     [TestCase("wrapSquare", "square")]
     [TestCase("wrapTopAndBottom", "topAndBottom")]
     public void Reader_AnchoredImageWrapMode_IsSerializedToDataWrap(string wrapXml, string expected)
@@ -302,6 +304,7 @@ public class TextBoxAnchorRoundTripTests
         anchor.GetFirstChild<Wp.WrapSquare>().Should().NotBeNull();
         anchor.GetFirstChild<Wp.WrapNone>().Should().BeNull();
     }
+
 
     private const string PngBase64 =
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";

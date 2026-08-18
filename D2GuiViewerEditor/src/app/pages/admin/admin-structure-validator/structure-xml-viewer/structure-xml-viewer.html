@@ -1,0 +1,90 @@
+<header class="panel-header">
+  <span class="panel-title">XML</span>
+  @if (title(); as name) {
+    <strong class="xml-title mono">{{ name }}</strong>
+  }
+
+  <div class="panel-actions">
+    <div class="mode-switch">
+      <button type="button" [class.active]="mode() === 'formatted'" (click)="setMode('formatted')">Sformatowany</button>
+      <button type="button" [class.active]="mode() === 'raw'" (click)="setMode('raw')">Źródło</button>
+    </div>
+    <button type="button" class="ghost-btn" [disabled]="lines().length === 0" (click)="collapseAll()">Zwiń</button>
+    <button type="button" class="ghost-btn" [disabled]="lines().length === 0" (click)="expandAll()">Rozwiń</button>
+    <button type="button" class="ghost-btn" [disabled]="lines().length === 0" (click)="copy()">
+      {{ copied() ? 'Skopiowano' : 'Kopiuj' }}
+    </button>
+  </div>
+</header>
+
+@if (meta(); as description) {
+  <div class="xml-meta mono">{{ description }}</div>
+}
+
+@if (lines().length > 0) {
+  <div class="xml-search">
+    <input
+      type="search"
+      class="search-input"
+      placeholder="Szukaj w XML… (Enter = następne, Shift+Enter = poprzednie)"
+      [ngModel]="search()"
+      (ngModelChange)="onSearchChange($event)"
+      (keydown)="onSearchKeydown($event)"
+    />
+    @if (search()) {
+      <span class="match-count">{{ matchPositionLabel() }}</span>
+      <button
+        type="button"
+        class="match-nav"
+        title="Poprzednie trafienie (Shift+Enter)"
+        [disabled]="matchLineNumbers().length === 0"
+        (click)="goToMatch(-1)"
+      >↑</button>
+      <button
+        type="button"
+        class="match-nav"
+        title="Następne trafienie (Enter)"
+        [disabled]="matchLineNumbers().length === 0"
+        (click)="goToMatch(1)"
+      >↓</button>
+    }
+  </div>
+}
+
+<div class="xml-scroll" #scroll>
+  @if (loading) {
+    <div class="viewer-state"><span class="spinner"></span></div>
+  } @else if (lines().length === 0) {
+    <div class="viewer-state empty">
+      Kliknij <strong>XML</strong> przy elemencie albo wybierz „XML części”, aby zobaczyć surowy
+      fragment pakietu.
+    </div>
+  } @else {
+    <div class="xml-code">
+      @for (line of visibleLines(); track line.number) {
+        <div
+          class="xml-line"
+          [attr.data-line]="line.number"
+          [class.highlighted]="line.number === highlightLine()"
+          [class.matched]="matchesSearch(line)"
+          [class.matched-current]="line.number === currentMatchNumber()"
+        >
+          <span class="line-number">{{ line.number }}</span>
+          <button
+            type="button"
+            class="fold-toggle"
+            [class.invisible]="!line.foldable"
+            [attr.aria-label]="isCollapsed(line) ? 'Rozwiń' : 'Zwiń'"
+            (click)="toggleFold(line)"
+          >
+            {{ line.foldable ? (isCollapsed(line) ? '+' : '−') : '' }}
+          </button>
+          <code class="line-text" [style.padding-left.px]="indent(line.depth)">@for (token of line.tokens; track $index) {<span [class]="'tok-' + token.kind">{{ token.text }}</span>}</code>
+          @if (isCollapsed(line)) {
+            <span class="fold-hint">…</span>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

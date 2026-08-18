@@ -1,5 +1,4 @@
 <div class="editor-toolbar" [class.more-open]="moreOpen()" (mousedown)="onToolbarMouseDown($event)">
-  
   <div class="toolbar-group">
     <button
       class="toolbar-btn"
@@ -292,7 +291,6 @@
         <path fill="currentColor" d="M13 4v16h-2V4H9v16H7v-4.74c-2.07-.53-3.67-2.12-3.94-4.28-.33-2.66 1.24-5.03 3.63-5.82C7.82 4.43 9.32 4 11 4h2zm4 0v16h2V4h-2z"/>
       </svg>
     </button>
-    
     @if (true) {
       <button
         class="toolbar-btn"
@@ -301,7 +299,6 @@
         title="Pokaż wszystko (Ctrl+Shift+8)"
         aria-label="Pokaż wszystko — znaczniki formatowania"
         [attr.aria-pressed]="isFormattingMarksActive()">
-        
         <svg viewBox="0 0 24 24" width="18" height="18">
           <text x="5" y="18" font-size="18" font-weight="700" fill="currentColor">¶</text>
           <circle cx="19.5" cy="16.5" r="1.5" fill="currentColor"/>
@@ -370,6 +367,7 @@
   }
 </div>
 
+
 @if (showLinkDialog()) {
   <div class="dialog-overlay" (click)="closeLinkDialog()">
     <div class="dialog" (click)="$event.stopPropagation()">
@@ -404,3 +402,4 @@
     </div>
   </div>
 }
+

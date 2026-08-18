@@ -23,16 +23,15 @@
 }
 
 .page {
-  width: 794px; 
-  
-  height: 1122px; 
+  width: 794px;
+  height: 1122px;
   background: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   position: relative;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  overflow: visible; 
+  overflow: visible;
 }
 
 .page.landscape {
@@ -136,23 +135,18 @@
   flex: 1;
   background: white;
   outline: none;
-  
   font-family: var(--corporate-font-family, 'Calibri', 'Segoe UI', Arial, sans-serif);
   font-size: 11pt;
   line-height: 1.15;
   color: #000;
-  
   -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: auto;
   text-rendering: geometricPrecision;
   box-sizing: border-box;
   position: relative;
-  
   overflow: clip;
   overflow-clip-margin: 16px;
-  
   white-space: pre-wrap;
-  
   column-fill: auto;
 }
 
@@ -272,10 +266,8 @@
 
 .editor-content p {
   margin: 0;
-  
   margin-top: var(--doc-par-margin-top, 0px);
   padding-bottom: var(--doc-par-margin, 10px);
-  
 }
 
 .editor-content > p:last-child {
@@ -310,7 +302,6 @@ img[data-legacy-graphic='blank'] {
 
 .editor-content ul[style*="padding-left"],
 .editor-content ol[style*="padding-left"] {
-  
   margin: 0;
 }
 
@@ -339,9 +330,7 @@ img[data-legacy-graphic='blank'] {
   top: 0;
   padding-right: 0.4em;
   white-space: nowrap;
-  
   color: var(--marker-color, inherit);
-  
   font-size: var(--marker-font-size, inherit);
 }
 
@@ -473,7 +462,6 @@ body.table-resizing * {
 :is(.editor-content, .header-editor-content, .footer-editor-content, .header-display, .footer-display) .editor-image-wrapper img {
   display: block;
   max-width: 100%;
-  
   pointer-events: none;
 }
 
@@ -771,6 +759,7 @@ body.image-moving * {
   color: #4472c4;
 }
 
+
 .fmt-marks-layer {
   position: absolute;
   inset: 0;
@@ -785,7 +774,6 @@ body.image-moving * {
   align-items: center;
   justify-content: center;
   line-height: 1;
-  
   color: #444444;
   font-family: Calibri, 'Segoe UI', sans-serif;
 }
@@ -937,7 +925,7 @@ body.image-moving * {
 }
 
 .wysiwyg-editor.landscape .editor-content {
-  min-height: 794px; 
+  min-height: 794px;
 }
 
 @media print {
@@ -979,6 +967,7 @@ body.image-moving * {
   }
 }
 
+
 .page-header,
 .page-footer {
   flex-shrink: 0;
@@ -988,7 +977,7 @@ body.image-moving * {
   z-index: 1;
   position: relative;
   box-sizing: border-box;
-  overflow: visible; 
+  overflow: visible;
 }
 
 .editor-content {
@@ -1037,7 +1026,6 @@ body.image-moving * {
 .page-footer.editing {
   background-color: rgba(66, 133, 244, 0.06);
   z-index: 15;
-  
 }
 
 .page-header.editing {
@@ -1089,7 +1077,7 @@ body.image-moving * {
   outline: none;
   display: block;
   overflow: visible;
-  color: #202124; 
+  color: #202124;
 }
 
 .header-editor-content p,
@@ -1115,6 +1103,8 @@ body.image-moving * {
   outline: none;
 }
 
+
+
 .header-toolbar,
 .footer-toolbar {
   position: absolute;
@@ -1132,7 +1122,6 @@ body.image-moving * {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   box-sizing: border-box;
   font-size: 12px;
-  
 }
 
 .header-toolbar {
@@ -1155,7 +1144,7 @@ body.image-moving * {
 
 .header-toolbar-spacer,
 .footer-toolbar-spacer {
-  display: none; 
+  display: none;
 }
 
 .header-toolbar-checkbox,
@@ -1265,6 +1254,8 @@ body.image-moving * {
   background: #f1f3f4;
 }
 
+
+
 .editor-content sup.footnote-ref,
 .editor-content sup.endnote-ref {
   color: inherit;
@@ -1295,6 +1286,7 @@ body.image-moving * {
   padding: 1px 0;
 }
 
+
 .endnotes-region {
   position: absolute;
   z-index: 3;
@@ -1317,10 +1309,10 @@ body.image-moving * {
   padding: 1px 0;
 }
 
+
 .footnote-item {
   display: flex;
   align-items: flex-start;
-  
   gap: 0.3em;
   padding: 1px 0;
   border-top: 1px solid #f1f3f4;
@@ -1334,13 +1326,11 @@ body.image-moving * {
 
 .footnote-item-number {
   flex: 0 0 auto;
-  
   font-weight: normal;
   color: #000;
   font-size: 0.65em;
   position: relative;
   top: -0.35em;
-  
   cursor: pointer;
   user-select: none;
 }
@@ -1359,9 +1349,7 @@ body.image-moving * {
   min-height: 1.4em;
   min-width: 0;
   outline: none;
-  
   white-space: pre-wrap;
-  
   overflow-wrap: anywhere;
 
   &:focus {
@@ -1388,3 +1376,4 @@ body.image-moving * {
     border-radius: 2px;
   }
 }
+
