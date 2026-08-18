@@ -35,8 +35,10 @@ import {
 import { normalizeWhitespace, resolvePlainText } from '../../core/utils/paste-text.util';
 import {
   applyListLabels,
+  bulletGlyphFromContract,
   ensureBulletMarkers,
   stripListLabelAttributes,
+  synthesizeBulletMarker,
 } from '../../core/utils/list-label.util';
 import {
   applyColumnWidths,
@@ -405,6 +407,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     columnWidths: number[];
     startHeight: number;
     startTableWidth: number;
+    moved: boolean;
   } | null = null;
 
   pageContents = signal<string[]>(['<p></p>']);
@@ -599,9 +602,12 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   private _isSameRenderedHtml(stored: string, live: HTMLElement): boolean {
     if (stored === live.innerHTML) return true;
+    const liveClone = live.cloneNode(true) as HTMLElement;
+    this._stripFmtTrailingBr(liveClone);
+    if (stored === liveClone.innerHTML) return true;
     const probe = document.createElement('div');
     probe.innerHTML = stored;
-    return probe.innerHTML === live.innerHTML;
+    return probe.innerHTML === liveClone.innerHTML;
   }
 
   commitFootnoteContent(id: string, event: Event): void {
@@ -613,7 +619,9 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (idx < 0 || this._isSameRenderedHtml(current[idx].html, el)) return;
 
     this._normalizeEditedNbsp(el);
-    const html = el.innerHTML;
+    const clean = el.cloneNode(true) as HTMLElement;
+    this._stripFmtTrailingBr(clean);
+    const html = clean.innerHTML;
     const updated = current.map(f => (f.id === id ? { ...f, html } : f));
     this._footnotes.set(updated);
     this.footnotesChange.emit(this.getFootnotes());
@@ -786,7 +794,9 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (idx < 0 || this._isSameRenderedHtml(current[idx].html, el)) return;
 
     this._normalizeEditedNbsp(el);
-    const html = el.innerHTML;
+    const clean = el.cloneNode(true) as HTMLElement;
+    this._stripFmtTrailingBr(clean);
+    const html = clean.innerHTML;
     const updated = current.map(e => (e.id === id ? { ...e, html } : e));
     this._endnotes.set(updated);
     this.endnotesChange.emit(this.getEndnotes());
@@ -999,8 +1009,11 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   private currentFontSize = 11;
   private currentFontFamily = 'Calibri';
-  private pendingFontSize: number | null = null;
-  private pendingFontFamily: string | null = null;
+
+  private _pendingInlineStyle: { fontFamily?: string; fontSize?: string } | null = null;
+  private _pendingStyleAnchor: { node: Node; offset: number } | null = null;
+  private _pendingDeleteCapture: { fontFamily?: string; fontSize?: string } | null = null;
+  private _pendingStyleHoldUntil = 0;
 
   private _headerHtml = signal<string>('');
   private _footerHtml = signal<string>('');
@@ -1010,8 +1023,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   private _headerEvenHtml = signal<string>('');
   private _footerOddHtml = signal<string>('');
   private _footerEvenHtml = signal<string>('');
-  private _headerHeight = signal<number>(1.27);
-  private _footerHeight = signal<number>(1.27);
+  private _headerHeight = signal<number>(1.27); // domyślnie 1.27 cm (jak w Google Docs)
+  private _footerHeight = signal<number>(1.27); // domyślnie 1.27 cm
   documentDefaultFontSize = signal<string | null>(null);
   documentDefaultFontFamily = signal<string | null>(null);
   documentDefaultLineHeight = signal<string | null>(null);
@@ -1100,6 +1113,10 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this._isDestroyed = true;
     if (this.pageCheckInterval) {
       clearInterval(this.pageCheckInterval);
+    }
+    if (this._persistTimer) {
+      clearTimeout(this._persistTimer);
+      this._persistTimer = null;
     }
     if (this._paginateRafHandle !== null) {
       cancelAnimationFrame(this._paginateRafHandle);
@@ -1195,11 +1212,18 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     editor.addEventListener('paste', (e) => {
       this.handlePaste(e);
     });
+    editor.addEventListener('copy', (e) => {
+      this.handleCopyOrCut(e, false);
+    });
+    editor.addEventListener('cut', (e) => {
+      this.handleCopyOrCut(e, true);
+    });
     editor.addEventListener('keydown', (e) => {
       this.handleKeyboard(e);
     });
     editor.addEventListener('blur', () => {
       this.saveSelection();
+      this._clearPendingInlineStyle();
     });
     editor.addEventListener('drop', (e) => {
       this.handleDrop(e);
@@ -1243,7 +1267,13 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   private handleEditorMouseDown(event: MouseEvent): void {
     const target = event.target as HTMLElement;
 
-    const tableHit = this.detectTableResizeHit(event);
+    let tableHit = event.detail >= 2 ? null : this.detectTableResizeHit(event);
+    if (tableHit) {
+      const cell = (event.target as HTMLElement | null)?.closest?.('td, th') as HTMLTableCellElement | null;
+      if (cell && !cell.textContent?.trim()) {
+        tableHit = this.detectTableResizeHit(event, this.EMPTY_CELL_EDGE_THRESHOLD);
+      }
+    }
     if (tableHit) {
       event.preventDefault();
       event.stopPropagation();
@@ -1486,9 +1516,10 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
 
-  private readonly TABLE_EDGE_THRESHOLD = 6;
+  private readonly TABLE_EDGE_THRESHOLD = 6; // px od krawędzi
+  private readonly EMPTY_CELL_EDGE_THRESHOLD = 2; // px od krawędzi
 
-  private detectTableResizeHit(event: MouseEvent): {
+  private detectTableResizeHit(event: MouseEvent, threshold: number = this.TABLE_EDGE_THRESHOLD): {
     type: 'col' | 'row' | 'table';
     table: HTMLTableElement;
     colIndex: number;
@@ -1500,7 +1531,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     if (!table) return null;
 
-    const t = this.TABLE_EDGE_THRESHOLD;
+    const t = threshold;
 
     const tableRect = table.getBoundingClientRect();
     if (
@@ -1511,6 +1542,9 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
 
     if (!td) return null;
+
+    if (this._pointOverText(event.clientX, event.clientY)) return null;
+
     const cellRect = td.getBoundingClientRect();
     const rowIndex = (td.parentElement as HTMLTableRowElement).rowIndex;
 
@@ -1532,6 +1566,22 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
 
     return null;
+  }
+
+  private _pointOverText(x: number, y: number): boolean {
+    const caret = document.caretRangeFromPoint?.(x, y);
+    if (!caret || caret.startContainer.nodeType !== Node.TEXT_NODE) return false;
+    const node = caret.startContainer as Text;
+    const start = Math.max(0, caret.startOffset - 1);
+    const end = Math.min(node.length, caret.startOffset + 1);
+    if (start === end) return false;
+    const r = document.createRange();
+    r.setStart(node, start);
+    r.setEnd(node, end);
+    for (const rect of Array.from(r.getClientRects())) {
+      if (x >= rect.left - 2 && x <= rect.right + 2 && y >= rect.top && y <= rect.bottom) return true;
+    }
+    return false;
   }
 
   private handleTableResizeCursor(event: MouseEvent): void {
@@ -1615,7 +1665,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       startColumnWidths,
       columnWidths: [...startColumnWidths],
       startHeight,
-      startTableWidth
+      startTableWidth,
+      moved: false
     };
 
     document.body.classList.add('table-resizing');
@@ -1626,6 +1677,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       moveEvent.preventDefault();
       if (!this.tableResizeState) return;
       const st = this.tableResizeState;
+      if (moveEvent.clientX !== st.startX || moveEvent.clientY !== st.startY) st.moved = true;
 
       if (st.type === 'col') {
         this.resizeTableColumn(st, moveEvent);
@@ -1647,7 +1699,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       }
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
-      if (finished && (finished.type === 'col' || finished.type === 'table')) {
+      if (!finished?.moved) return;
+      if (finished.type === 'col' || finished.type === 'table') {
         writeColgroupWidths(
           finished.table,
           finished.grid,
@@ -2377,7 +2430,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this._isInternalUpdate = false;
     this.saveToUndoStack();
     this.updateState();
-    this.updateFormattingState();
+    this.updateFormattingState(); // Aktualizuj też stan formatowania
     this._scheduleAnchorBadgeRefresh();
   }
 
@@ -2385,6 +2438,13 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const selection = window.getSelection();
 
     if (selection && this.isSelectionInEditor(selection)) {
+      if (
+        this._pendingInlineStyle &&
+        Date.now() >= this._pendingStyleHoldUntil &&
+        !this._caretMatchesPendingAnchor(selection)
+      ) {
+        this._clearPendingInlineStyle();
+      }
       this.saveSelection();
       this.updateFormattingState();
       this.selectionChange.emit(selection);
@@ -2404,6 +2464,14 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const footer = this.footerContentEl?.nativeElement;
     if (footer && footer.contains(selection.anchorNode)) return true;
     return false;
+  }
+
+  findEditorContentContaining(node: Node | null | undefined): HTMLElement | null {
+    if (!node) return null;
+    for (const ref of this.pageEditorRefs?.toArray() ?? []) {
+      if (ref.nativeElement.contains(node)) return ref.nativeElement;
+    }
+    return null;
   }
 
   private plainTextPasteUntil = 0;
@@ -2429,19 +2497,335 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
 
     if (html) {
-      this.insertHtml(this.sanitizeHtml(html));
-    } else {
-      this.insertText(normalizeWhitespace(plain));
+      const fragment = this.prepareClipboardFragment(html);
+      if (fragment) {
+        this.insertClipboardFragment(fragment);
+        return;
+      }
+    }
+    this.insertText(normalizeWhitespace(plain));
+  }
+
+
+  private handleCopyOrCut(e: ClipboardEvent, cut: boolean): void {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    if (!this.isSelectionInEditor(sel) || !e.clipboardData) return;
+
+    const range = sel.getRangeAt(0);
+    e.preventDefault();
+    e.clipboardData.setData('text/html', this.buildClipboardHtml(range));
+    e.clipboardData.setData('text/plain', sel.toString());
+
+    if (cut && !this.readOnly) {
+      range.deleteContents();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      this.savedSelection = range.cloneRange();
+      this.onContentChange();
     }
   }
 
-  private sanitizeHtml(html: string): string {
-    html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-    html = html.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
-    html = html.replace(/<!--[\s\S]*?-->/g, '');
-    html = html.replace(/\s*on\w+\s*=\s*["'][^"']*["']/gi, '');
-    
-    return html;
+  private buildClipboardHtml(range: Range): string {
+    const holder = document.createElement('div');
+    holder.appendChild(range.cloneContents());
+
+    this.rewrapClipboardOrphans(holder, range);
+    this.stripClipboardArtifacts(holder);
+
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('data-d2-clip', '1');
+    while (holder.firstChild) wrapper.appendChild(holder.firstChild);
+    return wrapper.outerHTML;
+  }
+
+  private rewrapClipboardOrphans(holder: HTMLElement, range: Range): void {
+    const anchorNode = range.commonAncestorContainer;
+    const anchor = anchorNode instanceof Element ? anchorNode : anchorNode.parentElement;
+
+    const groupConsecutive = (tagNames: Set<string>, makeShell: () => HTMLElement) => {
+      const kids = Array.from(holder.children);
+      let run: HTMLElement[] = [];
+      const flush = () => {
+        if (run.length === 0) return;
+        const shell = makeShell();
+        holder.insertBefore(shell, run[0]);
+        run.forEach(el => shell.appendChild(el));
+        run = [];
+      };
+      for (const kid of kids) {
+        if (tagNames.has(kid.tagName)) run.push(kid as HTMLElement);
+        else flush();
+      }
+      flush();
+    };
+
+    groupConsecutive(new Set(['TD', 'TH']), () => document.createElement('tr'));
+    groupConsecutive(new Set(['TR', 'TBODY', 'THEAD', 'TFOOT']), () => {
+      const table = anchor?.closest('table');
+      if (!table) return document.createElement('table');
+      const shell = table.cloneNode(false) as HTMLElement;
+      const colgroup = table.querySelector(':scope > colgroup');
+      if (colgroup) shell.appendChild(colgroup.cloneNode(true));
+      return shell;
+    });
+    groupConsecutive(new Set(['LI']), () => {
+      const list = anchor?.closest('ul,ol')
+        ?? this._closestList(range.startContainer)
+        ?? this._closestList(range.endContainer);
+      return list ? (list.cloneNode(false) as HTMLElement) : document.createElement('ul');
+    });
+  }
+
+  private _closestList(node: Node): HTMLElement | null {
+    const el = node instanceof Element ? node : node.parentElement;
+    return el?.closest('ul,ol') ?? null;
+  }
+
+  private stripClipboardArtifacts(root: ParentNode): void {
+    root.querySelectorAll('[data-split-table-id],[data-split-row-id],[data-split-cont]').forEach(el => {
+      el.removeAttribute('data-split-table-id');
+      el.removeAttribute('data-split-row-id');
+      el.removeAttribute('data-split-cont');
+    });
+    root.querySelectorAll('.docx-bookmark').forEach(el => el.remove());
+  }
+
+  private prepareClipboardFragment(html: string): DocumentFragment | null {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html; // template nie wykonuje skryptów ani nie ładuje zasobów
+
+    tpl.content.querySelectorAll('script,style,link,meta,title,iframe,object,embed,base,form,input,button,textarea,select')
+      .forEach(n => n.remove());
+
+    const internal = tpl.content.querySelector('[data-d2-clip]');
+    if (!internal) {
+      this.sanitizeExternalClipboardHtml(tpl.content);
+    }
+    this.stripClipboardArtifacts(tpl.content);
+
+    const source: ParentNode = internal ?? tpl.content;
+    const out = document.createDocumentFragment();
+    while (source.firstChild) out.appendChild(source.firstChild);
+    return out.childNodes.length > 0 ? out : null;
+  }
+
+  private sanitizeExternalClipboardHtml(root: DocumentFragment): void {
+    const ALLOWED_TAGS = new Set([
+      'P', 'DIV', 'SPAN', 'B', 'STRONG', 'I', 'EM', 'U', 'S', 'STRIKE', 'SUB', 'SUP', 'A',
+      'UL', 'OL', 'LI', 'TABLE', 'THEAD', 'TBODY', 'TFOOT', 'TR', 'TD', 'TH', 'COL', 'COLGROUP',
+      'BR', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'IMG', 'BLOCKQUOTE',
+    ]);
+    const KEEP_STYLES = new Set([
+      'font-weight', 'font-style', 'text-decoration', 'text-decoration-line', 'color',
+      'background-color', 'font-size', 'font-family', 'text-align', 'vertical-align',
+    ]);
+    const TABLE_TAGS = new Set(['TABLE', 'TD', 'TH', 'COL', 'COLGROUP', 'TR']);
+    const KEEP_TABLE_STYLES = new Set([
+      'width', 'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+      'border-collapse', 'padding',
+    ]);
+
+    for (const el of Array.from(root.querySelectorAll('*'))) {
+      if (!root.contains(el)) continue;
+
+      if (!ALLOWED_TAGS.has(el.tagName)) {
+        el.replaceWith(...Array.from(el.childNodes));
+        continue;
+      }
+
+      if (el.tagName === 'IMG') {
+        const src = el.getAttribute('src') ?? '';
+        if (!src.startsWith('data:image/')) { el.remove(); continue; }
+      }
+      if (el.tagName === 'A') {
+        const href = el.getAttribute('href') ?? '';
+        if (!/^(https?:|mailto:|#)/i.test(href)) el.removeAttribute('href');
+      }
+
+      const keepAttrs = new Set(['src', 'alt', 'href', 'colspan', 'rowspan', 'span']);
+      for (const attr of Array.from(el.attributes)) {
+        if (attr.name === 'style' || keepAttrs.has(attr.name)) continue;
+        el.removeAttribute(attr.name);
+      }
+
+      const style = el.getAttribute('style');
+      if (style) {
+        const kept: string[] = [];
+        for (const decl of style.split(';')) {
+          const idx = decl.indexOf(':');
+          if (idx < 0) continue;
+          const prop = decl.slice(0, idx).trim().toLowerCase();
+          const value = decl.slice(idx + 1).trim();
+          if (!value) continue;
+          if (KEEP_STYLES.has(prop) || (TABLE_TAGS.has(el.tagName) && KEEP_TABLE_STYLES.has(prop))) {
+            kept.push(`${prop}:${value}`);
+          }
+        }
+        if (kept.length > 0) el.setAttribute('style', kept.join(';') + ';');
+        else el.removeAttribute('style');
+      }
+    }
+
+    root.querySelectorAll('span').forEach(span => {
+      if (span.attributes.length === 0) span.replaceWith(...Array.from(span.childNodes));
+    });
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const value = node.nodeValue ?? '';
+      if (!value.includes('\u00A0')) continue;
+      const cleaned = value.replace(/(?<=\S)\u00A0|\u00A0(?=\S)/g, ' ');
+      if (cleaned !== value) node.nodeValue = cleaned;
+    }
+  }
+
+  private insertClipboardFragment(fragment: DocumentFragment): void {
+    const editor = this.getActiveEditor();
+    if (!editor) return;
+
+    let range: Range | null = null;
+    const live = window.getSelection();
+    if (live && live.rangeCount > 0 && this.isSelectionInEditor(live)) {
+      range = live.getRangeAt(0);
+    } else if (this.savedSelection && editor.contains(this.savedSelection.startContainer)) {
+      range = this.savedSelection.cloneRange();
+    }
+    if (!range) return;
+    range.deleteContents();
+
+    const BLOCK_TAGS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'TABLE', 'BLOCKQUOTE']);
+    const isBlock = (n: Node): n is HTMLElement =>
+      n.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.has((n as Element).tagName);
+    const nodes = Array.from(fragment.childNodes);
+
+    let last: Node | null = null;
+    if (!nodes.some(isBlock)) {
+      last = nodes[nodes.length - 1] ?? null;
+      range.insertNode(fragment);
+    } else {
+      last = this.insertBlockNodesAtCaret(range, nodes, isBlock, editor);
+    }
+
+    if (last) {
+      const caret = document.createRange();
+      caret.setStartAfter(last);
+      caret.collapse(true);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(caret);
+      this.savedSelection = caret.cloneRange();
+    }
+    this.onContentChange();
+  }
+
+  private insertBlockNodesAtCaret(
+    range: Range,
+    nodes: Node[],
+    isBlock: (n: Node) => boolean,
+    editor: HTMLElement,
+  ): Node | null {
+    const block = this._nearestBlockElement(range.startContainer, editor);
+    let last: Node | null = null;
+
+    if (block?.tagName === 'LI' && block.parentElement
+        && (block.parentElement.tagName === 'UL' || block.parentElement.tagName === 'OL')
+        && nodes.filter(isBlock).every(n => (n as Element).tagName === 'UL' || (n as Element).tagName === 'OL')) {
+      return this.mergeListNodesIntoHostList(range, nodes, block, isBlock);
+    }
+
+    const SPLITTABLE = new Set(['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE']);
+    if (!block || block === editor || !block.parentNode || !SPLITTABLE.has(block.tagName)) {
+      for (const n of nodes) {
+        range.insertNode(n);
+        range.setStartAfter(n);
+        range.collapse(true);
+        last = n;
+      }
+      return last;
+    }
+
+    const parent = block.parentNode;
+    const after = block.cloneNode(false) as HTMLElement;
+    const tail = document.createRange();
+    tail.setStart(range.startContainer, range.startOffset);
+    tail.setEnd(block, block.childNodes.length);
+    after.appendChild(tail.extractContents());
+    parent.insertBefore(after, block.nextSibling);
+
+    let leading = true;
+    let afterCursor: Node | null = after.firstChild;
+    for (const n of nodes) {
+      if (leading && !isBlock(n)) {
+        block.appendChild(n);
+        last = n;
+        continue;
+      }
+      leading = false;
+      if (isBlock(n)) {
+        parent.insertBefore(n, after);
+        last = n;
+      } else {
+        after.insertBefore(n, afterCursor);
+        last = n;
+      }
+    }
+
+    const isEmpty = (el: HTMLElement) => (el.textContent ?? '').length === 0 && el.children.length === 0;
+    if (isEmpty(after)) after.remove();
+    if (isEmpty(block)) block.remove();
+
+    return last;
+  }
+
+  private mergeListNodesIntoHostList(
+    range: Range,
+    nodes: Node[],
+    li: HTMLElement,
+    isBlock: (n: Node) => boolean,
+  ): Node | null {
+    const list = li.parentElement!;
+    const after = li.cloneNode(false) as HTMLElement;
+    const tail = document.createRange();
+    tail.setStart(range.startContainer, range.startOffset);
+    tail.setEnd(li, li.childNodes.length);
+    after.appendChild(tail.extractContents());
+    list.insertBefore(after, li.nextSibling);
+
+    let leading = true;
+    let last: Node | null = null;
+    const afterCursor: Node | null = after.firstChild;
+    for (const n of nodes) {
+      if (leading && !isBlock(n)) {
+        li.appendChild(n);
+        last = n;
+        continue;
+      }
+      leading = false;
+      if (isBlock(n)) {
+        for (const item of Array.from(n.childNodes)) {
+          if (!(item instanceof Element)) continue;
+          list.insertBefore(item, after);
+          last = item;
+        }
+      } else {
+        after.insertBefore(n, afterCursor);
+        last = n;
+      }
+    }
+
+    const isEmptyItem = (el: HTMLElement) => {
+      const nonMarkerKids = Array.from(el.children).filter(c => !c.classList.contains('list-marker'));
+      const text = Array.from(el.childNodes)
+        .filter(n => !(n instanceof Element && n.classList.contains('list-marker')))
+        .map(n => n.textContent ?? '')
+        .join('');
+      return text.length === 0 && nonMarkerKids.length === 0;
+    };
+    if (isEmptyItem(after)) after.remove();
+    if (isEmptyItem(li)) li.remove();
+
+    return last;
   }
 
   private handleKeyboard(e: KeyboardEvent): void {
@@ -2520,6 +2904,12 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       if (this._handleTableTab(e.shiftKey)) return;
       if (e.shiftKey) {
         this.executeCommand('outdent');
+        return;
+      }
+      const sel = window.getSelection();
+      const collapsed = !!sel && sel.rangeCount > 0 && sel.isCollapsed;
+      if (collapsed && !this._isCaretAtBlockStart()) {
+        this._insertTabAtCaret();
       } else {
         this.executeCommand('indent');
       }
@@ -2572,7 +2962,59 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const prevFragment = this._siblingTableFragment(table, -1);
     const lastRow = prevFragment?.rows[prevFragment.rows.length - 1];
     if (lastRow?.cells.length) { this._focusTableCell(lastRow.cells[lastRow.cells.length - 1]); return true; }
+    return true; // pierwsza komórka tabeli: jak Word — nic, ale bez outdentu
+  }
+
+  private _isCaretAtBlockStart(): boolean {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return false;
+    const range = sel.getRangeAt(0);
+    const isZeroWidthOnly = (text: string | null) =>
+      (text ?? '').replace(/[​‌‍﻿]/g, '') === '';
+    const editor = this.getActiveEditor();
+    const isBlock = (el: HTMLElement) =>
+      /^(P|H[1-6]|LI)$/.test(el.tagName) || el === editor || el.getAttribute('contenteditable') === 'true';
+
+    let node: Node = range.startContainer;
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (!isZeroWidthOnly((node.textContent ?? '').slice(0, range.startOffset))) return false;
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      const el = node as HTMLElement;
+      for (let i = 0; i < range.startOffset; i++) {
+        const child = el.childNodes[i];
+        if (child.nodeName === 'BR' || child.nodeName === 'IMG' || !isZeroWidthOnly(child.textContent)) return false;
+      }
+      if (isBlock(el)) return true;
+    }
+
+    while (node.parentNode) {
+      for (let sib = node.previousSibling; sib; sib = sib.previousSibling) {
+        if (sib.nodeName === 'BR' || sib.nodeName === 'IMG' || !isZeroWidthOnly(sib.textContent)) return false;
+      }
+      const parent = node.parentNode;
+      if (parent.nodeType === Node.ELEMENT_NODE && isBlock(parent as HTMLElement)) return true;
+      node = parent;
+    }
     return true;
+  }
+
+  private _insertTabAtCaret(): void {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.setAttribute('style', 'display:inline-block;min-width:2em');
+    span.textContent = '\t';
+    range.insertNode(span);
+
+    const caret = document.createRange();
+    caret.setStartAfter(span);
+    caret.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(caret);
+    this.savedSelection = caret.cloneRange();
+    this.onContentChange();
   }
 
   private _siblingTableFragment(table: HTMLTableElement, direction: 1 | -1): HTMLTableElement | null {
@@ -2782,14 +3224,17 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         document.execCommand('justifyFull', false);
         break;
       case 'indent':
-        document.execCommand('indent', false);
+        this._changeParagraphIndent(1);
         break;
       case 'outdent':
-        document.execCommand('outdent', false);
+        this._changeParagraphIndent(-1);
         break;
       case 'bulletList':
       case 'insertUnorderedList':
         document.execCommand('insertUnorderedList', false);
+        break;
+      case 'toggleCheckboxBullet':
+        this.toggleCheckboxBullet();
         break;
       case 'numberedList':
       case 'insertOrderedList':
@@ -2840,6 +3285,66 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this.updateFormattingState();
   }
 
+  private static readonly INDENT_STEP_PX = 48;
+
+  private _changeParagraphIndent(direction: 1 | -1): void {
+    const editor = this.getActiveEditor();
+    if (!editor) return;
+
+    const live = window.getSelection();
+    const range: Range | null = live && live.rangeCount > 0 && this.isSelectionInEditor(live)
+      ? live.getRangeAt(0)
+      : this.savedSelection;
+    if (!range) return;
+
+    const startEl = range.startContainer instanceof Element
+      ? range.startContainer
+      : range.startContainer.parentElement;
+    if (startEl?.closest('li')) {
+      document.execCommand(direction > 0 ? 'indent' : 'outdent', false);
+      return;
+    }
+
+    const step = WysiwygEditorComponent.INDENT_STEP_PX;
+    for (const block of this._indentableBlocksInRange(editor, range)) {
+      const inline = parseFloat(block.style.marginLeft);
+      const current = Number.isFinite(inline)
+        ? inline
+        : parseFloat(getComputedStyle(block).marginLeft) || 0;
+      const parent = block.parentElement;
+      let maxMargin = Number.POSITIVE_INFINITY;
+      if (parent && parent.clientWidth > 0) {
+        const cs = getComputedStyle(parent);
+        const columnWidth = parent.clientWidth
+          - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+        maxMargin = Math.max(0, columnWidth - step);
+      }
+      const next = direction > 0
+        ? Math.min(current + step, maxMargin)
+        : Math.max(current - step, 0);
+      if (next === current) continue;
+      if (next > 0) {
+        block.style.marginLeft = `${Math.round(next)}px`;
+      } else {
+        block.style.removeProperty('margin-left');
+      }
+    }
+  }
+
+  private _indentableBlocksInRange(editor: HTMLElement, range: Range): HTMLElement[] {
+    const SELECTOR = 'p, h1, h2, h3, h4, h5, h6, blockquote, pre';
+    if (range.collapsed) {
+      const el = range.startContainer instanceof Element
+        ? range.startContainer
+        : range.startContainer.parentElement;
+      const block = el?.closest<HTMLElement>(SELECTOR) ?? null;
+      return block && editor.contains(block) ? [block] : [];
+    }
+    const hits = Array.from(editor.querySelectorAll<HTMLElement>(SELECTOR))
+      .filter(b => range.intersectsNode(b));
+    return hits.filter(b => !hits.some(other => other !== b && b.contains(other)));
+  }
+
   setFontSize(size: number): void {
     const editor = this.getActiveEditor();
     if (!editor) return;
@@ -2863,15 +3368,12 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
 
     if (!selection || selection.rangeCount === 0) {
-      this.pendingFontSize = size;
       return;
     }
 
     const range = selection.getRangeAt(0);
 
     if (range.collapsed) {
-      this.pendingFontSize = size;
-
       const containerEl = range.startContainer.nodeType === Node.TEXT_NODE
         ? range.startContainer.parentElement
         : range.startContainer as HTMLElement;
@@ -2887,13 +3389,14 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         selection.removeAllRanges();
         selection.addRange(newRange);
         this.savedSelection = newRange.cloneRange();
+        this._setPendingInlineStyle({ fontSize: `${size}pt` }, newRange);
         this.updateFormattingState();
         return;
       }
 
       const span = document.createElement('span');
       span.style.fontSize = `${size}pt`;
-      span.innerHTML = '\u200B';
+      span.innerHTML = '\u200B'; // Zero-width space
 
       range.insertNode(span);
 
@@ -2906,6 +3409,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       selection.addRange(newRange);
 
       this.savedSelection = newRange.cloneRange();
+      this._setPendingInlineStyle({ fontSize: `${size}pt` }, newRange);
       this.updateFormattingState();
       return;
     }
@@ -2921,79 +3425,71 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private applyFontSizeToSelection(size: number, selection: Selection, range: Range): void {
-    const editor = this.getActiveEditor();
-    if (!editor) return;
-
-    const fragment = range.extractContents();
-
-    const processNode = (node: Node, insideStyledSpan = false): Node => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        if (insideStyledSpan) {
-          return node.cloneNode(true);
-        }
-        const span = document.createElement('span');
-        span.style.fontSize = `${size}pt`;
-        span.textContent = node.textContent;
-        return span;
-      }
-
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const element = node as HTMLElement;
-
-        if (element.tagName === 'SPAN' || element.tagName === 'FONT') {
-          const newSpan = document.createElement('span');
-
-          if (element.style.cssText) {
-            newSpan.style.cssText = element.style.cssText;
-          }
-          newSpan.style.fontSize = `${size}pt`;
-
-          if (element.tagName === 'FONT') {
-            const fontEl = element as HTMLFontElement;
-            if (fontEl.face) newSpan.style.fontFamily = fontEl.face;
-            if (fontEl.color) newSpan.style.color = fontEl.color;
-          }
-
-          Array.from(element.childNodes).forEach(child => {
-            newSpan.appendChild(processNode(child, true));
-          });
-
-          return newSpan;
-        }
-
-        const clone = element.cloneNode(false) as HTMLElement;
-        Array.from(element.childNodes).forEach(child => {
-          clone.appendChild(processNode(child, insideStyledSpan));
-        });
-        return clone;
-      }
-
-      return node.cloneNode(true);
-    };
-    
-    const newFragment = document.createDocumentFragment();
-    const insertedNodes: Node[] = [];
-    Array.from(fragment.childNodes).forEach(child => {
-      const processed = processNode(child);
-      insertedNodes.push(processed);
-      newFragment.appendChild(processed);
+    this._applyInlineStyleToRange(range, span => {
+      span.style.fontSize = `${size}pt`;
     });
-    
-    range.insertNode(newFragment);
-    
-    if (insertedNodes.length > 0) {
-      const newRange = document.createRange();
-      const firstNode = insertedNodes[0];
-      const lastNode = insertedNodes[insertedNodes.length - 1];
-      
-      newRange.setStartBefore(firstNode);
-      newRange.setEndAfter(lastNode);
-      
-      selection.removeAllRanges();
-      selection.addRange(newRange);
+  }
+
+  private _applyInlineStyleToRange(range: Range, apply: (span: HTMLElement) => void): void {
+    if (range.collapsed) return;
+
+    let startContainer: Node = range.startContainer;
+    let startOffset = range.startOffset;
+    let endContainer: Node = range.endContainer;
+    const endOffset = range.endOffset;
+
+    if (endContainer.nodeType === Node.TEXT_NODE && endOffset < (endContainer as Text).length) {
+      (endContainer as Text).splitText(endOffset);
     }
-    
-    editor.normalize();
+    if (startContainer.nodeType === Node.TEXT_NODE && startOffset > 0) {
+      const right = (startContainer as Text).splitText(startOffset);
+      if (endContainer === startContainer) endContainer = right;
+      startContainer = right;
+      startOffset = 0;
+    }
+
+    const norm = document.createRange();
+    if (startContainer.nodeType === Node.TEXT_NODE) norm.setStartBefore(startContainer);
+    else norm.setStart(startContainer, startOffset);
+    if (endContainer.nodeType === Node.TEXT_NODE) norm.setEndAfter(endContainer);
+    else norm.setEnd(endContainer, endOffset);
+
+    const root = norm.commonAncestorContainer;
+    const rootEl = root.nodeType === Node.ELEMENT_NODE ? root as Element : root.parentElement;
+    if (!rootEl) return;
+
+    const targets: Text[] = [];
+    const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!norm.intersectsNode(n)) continue;
+      if (!(n.textContent ?? '').length) continue;
+      const el = n.parentElement;
+      if (!el) continue;
+      if (el.closest('[contenteditable="false"]')) continue;
+      if (el.closest('.page-header, .page-footer, .footnotes-region, .endnotes-region')
+        && !el.closest('.header-editor-content, .footer-editor-content, .footnote-item-content')) continue;
+      targets.push(n as Text);
+    }
+
+    for (const n of targets) {
+      const parent = n.parentElement;
+      if (!parent) continue;
+      if (parent.tagName === 'SPAN' && parent.childNodes.length === 1) {
+        apply(parent);
+        continue;
+      }
+      const span = document.createElement('span');
+      apply(span);
+      parent.insertBefore(span, n);
+      span.appendChild(n);
+    }
+
+    rootEl.normalize();
+    const sel = window.getSelection();
+    if (sel) {
+      sel.removeAllRanges();
+      sel.addRange(norm);
+    }
   }
 
   setFontFamily(fontFamily: string): void {
@@ -3017,15 +3513,12 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
 
     if (!selection || selection.rangeCount === 0) {
-      this.pendingFontFamily = fontFamily;
       return;
     }
 
     const range = selection.getRangeAt(0);
-    
-    if (range.collapsed) {
-      this.pendingFontFamily = fontFamily;
 
+    if (range.collapsed) {
       const zwsChar = String.fromCharCode(0x200b);
       const zwsContainer = range.startContainer.nodeType === Node.TEXT_NODE
         ? range.startContainer.parentElement
@@ -3043,6 +3536,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         selection.removeAllRanges();
         selection.addRange(updRange);
         this.savedSelection = updRange.cloneRange();
+        this._setPendingInlineStyle({ fontFamily }, updRange);
         this.updateFormattingState();
         return;
       }
@@ -3059,6 +3553,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       selection.removeAllRanges();
       selection.addRange(newRange);
       this.savedSelection = newRange.cloneRange();
+      this._setPendingInlineStyle({ fontFamily }, newRange);
       this.updateFormattingState();
 
       return;
@@ -3092,79 +3587,9 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private applyFontFamilyToSelection(fontFamily: string, selection: Selection, range: Range): void {
-    const editor = this.getActiveEditor();
-    if (!editor) return;
-
-    const fragment = range.extractContents();
-    
-    const processNode = (node: Node): Node => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const span = document.createElement('span');
-        span.style.fontFamily = fontFamily;
-        span.textContent = node.textContent;
-        return span;
-      }
-      
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const element = node as HTMLElement;
-        
-        if (element.tagName === 'SPAN' || element.tagName === 'FONT') {
-          const newSpan = document.createElement('span');
-          
-          if (element.style.cssText) {
-            newSpan.style.cssText = element.style.cssText;
-          }
-          newSpan.style.fontFamily = fontFamily;
-          
-          if (element.tagName === 'FONT') {
-            const fontEl = element as HTMLFontElement;
-            if (fontEl.size) {
-              const sizeMap: Record<string, number> = {
-                '1': 8, '2': 10, '3': 12, '4': 14, '5': 18, '6': 24, '7': 36
-              };
-              newSpan.style.fontSize = `${sizeMap[fontEl.size] || 11}pt`;
-            }
-            if (fontEl.color) {
-              newSpan.style.color = fontEl.color;
-            }
-          }
-          
-          Array.from(element.childNodes).forEach(child => {
-            newSpan.appendChild(processNode(child));
-          });
-          
-          return newSpan;
-        }
-        
-        const clone = element.cloneNode(false) as HTMLElement;
-        Array.from(element.childNodes).forEach(child => {
-          clone.appendChild(processNode(child));
-        });
-        return clone;
-      }
-      
-      return node.cloneNode(true);
-    };
-    
-    const newFragment = document.createDocumentFragment();
-    const insertedNodes: Node[] = [];
-    Array.from(fragment.childNodes).forEach(child => {
-      const processed = processNode(child);
-      insertedNodes.push(processed);
-      newFragment.appendChild(processed);
+    this._applyInlineStyleToRange(range, span => {
+      span.style.fontFamily = fontFamily;
     });
-    
-    range.insertNode(newFragment);
-    
-    if (insertedNodes.length > 0) {
-      const newRange = document.createRange();
-      newRange.setStartBefore(insertedNodes[0]);
-      newRange.setEndAfter(insertedNodes[insertedNodes.length - 1]);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    }
-    
-    editor.normalize();
   }
 
   setTextColor(color: string): void {
@@ -3184,79 +3609,9 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private applyColorToSelection(color: string, selection: Selection, range: Range): void {
-    const editor = this.getActiveEditor();
-    if (!editor) return;
-
-    const fragment = range.extractContents();
-    
-    const processNode = (node: Node): Node => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const span = document.createElement('span');
-        span.style.color = color;
-        span.textContent = node.textContent;
-        return span;
-      }
-      
-      if (node.nodeType === Node.ELEMENT_NODE) {
-        const element = node as HTMLElement;
-        
-        if (element.tagName === 'SPAN' || element.tagName === 'FONT') {
-          const newSpan = document.createElement('span');
-          
-          if (element.style.cssText) {
-            newSpan.style.cssText = element.style.cssText;
-          }
-          newSpan.style.color = color;
-          
-          if (element.tagName === 'FONT') {
-            const fontEl = element as HTMLFontElement;
-            if (fontEl.size) {
-              const sizeMap: Record<string, number> = {
-                '1': 8, '2': 10, '3': 12, '4': 14, '5': 18, '6': 24, '7': 36
-              };
-              newSpan.style.fontSize = `${sizeMap[fontEl.size] || 11}pt`;
-            }
-            if (fontEl.face) {
-              newSpan.style.fontFamily = fontEl.face;
-            }
-          }
-          
-          Array.from(element.childNodes).forEach(child => {
-            newSpan.appendChild(processNode(child));
-          });
-          
-          return newSpan;
-        }
-        
-        const clone = element.cloneNode(false) as HTMLElement;
-        Array.from(element.childNodes).forEach(child => {
-          clone.appendChild(processNode(child));
-        });
-        return clone;
-      }
-      
-      return node.cloneNode(true);
-    };
-    
-    const newFragment = document.createDocumentFragment();
-    const insertedNodes: Node[] = [];
-    Array.from(fragment.childNodes).forEach(child => {
-      const processed = processNode(child);
-      insertedNodes.push(processed);
-      newFragment.appendChild(processed);
+    this._applyInlineStyleToRange(range, span => {
+      span.style.color = color;
     });
-    
-    range.insertNode(newFragment);
-    
-    if (insertedNodes.length > 0) {
-      const newRange = document.createRange();
-      newRange.setStartBefore(insertedNodes[0]);
-      newRange.setEndAfter(insertedNodes[insertedNodes.length - 1]);
-      selection.removeAllRanges();
-      selection.addRange(newRange);
-    }
-    
-    editor.normalize();
   }
 
   setBackgroundColor(color: string): void {
@@ -3478,11 +3833,17 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!editor || !bookmark || !editor.contains(bookmark.startContainer)) return;
 
     const range = bookmark.cloneRange();
-    range.deleteContents();
+    range.deleteContents(); // replace the target selection when it was non-empty
 
-    const fragment = this.buildPlainTextFragment(text);
-    const lastNode = fragment.lastChild;
-    this.insertFragmentOutsideInlineFormatting(range, fragment);
+    const lines = text.split('\n');
+    let lastNode: Node | null;
+    if (lines.length > 1) {
+      lastNode = this._pastePlainLinesAsParagraphs(range, lines);
+    } else {
+      const fragment = this.buildPlainTextFragment(text);
+      lastNode = fragment.lastChild;
+      this.insertFragmentOutsideInlineFormatting(range, fragment);
+    }
 
     const sel = window.getSelection();
     if (sel && lastNode) {
@@ -3511,6 +3872,14 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private insertFragmentOutsideInlineFormatting(range: Range, fragment: DocumentFragment): void {
+    const { container, offset } = this._liftRangeToBlockLevel(range);
+    const insertAt = document.createRange();
+    insertAt.setStart(container, Math.max(0, offset));
+    insertAt.collapse(true);
+    insertAt.insertNode(fragment);
+  }
+
+  private _liftRangeToBlockLevel(range: Range): { container: Node; offset: number } {
     const editor = this.getActiveEditor();
     const BLOCK_TAGS = ['P', 'DIV', 'LI', 'TD', 'TH', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE'];
     const isBlock = (node: Node | null): boolean =>
@@ -3544,10 +3913,68 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       offset = idx;
     }
 
-    const insertAt = document.createRange();
-    insertAt.setStart(container, Math.max(0, offset));
-    insertAt.collapse(true);
-    insertAt.insertNode(fragment);
+    return { container, offset };
+  }
+
+  private _pastePlainLinesAsParagraphs(range: Range, lines: string[]): Node | null {
+    const editor = this.getActiveEditor();
+    if (!editor) return null;
+    const { container, offset } = this._liftRangeToBlockLevel(range);
+
+    const PARA_TAGS = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE', 'PRE'];
+    const host = container !== editor && container.nodeType === Node.ELEMENT_NODE
+      && PARA_TAGS.includes((container as Element).tagName) ? container as Element : null;
+
+    const shell = (): Element => {
+      const el = host ? host.cloneNode(false) as Element : document.createElement('p');
+      el.removeAttribute('id');
+      for (const attr of Array.from(el.attributes)) {
+        if (attr.name.startsWith('data-split')) el.removeAttribute(attr.name);
+      }
+      el.classList.remove('fmt-trailing-br');
+      if (!el.getAttribute('class')) el.removeAttribute('class');
+      return el;
+    };
+    const fill = (el: Element, line: string) => {
+      el.appendChild(line ? document.createTextNode(line) : document.createElement('br'));
+    };
+
+    if (!host) {
+      const frag = document.createDocumentFragment();
+      let lastText: Node | null = null;
+      for (const line of lines) {
+        const p = shell();
+        fill(p, line);
+        lastText = p.lastChild;
+        frag.appendChild(p);
+      }
+      const at = document.createRange();
+      at.setStart(container, Math.max(0, offset));
+      at.collapse(true);
+      at.insertNode(frag);
+      return lastText;
+    }
+
+    const parent = host.parentNode!;
+    const tail = shell();
+    while (host.childNodes.length > offset) {
+      tail.appendChild(host.childNodes[offset]);
+    }
+    parent.insertBefore(tail, host.nextSibling);
+
+    if (lines[0]) host.appendChild(document.createTextNode(lines[0]));
+    if (!host.firstChild) host.appendChild(document.createElement('br'));
+
+    for (let i = 1; i < lines.length - 1; i++) {
+      const el = shell();
+      fill(el, lines[i]);
+      parent.insertBefore(el, tail);
+    }
+
+    const caretNode = document.createTextNode(lines[lines.length - 1]);
+    tail.insertBefore(caretNode, tail.firstChild);
+    if (!tail.textContent && !tail.querySelector('*')) tail.appendChild(document.createElement('br'));
+    return caretNode;
   }
 
   insertHtml(html: string): void {
@@ -3875,7 +4302,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!editor) return;
 
     const normalized = this.normalizeLinkUrl(url);
-    if (!normalized) return;
+    if (!normalized) return; // pusty/niepoprawny URL — nie rób nic
 
     const live = window.getSelection();
     const liveInEditor = !!live && live.rangeCount > 0 && this.isSelectionInEditor(live);
@@ -3934,6 +4361,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   undo(): void {
+    this._clearPendingInlineStyle();
     this._flushPendingPersist();
     if (this.undoStack.length > 1) {
       const caret = this._captureCaretForHistory();
@@ -3958,6 +4386,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   redo(): void {
+    this._clearPendingInlineStyle();
     this._flushPendingPersist();
     if (this.redoStack.length > 0) {
       const entry = this.redoStack.pop()!;
@@ -4049,7 +4478,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const computedStyle = window.getComputedStyle(element);
 
       const fontSizePx = parseFloat(computedStyle.fontSize);
-      fontSize = Math.round(fontSizePx * 0.75);
+      fontSize = Math.round(fontSizePx * 0.75); // px to pt (96dpi / 72pt)
 
       fontFamily = computedStyle.fontFamily.replace(/['"]/g, '').split(',')[0].trim();
 
@@ -4072,6 +4501,16 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const listTag = li?.parentElement?.tagName;
       bulletList = listTag === 'UL';
       numberedList = listTag === 'OL';
+    }
+
+    if (this._pendingInlineStyle && selection && this._caretMatchesPendingAnchor(selection)) {
+      if (this._pendingInlineStyle.fontFamily) {
+        fontFamily = this._pendingInlineStyle.fontFamily;
+      }
+      const pendingPt = parseFloat(this._pendingInlineStyle.fontSize ?? '');
+      if (Number.isFinite(pendingPt)) {
+        fontSize = Math.round(pendingPt);
+      }
     }
 
     const formatting: TextFormatting = {
@@ -4233,7 +4672,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         await navigator.clipboard.writeText(normalized);
         console.log('Skopiowano', normalized.length, 'znaków do schowka.');
       };
-    } catch {  }
+    } catch { /* ignore */ }
 
     this.editorState.update(state => ({
       ...state,
@@ -4257,6 +4696,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   onPageInput(index: number, _ev: Event): void {
     if (this._isRepaginating) return;
+    this._consumePendingDeleteCapture();
     this._isDirty = true;
     this._schedulePaginate('input');
     this._schedulePersist();
@@ -4265,9 +4705,16 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   onEditorBeforeInput(event: InputEvent): void {
+    if (event.inputType === 'deleteContentBackward' || event.inputType === 'deleteContentForward') {
+      this._captureStyleBeforeDelete();
+      return;
+    }
     if (event.inputType !== 'insertText' && event.inputType !== 'insertFromPaste') return;
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return;
+    if (event.inputType === 'insertText' && this._pendingInlineStyle && this._caretMatchesPendingAnchor(sel)) {
+      this._materializePendingStyleSpan(sel);
+    }
     const anchor = sel.anchorNode;
     if (!anchor) return;
     const el = anchor.nodeType === Node.ELEMENT_NODE ? (anchor as Element) : anchor.parentElement;
@@ -4283,6 +4730,214 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     range.selectNodeContents(nbspNode);
     sel.removeAllRanges();
     sel.addRange(range);
+  }
+
+
+  private _setPendingInlineStyle(
+    patch: { fontFamily?: string; fontSize?: string },
+    caret: Range,
+  ): void {
+    const sameAnchor =
+      this._pendingStyleAnchor?.node === caret.startContainer &&
+      this._pendingStyleAnchor?.offset === caret.startOffset;
+    this._pendingInlineStyle = { ...(sameAnchor ? this._pendingInlineStyle : null), ...patch };
+    this._pendingStyleAnchor = { node: caret.startContainer, offset: caret.startOffset };
+  }
+
+  private _clearPendingInlineStyle(): void {
+    this._pendingInlineStyle = null;
+    this._pendingStyleAnchor = null;
+    this._pendingDeleteCapture = null;
+  }
+
+  private _caretMatchesPendingAnchor(selection: Selection): boolean {
+    const anchor = this._pendingStyleAnchor;
+    if (!anchor || !anchor.node.isConnected) return false;
+    if (selection.rangeCount === 0 || !selection.isCollapsed) return false;
+    const range = selection.getRangeAt(0);
+    return range.startContainer === anchor.node && range.startOffset === anchor.offset;
+  }
+
+  private _captureStyleBeforeDelete(): void {
+    this._pendingDeleteCapture = null;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return;
+    if (!this.isSelectionInEditor(sel)) return;
+    const node = sel.anchorNode;
+    const el = node instanceof Element ? node : node?.parentElement;
+    const span = (el?.closest?.('span') as HTMLElement | null) ?? null;
+    if (!span || (span.style.fontFamily === '' && span.style.fontSize === '')) return;
+    const visible = (span.textContent ?? '').replace(/[\u200B\uFEFF]/g, '');
+    if (visible.length !== 1) return;
+    try {
+      const cs = window.getComputedStyle(span);
+      const fontFamily = cs.fontFamily.replace(/['"]/g, '').split(',')[0].trim();
+      const sizePx = parseFloat(cs.fontSize);
+      const capture: { fontFamily?: string; fontSize?: string } = {};
+      if (fontFamily) capture.fontFamily = fontFamily;
+      if (Number.isFinite(sizePx)) capture.fontSize = `${Math.round(sizePx * 0.75)}pt`;
+      if (capture.fontFamily || capture.fontSize) this._pendingDeleteCapture = capture;
+    } catch {
+    }
+  }
+
+  private _consumePendingDeleteCapture(): void {
+    const capture = this._pendingDeleteCapture;
+    if (!capture) return;
+    this._pendingDeleteCapture = null;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed || !sel.anchorNode) return;
+    if (!this.isSelectionInEditor(sel)) return;
+    this._pendingInlineStyle = capture;
+    this._pendingStyleAnchor = { node: sel.anchorNode, offset: sel.anchorOffset };
+    this._pendingStyleHoldUntil = Date.now() + 150;
+  }
+
+  private _materializePendingStyleSpan(sel: Selection): void {
+    const pending = this._pendingInlineStyle;
+    if (!pending) return;
+    const range = sel.getRangeAt(0);
+    const zws = '\u200B';
+    const containerEl = range.startContainer.nodeType === Node.TEXT_NODE
+      ? range.startContainer.parentElement
+      : range.startContainer as HTMLElement;
+    if (
+      containerEl instanceof HTMLSpanElement &&
+      containerEl.textContent === zws &&
+      (containerEl.style.fontFamily !== '' || containerEl.style.fontSize !== '')
+    ) {
+      if (pending.fontFamily) containerEl.style.fontFamily = pending.fontFamily;
+      if (pending.fontSize) containerEl.style.fontSize = pending.fontSize;
+      this._clearPendingInlineStyle();
+      return;
+    }
+    const span = document.createElement('span');
+    if (pending.fontFamily) span.style.fontFamily = pending.fontFamily;
+    if (pending.fontSize) span.style.fontSize = pending.fontSize;
+    span.textContent = zws;
+    range.insertNode(span);
+    const newRange = document.createRange();
+    newRange.setStart(span.firstChild!, 1);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    this.savedSelection = newRange.cloneRange();
+    this._clearPendingInlineStyle();
+  }
+
+
+  private static readonly UNCHECKED_BULLET_CODES = new Set([0x71, 0xa8, 0x6f, 0x72]);
+  private static readonly CHECKED_BULLET_CODES = new Set([0xfe, 0xfd, 0xfc]);
+  private static readonly UNCHECKED_BULLET_GLYPHS = new Set(['☐', '❑', '□', '❒', '◻']);
+  private static readonly CHECKED_BULLET_GLYPHS = new Set(['☑', '☒', '✔', '✓']);
+
+  private _checkboxListSeq = 0;
+
+  toggleCheckboxBullet(): void {
+    if (this.readOnly) return;
+    const editor = this.getActiveEditor();
+    if (!editor) return;
+
+    const sel = window.getSelection();
+    let node: Node | null = sel && sel.rangeCount > 0 && this.isSelectionInEditor(sel)
+      ? sel.getRangeAt(0).startContainer
+      : this.savedSelection?.startContainer ?? null;
+    const li = (node instanceof Element ? node : node?.parentElement)?.closest('li') ?? null;
+    const container = li?.parentElement instanceof HTMLElement ? li.parentElement : null;
+    if (!li || !container || !editor.contains(li)) return;
+    if (!/^(ul|ol)$/i.test(container.tagName) || !container.hasAttribute('data-num-id')) return;
+
+    const state = this._checkboxBulletState(container);
+    if (!state) return; // punktor tej listy nie jest checkboxem — nic nie rób
+
+    const solo = this._isolateListItem(container, li);
+    const targetLvlText = state.checked ? state.uncheckedLvlText : state.checkedLvlText;
+    solo.setAttribute('data-lvl-text', targetLvlText);
+    if (state.bulletFont) solo.setAttribute('data-bullet-font', state.bulletFont);
+    solo.setAttribute('data-lvl-override', '1');
+    solo.setAttribute('data-unchecked-lvl-text', state.uncheckedLvlText);
+
+    const glyph = bulletGlyphFromContract(targetLvlText, state.bulletFont);
+    const marker = li.querySelector<HTMLElement>(':scope > span.list-marker');
+    if (marker) {
+      marker.textContent = glyph;
+    } else {
+      const synthesized = synthesizeBulletMarker(solo);
+      if (synthesized) li.insertBefore(synthesized, li.firstChild);
+    }
+
+    const caret = document.createRange();
+    caret.selectNodeContents(li);
+    caret.collapse(false);
+    sel?.removeAllRanges();
+    sel?.addRange(caret);
+    this.savedSelection = caret.cloneRange();
+
+    this.onContentChange();
+  }
+
+  private _checkboxBulletState(container: HTMLElement): {
+    checked: boolean;
+    checkedLvlText: string;
+    uncheckedLvlText: string;
+    bulletFont: string | null;
+  } | null {
+    if ((container.getAttribute('data-num-fmt') ?? '') !== 'bullet') return null;
+    const lvlText = container.getAttribute('data-lvl-text') ?? '';
+    if (lvlText.length === 0) return null;
+    const code = lvlText.codePointAt(0) ?? 0;
+    const isPua = code >= 0xf000 && code <= 0xf0ff;
+    const low = isPua ? code & 0xff : code;
+    const font = container.getAttribute('data-bullet-font');
+    const storedUnchecked = container.getAttribute('data-unchecked-lvl-text');
+
+    const isUnchecked = isPua
+      ? WysiwygEditorComponent.UNCHECKED_BULLET_CODES.has(low)
+      : WysiwygEditorComponent.UNCHECKED_BULLET_GLYPHS.has(lvlText);
+    const isChecked = isPua
+      ? WysiwygEditorComponent.CHECKED_BULLET_CODES.has(low)
+      : WysiwygEditorComponent.CHECKED_BULLET_GLYPHS.has(lvlText);
+    if (!isUnchecked && !isChecked) return null;
+
+    return {
+      checked: isChecked,
+      checkedLvlText: isPua ? String.fromCharCode(0xf0fe) : String.fromCharCode(0x2611),
+      uncheckedLvlText: isUnchecked
+        ? lvlText
+        : storedUnchecked ?? (isPua ? String.fromCharCode(0xf0a8) : String.fromCharCode(0x2610)),
+      bulletFont: isPua ? (font ?? 'Wingdings') : font,
+    };
+  }
+
+  private _isolateListItem(container: HTMLElement, li: HTMLElement): HTMLElement {
+    const kids = Array.from(container.children);
+    const otherItems = kids.filter(k => k !== li && k.tagName === 'LI');
+    if (otherItems.length === 0) {
+      container.setAttribute('data-num-id', this._uniqueListInstanceId());
+      return container;
+    }
+
+    const parent = container.parentNode!;
+    const after = kids.slice(kids.indexOf(li) + 1);
+    if (after.length > 0) {
+      const tail = container.cloneNode(false) as HTMLElement;
+      after.forEach(k => tail.appendChild(k));
+      parent.insertBefore(tail, container.nextSibling);
+    }
+    const solo = container.cloneNode(false) as HTMLElement;
+    solo.setAttribute('data-num-id', this._uniqueListInstanceId());
+    solo.appendChild(li);
+    parent.insertBefore(solo, container.nextSibling);
+    if (!container.querySelector(':scope > li')) container.remove();
+    return solo;
+  }
+
+  private _uniqueListInstanceId(): string {
+    let id: string;
+    do {
+      id = `chk-${++this._checkboxListSeq}`;
+    } while (document.querySelector(`[data-num-id="${id}"]`));
+    return id;
   }
 
   refreshListLabels(): void {
@@ -4594,7 +5249,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           b.getAttribute('data-split-table-id') === prev.getAttribute('data-split-table-id')
         ) {
           const targetBody = prev.querySelector('tbody') ?? prev;
-          b.querySelectorAll('tr').forEach(tr => targetBody.appendChild(tr));
+          this._tableDirectRows(b as HTMLTableElement).forEach(tr => targetBody.appendChild(tr));
           continue;
         }
         premerged.push(b);
@@ -4832,11 +5487,14 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           continue;
         }
         if (block.tagName === 'TABLE') {
+          const tableMargins = this._measureTableVerticalMargins(
+            block as HTMLTableElement, measurer);
+          const freshColumnBudget = Math.max(80, columnHeight - tableMargins);
           const usedInColumn = columnHeight > 0 ? (currentHeight - columnBase) % columnHeight : 0;
-          const split = this._splitTableForPagination(
+          let split = this._splitTableForPagination(
             block as HTMLTableElement,
-            Math.max(80, columnHeight - usedInColumn),
-            columnHeight,
+            Math.max(80, columnHeight - usedInColumn - tableMargins),
+            freshColumnBudget,
             measurer,
             lineHeightPx
           );
@@ -4850,7 +5508,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
             }
           };
           for (let i = 0; i < split.length; i++) {
-            const h = measureBlock(split[i]);
+            let frag = split[i];
+            let h = measureBlock(frag);
             if (i > 0) {
               advanceColumnOrPage();
             } else {
@@ -4858,10 +5517,21 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
               const remaining = columnHeight - used;
               if (h > remaining + 0.5 && pages[pages.length - 1].length > 0) {
                 advanceColumnOrPage();
+                if (split.length > 1) {
+                  split = this._splitTableForPagination(
+                    block as HTMLTableElement,
+                    freshColumnBudget,
+                    freshColumnBudget,
+                    measurer,
+                    lineHeightPx
+                  );
+                  frag = split[0];
+                  h = measureBlock(frag);
+                }
               }
             }
-            pages[pages.length - 1].push(split[i]);
-            commitFootnotes(split[i]);
+            pages[pages.length - 1].push(frag);
+            commitFootnotes(frag);
             currentHeight += h;
           }
           bi++;
@@ -5041,10 +5711,11 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   private _renderFormattingMarksOverlay(): void {
     const host: HTMLElement = this._hostRef.nativeElement;
     host.querySelectorAll('.fmt-marks-layer').forEach((el: Element) => el.remove());
+    this._stripFmtTrailingBr(host);
     if (!this.showFormattingMarks()) return;
 
     const pages = Array.from(host.querySelectorAll<HTMLElement>('.page'));
-    let budget = 20000;
+    let budget = 20000; // twardy limit znaczników — patologiczne dokumenty nie zamrożą UI
 
     const CONTAINERS = '.editor-content, .page-overflow-content, .header-display, .footer-display,'
       + ' .header-editor-content, .footer-editor-content, .footnote-item-content';
@@ -5111,7 +5782,13 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
         container.querySelectorAll('br').forEach(br => {
           if (budget <= 0) return;
-          addMark(br.getBoundingClientRect(), '↵', 'fmt-br', br.parentElement);
+          const rect = br.getBoundingClientRect();
+          addMark(rect, '↵', 'fmt-br', br.parentElement);
+          const block = this._trailingBrBlock(br);
+          if (block) {
+            block.classList.add('fmt-trailing-br');
+            addMark(new DOMRect(rect.left + 9 * scale, rect.top, rect.width, rect.height), '¶', 'fmt-pilcrow', br.parentElement);
+          }
         });
 
         container.querySelectorAll<HTMLTableCellElement>('td, th').forEach(cell => {
@@ -5143,6 +5820,26 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
       page.appendChild(layer);
     }
+  }
+
+  private _trailingBrBlock(br: HTMLElement): HTMLElement | null {
+    const block = br.closest<HTMLElement>('p, h1, h2, h3, h4, h5, h6, li, blockquote, pre');
+    if (!block) return null;
+    const tail = document.createRange();
+    tail.selectNodeContents(block);
+    tail.setStartAfter(br);
+    if (tail.toString().replace(/[\s\u200B\uFEFF]/g, '').length > 0) return null;
+    const frag = tail.cloneContents();
+    return frag.querySelector(
+      'br, img, svg, table, sup, .docx-tab-seg, .docx-tab-leader, .docx-textbox, .docx-shape, .editor-image-wrapper',
+    ) ? null : block;
+  }
+
+  private _stripFmtTrailingBr(root: ParentNode): void {
+    root.querySelectorAll('.fmt-trailing-br').forEach(el => {
+      el.classList.remove('fmt-trailing-br');
+      if (!el.getAttribute('class')) el.removeAttribute('class');
+    });
   }
 
   private _createBlockMeasurer(cs: CSSStyleDeclaration, widthPx: number): HTMLElement {
@@ -5352,7 +6049,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       let nodeBottom = 0;
       const nodeRects = probe.getClientRects();
       for (let i = 0; i < nodeRects.length; i++) nodeBottom = Math.max(nodeBottom, nodeRects[i].bottom);
-      if (nodeRects.length === 0 || nodeBottom <= limitY + EPS) continue;
+      if (nodeRects.length === 0 || nodeBottom <= limitY + EPS) continue; // cały węzeł się mieści
 
       for (let i = 0; i < len; i++) {
         probe.setStart(text, i);
@@ -5366,12 +6063,21 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     return null;
   }
 
+  private _tableDirectRows(table: HTMLTableElement): HTMLTableRowElement[] {
+    return Array.from(table.rows);
+  }
+
   private _rowCanSplit(table: HTMLTableElement, row: HTMLTableRowElement): boolean {
     if (row.getAttribute('data-cant-split') === '1') return false;
     if (row.getAttribute('data-tbl-header') === '1') return false;
     if (row.getAttribute('data-row-hrule') === 'exact') return false;
-    for (const cell of Array.from(table.querySelectorAll('td, th'))) {
-      if ((cell as HTMLTableCellElement).rowSpan > 1) return false;
+    const rows = this._tableDirectRows(table);
+    const idx = rows.indexOf(row);
+    if (idx < 0) return true;
+    for (let r = 0; r < rows.length; r++) {
+      for (const cell of Array.from(rows[r].cells)) {
+        if (cell.rowSpan > 1 && idx >= r && idx <= r + cell.rowSpan - 1) return false;
+      }
     }
     return true;
   }
@@ -5382,7 +6088,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     measurer: HTMLElement
   ): { contentWidthPx: number; blockTops: number[]; blockBottoms: number[] }[] {
     const t = table.cloneNode(false) as HTMLTableElement;
-    const colgroup = table.querySelector('colgroup');
+    const colgroup = table.querySelector(':scope > colgroup');
     if (colgroup) t.appendChild(colgroup.cloneNode(true));
     const tbody = document.createElement('tbody');
     const rowClone = row.cloneNode(true) as HTMLTableRowElement;
@@ -5417,6 +6123,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     measurer: HTMLElement
   ): number {
     const t = table.cloneNode(false) as HTMLTableElement;
+    const colgroup = table.querySelector(':scope > colgroup');
+    if (colgroup) t.appendChild(colgroup.cloneNode(true));
     let key = measurer.style.cssText + '|' + t.outerHTML;
     for (const r of subset) key += r.outerHTML;
     const cached = this._tableMeasureCache.get(key);
@@ -5430,6 +6138,21 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (this._tableMeasureCache.size >= 2000) this._tableMeasureCache.clear();
     this._tableMeasureCache.set(key, h);
     return h;
+  }
+
+  private _measureTableVerticalMargins(table: HTMLTableElement, measurer: HTMLElement): number {
+    const shell = table.cloneNode(false) as HTMLTableElement;
+    const key = 'tblMargins|' + measurer.style.cssText + '|' + shell.outerHTML;
+    const cached = this._tableMeasureCache.get(key);
+    if (cached !== undefined) return cached;
+    measurer.innerHTML = '';
+    measurer.appendChild(shell);
+    const cs = getComputedStyle(shell);
+    const m = (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+    measurer.innerHTML = '';
+    if (this._tableMeasureCache.size >= 2000) this._tableMeasureCache.clear();
+    this._tableMeasureCache.set(key, m);
+    return m;
   }
 
   private _splitRowSeq = 0;
@@ -5527,7 +6250,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     measurer: HTMLElement,
     lineHeightPx = 16
   ): HTMLTableElement[] {
-    const rows = Array.from(table.querySelectorAll('tr')) as HTMLTableRowElement[];
+    const rows = this._tableDirectRows(table);
     if (rows.length === 0) return [table];
 
     const measureRows = (subset: HTMLTableRowElement[]): number =>
@@ -5570,7 +6293,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     const existingId = table.getAttribute('data-split-table-id');
     const splitId = chunks.length > 1 ? (existingId ?? `st-${++this._splitTableSeq}`) : existingId;
-    const colgroup = table.querySelector('colgroup');
+    const colgroup = table.querySelector(':scope > colgroup');
 
     return chunks.map(subset => {
       const t = table.cloneNode(false) as HTMLTableElement;
@@ -5617,7 +6340,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       let next = first.nextElementSibling;
       while (next && next.tagName === 'TABLE' && next.getAttribute('data-split-table-id') === id) {
         handled.add(next);
-        next.querySelectorAll('tr').forEach(tr => targetBody.appendChild(tr));
+        this._tableDirectRows(next as HTMLTableElement).forEach(tr => targetBody.appendChild(tr));
         const toRemove = next;
         next = next.nextElementSibling;
         toRemove.remove();
@@ -6023,6 +6746,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     stripListLabelAttributes(clone);
 
+    this._stripFmtTrailingBr(clone);
+
     this._unwrapImageWrappers(clone);
 
     return clone.innerHTML;
@@ -6389,12 +7114,14 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   private _cleanBandHtml(html: string): string {
     if (!html || (!html.includes('editor-image-wrapper') && !html.includes('data-band-orig-left')
-        && !html.includes('shape-resize-handle') && !html.includes('shape-selected'))) {
+        && !html.includes('shape-resize-handle') && !html.includes('shape-selected')
+        && !html.includes('fmt-trailing-br'))) {
       return html;
     }
     const tmp = document.createElement('div');
     tmp.innerHTML = html;
     this._unwrapImageWrappers(tmp);
+    this._stripFmtTrailingBr(tmp);
     tmp.querySelectorAll<HTMLElement>('[data-band-orig-left]').forEach(el => {
       el.style.left = el.getAttribute('data-band-orig-left') ?? el.style.left;
       el.style.top = el.getAttribute('data-band-orig-top') ?? el.style.top;

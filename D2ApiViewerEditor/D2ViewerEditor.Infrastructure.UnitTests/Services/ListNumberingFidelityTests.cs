@@ -183,7 +183,7 @@ public class ListNumberingFidelityTests
 
         var ol = ListOpenTags(html).First(t => t.StartsWith("<ol"));
         ol.Should().Contain("start=\"5\"");
-        ol.Should().Contain("data-start=\"5\"");
+        ol.Should().Contain("data-start=\"5\""); 
     }
 
     [Test]
@@ -797,13 +797,13 @@ public class ListNumberingFidelityTests
     {
         var cases = new (string lvlText, string? font, string expected)[]
         {
-            ("", "Wingdings", "❑"),
-            ("", "Wingdings", "☐"),
-            ("", "Wingdings", "☑"),
-            ("", "Wingdings", "☒"),
-            ("", null, "❑"),
+            ("", "Wingdings", "❑"),  
+            ("", "Wingdings", "☐"),  
+            ("", "Wingdings", "☑"),  
+            ("", "Wingdings", "☒"),  
+            ("", null, "❑"),         
             ("", null, "☐"),
-            ("", null, "•"),
+            ("", null, "•"),         
         };
         foreach (var (lvlText, font, expected) in cases)
         {
@@ -1097,5 +1097,88 @@ public class ListNumberingFidelityTests
         markColor.Should().NotBeNull("kolor znacznika z ¶-mark nie może ginąć przy zapisie");
         markColor!.Val!.Value.Should().Be("FF0000");
         AssertNoValidationErrors(regenerated);
+    }
+
+
+    [Test]
+    public void RoundTrip_ListItemParagraphStyle_SurvivesThroughDataStyleId()
+    {
+        using var docx = BuildDocx(
+            [Abstract(1, Lvl(0, NumberFormatValues.Decimal, "%1."))],
+            [Num(1, 1)],
+            [
+                new Paragraph(
+                    new ParagraphProperties(
+                        new ParagraphStyleId { Val = "Wyliczenie" },
+                        new NumberingProperties(
+                            new NumberingLevelReference { Val = 0 },
+                            new NumberingId { Val = 1 })),
+                    new Run(new Text("Jeden"))),
+            ]);
+
+        var html = _reader.Convert(docx).Html;
+        html.Should().Contain("data-style-id=\"Wyliczenie\"");
+
+        var regenerated = _writer.Convert(html);
+        using var doc = WordprocessingDocument.Open(new MemoryStream(regenerated), false);
+        var listPara = doc.MainDocumentPart!.Document.Body!
+            .Descendants<Paragraph>()
+            .First(p => p.ParagraphProperties?.NumberingProperties != null);
+        listPara.ParagraphProperties!.ParagraphStyleId!.Val!.Value.Should().Be("Wyliczenie");
+    }
+
+    [Test]
+    public void RoundTrip_ListItemTabStops_SurviveThroughDataTabStops()
+    {
+        using var docx = BuildDocx(
+            [Abstract(1, Lvl(0, NumberFormatValues.Decimal, "%1."))],
+            [Num(1, 1)],
+            [
+                new Paragraph(
+                    new ParagraphProperties(
+                        new NumberingProperties(
+                            new NumberingLevelReference { Val = 0 },
+                            new NumberingId { Val = 1 }),
+                        new Tabs(new TabStop { Val = TabStopValues.Center, Position = 4536 })),
+                    new Run(new Text("Jeden"), new TabChar(), new Text("Dwa"))),
+            ]);
+
+        var html = _reader.Convert(docx).Html;
+        html.Should().Contain("data-tab-stops=\"4536:center\"");
+
+        var regenerated = _writer.Convert(html);
+        using var doc = WordprocessingDocument.Open(new MemoryStream(regenerated), false);
+        var listPara = doc.MainDocumentPart!.Document.Body!
+            .Descendants<Paragraph>()
+            .First(p => p.ParagraphProperties?.NumberingProperties != null);
+        var stop = listPara.ParagraphProperties!.GetFirstChild<Tabs>()!.Elements<TabStop>().Single();
+        stop.Position!.Value.Should().Be(4536);
+        stop.Val!.Value.Should().Be(TabStopValues.Center);
+        AssertNoValidationErrors(regenerated);
+    }
+
+    [Test]
+    public void Reader_ListItemAutoLineHeight_CalibratedWithParagraphRunFont()
+    {
+        using var docx = BuildDocx(
+            [Abstract(1, Lvl(0, NumberFormatValues.Decimal, "%1."))],
+            [Num(1, 1)],
+            [
+                new Paragraph(
+                    new ParagraphProperties(
+                        new NumberingProperties(
+                            new NumberingLevelReference { Val = 0 },
+                            new NumberingId { Val = 1 }),
+                        new SpacingBetweenLines { Line = "240", LineRule = LineSpacingRuleValues.Auto }),
+                    new Run(new RunProperties(new RunFonts { Ascii = "Calibri" }), new Text("Jeden"))),
+            ]);
+
+        var html = _reader.Convert(docx).Html;
+
+        var li = Regex.Match(html, "<li[^>]*style=\"([^\"]*)\"");
+        li.Success.Should().BeTrue();
+        li.Groups[1].Value.Should().Contain("line-height:1.221;",
+            "kalibracja fontem AKAPITU (Calibri, jak ścieżka <p>), nie domyślnym dokumentu");
+        li.Groups[1].Value.Should().Contain("--w-line-tw:240;");
     }
 }

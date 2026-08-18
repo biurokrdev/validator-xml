@@ -1,0 +1,211 @@
+﻿<div class="wysiwyg-editor-wrapper" [class.read-only]="readOnly" [class.band-editing]="editingSection() !== 'body'">
+  <div class="pages-container">
+    
+    @for (page of pageContents(); track $index) {
+      <div class="page-wrapper">
+        <div class="page"
+             [class.landscape]="isLandscapePage($index)"
+             [style.width.px]="pageWidthPx($index)"
+             [style.height.px]="pageHeightPx($index)"
+             [style.--w-line-single]="documentDefaultLineSingle()"
+             [attr.data-page-number]="$index + 1">
+
+          
+          <div class="page-header"
+               [class.editing]="editingSection() === 'header'"
+               [style.margin-top.px]="headerOffsetPx($index)"
+               [style.min-height.px]="headerBandPx($index)"
+               [style.padding-left.px]="pageMarginPx($index, 'left')"
+               [style.padding-right.px]="pageMarginPx($index, 'right')"
+               (click)="startEditingHeader($event)"
+               (dblclick)="startEditingHeader($event)">
+            @if (editingSection() === 'header' && $index === editingHfPageIndex()) {
+              <div
+                #headerContent
+                class="header-editor-content"
+                [class.show-formatting-marks]="showFormattingMarks()"
+                [attr.contenteditable]="readOnly ? 'false' : 'true'"
+                spellcheck="false"
+                [attr.placeholder]="''"
+                (beforeinput)="onEditorBeforeInput($event)"
+                (input)="onHeaderInput($event)"
+              ></div>
+              
+            } @else {
+              <div class="header-display" [class.show-formatting-marks]="showFormattingMarks()" [innerHTML]="getHeaderContentSafe($index)"></div>
+            }
+          </div>
+
+          @if ($index === 0) {
+            <div
+              #pageEditor
+              class="editor-content"
+              [class.show-formatting-marks]="showFormattingMarks()"
+              [attr.contenteditable]="readOnly ? 'false' : 'true'"
+              spellcheck="false"
+              [attr.data-page-index]="$index"
+              [attr.placeholder]="'Zacznij pisaÄ‡...'"
+              [style.padding-left.px]="pageMarginPx($index, 'left')"
+              [style.padding-right.px]="pageMarginPx($index, 'right')"
+              [style.font-size]="documentDefaultFontSize()"
+              [style.font-family]="documentDefaultFontFamily()"
+              [style.line-height]="documentDefaultLineHeight()"
+              [style.--doc-par-margin]="documentDefaultParagraphSpacing()"
+              [style.--doc-par-margin-top]="documentDefaultParagraphSpacingBefore()"
+              [style.--w-line-tw]="documentDefaultLineTw()"
+              [style.column-count]="pageColumnCount($index)"
+              [style.column-gap.px]="pageColumnGapPx($index)"
+              [style.column-rule]="pageColumnRule($index)"
+              [style.height.px]="pageBodyHeightPx($index)"
+              [style.flex]="pageBodyFlex($index)"
+              [innerHTML]="getPageContentSafe($index)"
+              (focusin)="setActivePage($index, $event)"
+              (beforeinput)="onEditorBeforeInput($event)"
+              (input)="onPageInput($index, $event)"
+              (mouseup)="saveSelection()"
+              (keyup)="saveSelection()"
+              (click)="onEditorClick($event)"
+            ></div>
+          } @else {
+            <div
+              #pageEditor
+              class="editor-content"
+              [class.show-formatting-marks]="showFormattingMarks()"
+              [attr.contenteditable]="readOnly ? 'false' : 'true'"
+              spellcheck="false"
+              [attr.data-page-index]="$index"
+              [style.padding-left.px]="pageMarginPx($index, 'left')"
+              [style.padding-right.px]="pageMarginPx($index, 'right')"
+              [style.font-size]="documentDefaultFontSize()"
+              [style.font-family]="documentDefaultFontFamily()"
+              [style.line-height]="documentDefaultLineHeight()"
+              [style.--doc-par-margin]="documentDefaultParagraphSpacing()"
+              [style.--doc-par-margin-top]="documentDefaultParagraphSpacingBefore()"
+              [style.--w-line-tw]="documentDefaultLineTw()"
+              [style.column-count]="pageColumnCount($index)"
+              [style.column-gap.px]="pageColumnGapPx($index)"
+              [style.column-rule]="pageColumnRule($index)"
+              [style.height.px]="pageBodyHeightPx($index)"
+              [style.flex]="pageBodyFlex($index)"
+              [innerHTML]="getPageContentSafe($index)"
+              (focusin)="setActivePage($index, $event)"
+              (beforeinput)="onEditorBeforeInput($event)"
+              (input)="onPageInput($index, $event)"
+              (mouseup)="saveSelection()"
+              (keyup)="saveSelection()"
+              (click)="onEditorClick($event)"
+            ></div>
+          }
+
+          
+          <div class="page-footer"
+               [class.editing]="editingSection() === 'footer'"
+               [style.margin-bottom.px]="footerOffsetPx($index)"
+               [style.min-height.px]="footerBandPx($index)"
+               [style.padding-left.px]="pageMarginPx($index, 'left')"
+               [style.padding-right.px]="pageMarginPx($index, 'right')"
+               (click)="startEditingFooter($event)"
+               (dblclick)="startEditingFooter($event)">
+            @if (editingSection() === 'footer' && $index === editingHfPageIndex()) {
+              
+              <div
+                #footerContent
+                class="footer-editor-content"
+                [class.show-formatting-marks]="showFormattingMarks()"
+                [attr.contenteditable]="readOnly ? 'false' : 'true'"
+                spellcheck="false"
+                [attr.placeholder]="''"
+                (beforeinput)="onEditorBeforeInput($event)"
+                (input)="onFooterInput($event)"
+              ></div>
+            } @else {
+              <div class="footer-display" [class.show-formatting-marks]="showFormattingMarks()" [innerHTML]="getFooterContentSafe($index)"></div>
+            }
+          </div>
+
+          
+          @if (endnoteRegionFor($index); as enRegion) {
+            <div class="endnotes-region"
+                 role="region"
+                 aria-label="Przypisy koĹ„cowe"
+                 data-testid="endnotes-region"
+                 [style.top.px]="enRegion.topPx"
+                 [style.left.px]="pageMarginPx($index, 'left')"
+                 [style.right.px]="pageMarginPx($index, 'right')">
+              <div class="endnotes-separator"
+                   [class.endnotes-separator-continuation]="enRegion.continuation"></div>
+              @for (entry of endnoteEntriesFor(enRegion); track entry.en.id) {
+                <div class="footnote-item endnote-entry"
+                     [attr.data-endnote-id]="entry.en.id"
+                     [attr.data-testid]="'endnote-item-' + entry.en.id">
+                  <span class="footnote-item-number"
+                        aria-hidden="true"
+                        title="PrzejdĹş do odwoĹ‚ania w treĹ›ci"
+                        (click)="scrollToNoteReference('endnote', entry.en.id)">{{ entry.label }}</span>
+                  <div class="footnote-item-content"
+                       [class.show-formatting-marks]="showFormattingMarks()"
+                       [attr.contenteditable]="readOnly ? 'false' : 'true'"
+                       spellcheck="false"
+                       [attr.aria-label]="'TreĹ›Ä‡ przypisu koĹ„cowego ' + entry.label"
+                       [attr.data-testid]="'endnote-content-' + entry.en.id"
+                       [innerHTML]="endnoteSafeHtml(entry.en)"
+                       (blur)="commitEndnoteContent(entry.en.id, $event)"></div>
+                  
+                </div>
+              }
+            </div>
+          }
+
+          
+          @if (footnoteRegionFor($index); as fnRegion) {
+            <div class="footnotes-region"
+                 role="region"
+                 aria-label="Przypisy dolne"
+                 data-testid="footnotes-region"
+                 [style.bottom.px]="fnRegion.bottomPx"
+                 [style.left.px]="pageMarginPx($index, 'left')"
+                 [style.right.px]="pageMarginPx($index, 'right')">
+              <div class="footnotes-separator"
+                   [class.footnotes-separator-continuation]="fnRegion.continuation"></div>
+              @for (entry of footnoteEntriesFor(fnRegion); track entry.fn.id) {
+                <div class="footnote-item footnote-entry"
+                     [attr.data-footnote-id]="entry.fn.id"
+                     [attr.data-testid]="'footnote-item-' + entry.fn.id">
+                  <span class="footnote-item-number"
+                        aria-hidden="true"
+                        title="PrzejdĹş do odwoĹ‚ania w treĹ›ci"
+                        (click)="scrollToNoteReference('footnote', entry.fn.id)">{{ entry.label }}</span>
+                  <div class="footnote-item-content"
+                       [class.show-formatting-marks]="showFormattingMarks()"
+                       [attr.contenteditable]="readOnly ? 'false' : 'true'"
+                       spellcheck="false"
+                       [attr.aria-label]="'TreĹ›Ä‡ przypisu ' + entry.label"
+                       [attr.data-testid]="'footnote-content-' + entry.fn.id"
+                       [innerHTML]="footnoteSafeHtml(entry.fn)"
+                       (blur)="commitFootnoteContent(entry.fn.id, $event)"></div>
+                  
+                </div>
+              }
+            </div>
+          }
+
+          
+          @if (showMarginGuides) {
+            <div class="margin-guides">
+              <div class="margin-guide margin-guide-top" [style.top.px]="pageMarginPx($index, 'top')"></div>
+              <div class="margin-guide margin-guide-bottom" [style.bottom.px]="pageMarginPx($index, 'bottom')"></div>
+              <div class="margin-guide margin-guide-left" [style.left.px]="pageMarginPx($index, 'left')"></div>
+              <div class="margin-guide margin-guide-right" [style.right.px]="pageMarginPx($index, 'right')"></div>
+            </div>
+          }
+        </div>
+
+        
+        @if ($index < pageContents().length - 1) {
+          <div class="page-separator"></div>
+        }
+      </div>
+    }
+  </div>
+
+</div>

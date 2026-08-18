@@ -98,3 +98,86 @@ describe('WysiwygEditorComponent — resize tabeli vs zaznaczanie tekstu', () =>
     expect((component as any).detectTableResizeHit(eventLike)).toBeNull();
   });
 });
+
+describe('WysiwygEditorComponent — strefa resize vs PUSTE komórki (Problem 11 RC-A)', () => {
+  let fixture: ComponentFixture<WysiwygEditorComponent>;
+  let component: WysiwygEditorComponent;
+  let editor: HTMLDivElement;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({ imports: [WysiwygEditorComponent] }).compileComponents();
+    fixture = TestBed.createComponent(WysiwygEditorComponent);
+    component = fixture.componentInstance;
+
+    editor = document.createElement('div');
+    editor.className = 'editor-content';
+    editor.innerHTML =
+      '<table><tbody><tr><td id="empty"><br></td><td id="full">tekst</td></tr></tbody></table>';
+    document.body.appendChild(editor);
+    (component as any).getActiveEditor = () => editor;
+  });
+
+  afterEach(() => editor.remove());
+
+  function mouseDown(cellId: string): { event: MouseEvent; prevented: () => boolean } {
+    let prevented = false;
+    const event = {
+      target: editor.querySelector('#' + cellId),
+      detail: 1,
+      clientX: 100,
+      clientY: 50,
+      preventDefault: () => { prevented = true; },
+      stopPropagation: () => {},
+    } as unknown as MouseEvent;
+    return { event, prevented: () => prevented };
+  }
+
+  function stubHit(hitAtThreshold: (threshold: number | undefined) => boolean): {
+    thresholds: (number | undefined)[];
+    resizeStarted: () => boolean;
+  } {
+    const thresholds: (number | undefined)[] = [];
+    const hit = { type: 'row', table: editor.querySelector('table'), colIndex: 0, rowIndex: 0 };
+    let started = false;
+    (component as any).detectTableResizeHit = (_e: MouseEvent, threshold?: number) => {
+      thresholds.push(threshold);
+      return hitAtThreshold(threshold) ? hit : null;
+    };
+    (component as any).startTableResize = () => { started = true; };
+    return { thresholds, resizeStarted: () => started };
+  }
+
+  it('pusta komórka: hit tylko w szerokim pasie (6px) → fall-through do stawiania karetki', () => {
+    const probe = stubHit(threshold => threshold === undefined);
+    const { event, prevented } = mouseDown('empty');
+
+    (component as any).handleEditorMouseDown(event);
+
+    expect(probe.resizeStarted()).toBe(false);
+    expect(prevented()).toBe(false);
+    expect(probe.thresholds.length).toBe(2);
+    expect(probe.thresholds[0]).toBeUndefined();
+    expect(probe.thresholds[1]).toBeLessThan(6);
+  });
+
+  it('pusta komórka przy samej krawędzi: hit także w ciasnym pasie → resize startuje', () => {
+    const probe = stubHit(() => true);
+    const { event, prevented } = mouseDown('empty');
+
+    (component as any).handleEditorMouseDown(event);
+
+    expect(probe.resizeStarted()).toBe(true);
+    expect(prevented()).toBe(true);
+  });
+
+  it('niepusta komórka: bez ponownego testu z ciasnym progiem — zachowanie bez zmian', () => {
+    const probe = stubHit(() => true);
+    const { event, prevented } = mouseDown('full');
+
+    (component as any).handleEditorMouseDown(event);
+
+    expect(probe.resizeStarted()).toBe(true);
+    expect(prevented()).toBe(true);
+    expect(probe.thresholds).toEqual([undefined]);
+  });
+});

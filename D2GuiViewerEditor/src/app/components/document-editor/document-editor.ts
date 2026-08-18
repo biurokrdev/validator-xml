@@ -71,8 +71,10 @@ import {
   readWordLineMultiple,
 } from '../../core/utils/word-line-spacing.util';
 
+
 const READ_ONLY_PROTECTED_MESSAGE =
   'Ten dokument jest oznaczony jako tylko do odczytu i nie może być edytowany w DOC2 Editor.';
+
 
 @Component({
   selector: 'd2-document-editor',
@@ -111,53 +113,83 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   private readonly msal = inject(MsalService);
   private readonly fontProvider = inject(FontProviderService);
 
+  
   readonly currentUserName = signal<string>('');
+  
   readonly firstName = signal<string>('');
+  
   readonly initials = signal<string>('');
+  
   readonly avatarUrl = signal<string | null>(null);
+  
   private avatarObjectUrl: string | null = null;
 
+  
   documentContent = signal<string>('<p></p>');
   documentMasterId = signal<string | null>(null);
+  
   documentVersionId = signal<string | null>(null);
+  
   readOnly = signal<boolean>(false);
 
+  
   lockedByOther = signal<boolean>(false);
 
+  
   documentEditProtected = signal<boolean>(false);
 
+  
   editingDisabled = computed(() => this.readOnly() || this.lockedByOther() || this.documentEditProtected());
 
+  
   autoSaveEnabled = signal<boolean>(environment.autoSave?.enabled ?? true);
+  
   autoSaveStatus = signal<'idle' | 'saving' | 'saved' | 'error'>('idle');
   lastAutoSaveAt = signal<Date | null>(null);
   private autoSaveSub?: Subscription;
   private isAutoSaving = false;
 
+  
   documentClassification = signal<string | null>(null);
 
+  
+  
   isFinishing = signal<boolean>(false);
   deliveryStatus = signal<DeliveryStatus | null>(null);
   deliveryId = signal<string | null>(null);
+  
   showSendingModal = signal<boolean>(false);
+  
   showSendErrorModal = signal<boolean>(false);
+  
   private sendCancelled = signal<boolean>(false);
+  
   private sendDetachedFromUi = signal<boolean>(false);
+  
   workFinished = signal<boolean>(false);
+  
   tabCloseBlocked = signal<boolean>(false);
   private tabCloseHintTimer?: ReturnType<typeof setTimeout>;
+  
   returnUrl = signal<string | null>(null);
+  
   readonly canFinish = computed(() => isValidReturnUrl(this.returnUrl()));
 
+  
   userDownload = signal<boolean>(false);
   readonly canUserDownload = computed(() => this.userDownload());
 
+  
   loadedFromDisk = signal<boolean>(false);
+  
   private diskOriginalFile: File | null = null;
 
+  
   readonly canDownloadOriginal = computed(() => this.loadedFromDisk() || this.userDownload());
 
+  
   showSaveState = signal<boolean>(true);
+  
   private finishSendSub?: Subscription;
   documentMetadata = signal<DocumentMetadata>({
     title: 'Nowy dokument',
@@ -167,10 +199,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   documentStyles = signal<DocumentStyle[]>([]);
   originalFileName = signal<string>('');
   
+  
   headerContent = signal<HeaderFooterContent>({ html: '', height: 1.25 });
   footerContent = signal<HeaderFooterContent>({ html: '', height: 1.25 });
   
+  
   editorState = signal<EditorState | null>(null);
+  
   
   isLoading = signal(false);
   showMenu = signal(false);
@@ -183,27 +218,34 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   showBarcodeDialog = signal(false);
   errorMessage = signal<string | null>(null);
   successMessage = signal<string | null>(null);
+  
   infoMessage = signal<string | null>(null);
   documentNotFound = signal(false);
 
+  
   showContextMenu = signal(false);
   contextMenuX = signal(0);
   contextMenuY = signal(0);
   contextSubmenu = signal<string | null>(null);
   contextMenuTargetCell = signal<HTMLElement | null>(null);
   contextMenuTargetImage = signal<HTMLImageElement | null>(null);
+  
   contextMenuExtrasVisible = signal(false);
 
+  
   showMiniToolbar = signal(false);
   miniToolbarX = signal(0);
   miniToolbarY = signal(0);
 
+  
   readonly commonFonts = this.fontProvider.displayNames;
 
+  
   readonly miniToolbarFontFamily = computed(() =>
     this.fontProvider.normalize(this.editorState()?.currentStyle?.fontFamily),
   );
 
+  
   readonly miniToolbarFontOptions = computed<readonly string[]>(() => {
     const current = this.miniToolbarFontFamily();
     const fonts = this.commonFonts();
@@ -213,8 +255,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return fonts;
   });
 
+  
   showToolsMenu = signal(false);
 
+  
   showParagraphDialog = signal(false);
   paragraphDialogTab = signal<'indents' | 'breaks'>('indents');
   paragraphData = {
@@ -236,6 +280,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     pageBreakBefore: false
   };
 
+  
   private _paragraphDefaults: typeof DocumentEditorComponent.prototype.paragraphData = {
     alignment: 'left',
     outlineLevel: 'body',
@@ -255,67 +300,86 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     pageBreakBefore: false
   };
 
+  
   showInsertTableDialog = signal(false);
   tableDialogData = {
     columns: 5,
     rows: 2,
     autoFitBehavior: 'fixed' as string,
-    fixedWidth: 0,
+    fixedWidth: 0, // 0 = Auto
     rememberDimensions: false
   };
   private savedTableDimensions: { columns: number; rows: number } | null = null;
   
+  
   templates = signal<DocumentTemplate[]>([]);
 
+  
   zoomLevel = signal(100);
   zoomLevels = [50, 75, 100, 125, 150, 200];
 
+  
   isInTable = signal(false);
   activeTableCell = signal<HTMLTableCellElement | null>(null);
   activeTable = signal<HTMLTableElement | null>(null);
 
+  
   showTablePanel = signal(false);
   private tablePanelManuallyClosed = false;
 
+  
+  
   tableBorderColor = signal(DEFAULT_TABLE_BORDER.color);
   tableBorderWidth = signal(DEFAULT_TABLE_BORDER.width);
   tableBorderStyle = signal<TableBorderLineStyle>(DEFAULT_TABLE_BORDER.style);
   lastBorderScope = signal<TableBorderScope | null>(null);
 
+  
   borderTargetInfo = computed(() => {
     const table = this.activeTable();
     if (!table) return null;
     return classifyBorderTarget(table, this.resolveAutoTargetCells(table));
   });
 
+  
   selectedCells = signal<Set<HTMLTableCellElement>>(new Set());
   private cellSelectionStartCell: HTMLTableCellElement | null = null;
   private isCellSelecting = false;
 
+  
   showShadingDropdown = signal(false);
 
+  
   currentPage = signal(1);
   totalPages = signal(1);
+  
   
   showPageIndicator = signal(false);
   private pageIndicatorTimeout?: ReturnType<typeof setTimeout>;
 
+  
   showPageSetup = signal(false);
+  
   showMarginGuides = signal(false);
   showRuler = signal(true);
 
+  
   currentBlockIndent = signal<{ start: number; end: number }>({ start: 0, end: 0 });
 
+  
   currentColumnRuler = signal<{ segments: RulerColumnSegment[]; activeIndex: number } | null>(null);
 
+  
   rulerGuide = signal<{ active: boolean; axis: 'horizontal' | 'vertical'; offsetPx: number }>({
     active: false,
     axis: 'horizontal',
     offsetPx: 0
   });
 
+  
   editingSection = signal<'header' | 'footer' | 'body'>('body');
 
+  
   showHeaderFooterPanel = computed(() =>
     this.editingSection() !== 'body'
     && !this.showFindReplace()
@@ -323,9 +387,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     && !this.showImagePanel()
   );
 
+  
   selectedImage = signal<ImageSelectionState | null>(null);
   imageLockAspect = signal<boolean>(true);
 
+  
   showImagePanel = computed(() =>
     this.selectedImage() !== null
     && !this.showFindReplace()
@@ -336,29 +402,37 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.selectedImage.set(state);
   }
 
+  
   sectionGeometry = signal<{ section: 'header' | 'footer'; topCm: number; bottomCm: number } | null>(null);
 
+  
   verticalRulerMargins = computed<PageMargins>(() => {
     const m = this.pageSettings().margins;
     const pageH = this.pageSettings().orientation === 'portrait' ? 29.7 : 21;
     const section = this.editingSection();
     const geo = this.sectionGeometry();
     if ((section === 'header' || section === 'footer') && geo && geo.section === section) {
+      
       return { ...m, top: Math.max(0, geo.topCm), bottom: Math.max(0, pageH - geo.bottomCm) };
     }
     return m;
   });
 
+  
   pageList = computed(() => Array.from({ length: this.totalPages() }, (_, i) => i));
 
+  
   vRulerSegmentHeightPx = computed(() =>
     (this.pageSettings().orientation === 'portrait' ? 1122 : 794) * (this.zoomLevel() / 100)
   );
 
+  
   vRulerGapPx = computed(() => 8 * (this.zoomLevel() / 100));
 
+  
   vRulerSegments = signal<{ top: number; height: number }[]>([]);
 
+  
   vRulerSegmentsView = computed(() => {
     const scale = this.zoomLevel() / 100;
     const toCm = (px: number) => px / (DocumentEditorComponent.CM_TO_PX * scale);
@@ -368,18 +442,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
     const h = this.vRulerSegmentHeightPx();
     const g = this.vRulerGapPx();
-    const pad = 20;
+    const pad = 20; // padding-top editor-scroll-container
     const fallbackAxis = this.pageSettings().orientation === 'portrait' ? 29.7 : 21;
     return this.pageList().map((_, i) => ({ top: pad + i * (h + g), height: h, axisCm: fallbackAxis }));
   });
 
+  
   vRulerInnerHeight = computed(() => {
     const segs = this.vRulerSegmentsView();
     return segs.length ? segs[segs.length - 1].top + segs[segs.length - 1].height : 0;
   });
 
+  
   private vRulerResizeObserver?: ResizeObserver;
 
+  
   private measureVRuler(): void {
     requestAnimationFrame(() => {
       const next = this.editor?.getPageLayout() ?? [];
@@ -390,6 +467,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   private ensureVRulerObserver(): void {
     if (this.vRulerResizeObserver) return;
     const wrapper = this.editorScrollContainer?.nativeElement?.querySelector('.editor-wrapper') as HTMLElement | null;
@@ -398,8 +476,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.vRulerResizeObserver.observe(wrapper);
   }
 
+  
   private static readonly CM_TO_PX = CSS_PX_PER_CM;
 
+  
   showViewMenu = signal(false);
   showHelpMenu = signal(false);
   pageSettings = signal<PageSettings>({
@@ -407,14 +487,20 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     orientation: 'portrait',
     paperSize: 'a4'
   });
+  
   documentPageSize = signal<PageSize | undefined>(undefined);
+  
   sectionHeadersFooters = signal<SectionHeaderFooter[] | null>(null);
+  
   footnotes = signal<Footnote[] | null>(null);
+  
   endnotes = signal<Endnote[] | null>(null);
+  
   footnoteNumberFormat = signal<string | null>(null);
   endnoteNumberFormat = signal<string | null>(null);
   marginPresets = MARGIN_PRESETS;
 
+  
   showHeaderFooterDialog = signal(false);
   headerFooterDialogData = signal<{
     headerMargin: number;
@@ -428,9 +514,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     differentOddEven: false
   });
 
+  
   showPropertiesDialog = signal(false);
   propertiesData = signal<DocumentMetadata>({});
 
+  
   showSignatureDialog = signal(false);
   signatureDialogTab = signal<'list' | 'sign'>('list');
   signatureData = {
@@ -443,17 +531,23 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     certificateFileName: '' as string
   };
 
+  
   documentSignatures = signal<DigitalSignatureInfo[]>([]);
 
+  
   showLeaveDialog = signal(false);
 
+  
   protected readonly Math = Math;
 
   constructor() {
+    
     this.loadTemplates();
   }
 
   ngOnInit(): void {
+    
+    
     this.route.queryParams.pipe(
       map(params => ({
         masterId: params['masterId'] as string | undefined,
@@ -467,10 +561,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       this.loadFromStorage(masterId!, versionId ?? null);
     });
 
+    
     const account = this.msal.instance.getActiveAccount() ?? this.msal.instance.getAllAccounts()[0] ?? null;
     const fullName = account?.name?.trim() || account?.username || '';
     this.currentUserName.set(fullName);
 
+    
+    
+    
     const parenthesized = fullName.match(/\(([^)]+)\)/)?.[1]?.trim();
     const givenName = (account?.idTokenClaims as Record<string, unknown> | undefined)?.['given_name'];
     const first = parenthesized
@@ -481,6 +579,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.firstName.set(first);
     this.initials.set(this.deriveInitials(fullName || first));
 
+    
     if (account) {
       void this.loadAvatar(account);
     }
@@ -490,6 +589,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopAutoSave();
+    this._disarmMiniToolbarAutoHide();
     this.finishSendSub?.unsubscribe();
     this.vRulerResizeObserver?.disconnect();
     clearTimeout(this.tabCloseHintTimer);
@@ -499,20 +599,23 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
   private async loadAvatar(account: AccountInfo): Promise<void> {
     try {
       const result = await this.msal.instance.acquireTokenSilent({ scopes: ['User.Read'], account });
       const response = await fetch('https://graph.microsoft.com/v1.0/me/photo/$value', {
         headers: { Authorization: `Bearer ${result.accessToken}` },
       });
-      if (!response.ok) return;
+      if (!response.ok) return; // brak zdjęcia (404) / brak dostępu → fallback na inicjały
       const blob = await response.blob();
       this.avatarObjectUrl = URL.createObjectURL(blob);
       this.avatarUrl.set(this.avatarObjectUrl);
     } catch {
+      
     }
   }
 
+  
   private deriveFirstName(fullName: string): string {
     if (!fullName) return '';
     if (fullName.includes(',')) {
@@ -524,6 +627,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return fullName.split(/\s+/)[0];
   }
 
+  
   private deriveInitials(name: string): string {
     const parts = name.replace(',', ' ').split(/\s+/).filter(Boolean);
     if (parts.length === 0) return '?';
@@ -531,6 +635,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return (parts[0][0] + parts[1][0]).toUpperCase();
   }
 
+  
   private startAutoSave(): void {
     this.stopAutoSave();
     const intervalMs = (environment.autoSave?.intervalSeconds ?? 30) * 1000;
@@ -549,12 +654,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.autoSaveSub = undefined;
   }
 
+  
   toggleAutoSave(): void {
     const next = !this.autoSaveEnabled();
     this.autoSaveEnabled.set(next);
     this.autoSaveStatus.set('idle');
   }
 
+  
   private buildSaveRequest() {
     const html = this.editor?.getContent() || this.documentContent();
     const fileName = this.originalFileName() || `${this.documentMetadata().title || 'dokument'}.docx`;
@@ -569,12 +676,17 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       sectionHeadersFooters: this.sectionHeadersFooters() ?? undefined,
       footnotes: this.footnotes() ?? undefined,
       endnotes: this.endnotes() ?? undefined,
+      
+      
       masterId: this.documentMasterId() ?? undefined,
+      
+      
       footnoteNumberFormat: this.footnoteNumberFormat() ?? 'decimal',
       endnoteNumberFormat: this.endnoteNumberFormat() ?? 'lowerRoman'
     };
   }
 
+  
   private persistDocument(): Observable<unknown> {
     const masterId = this.documentMasterId()!;
     const versionId = this.documentVersionId();
@@ -587,6 +699,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     );
   }
 
+  
   private performAutoSave(): void {
     this.isAutoSaving = true;
     this.autoSaveStatus.set('saving');
@@ -605,6 +718,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   private logOpenDiagnostics(): void {
     const block = this.formatDiagnostics(this.collectDiagnosticRows());
     console.info(`[open] ${new Date().toISOString()} — otwarto dokument\n${block}`);
@@ -614,6 +728,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   private static readonly DOC_MIME = 'application/msword';
   private static readonly PDF_MIME = 'application/pdf';
 
+  
   private loadFromStorage(masterId: string, versionId: string | null): void {
     this.isLoading.set(true);
     this.errorMessage.set(null);
@@ -621,6 +736,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.returnUrl.set(null);
     this.userDownload.set(false);
     this.showSaveState.set(true);
+    
     this.loadedFromDisk.set(false);
     this.diskOriginalFile = null;
 
@@ -628,16 +744,22 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       switchMap(meta => {
         const mime = (meta.mimeType || '').toLowerCase();
 
+        
         this.documentClassification.set(meta.classification ?? null);
+        
         this.returnUrl.set(meta.returnUrl ?? null);
+        
         this.userDownload.set(meta.userDownload === true);
+        
         this.showSaveState.set(meta.showSaveState !== false);
 
+        
         if (mime === DocumentEditorComponent.PDF_MIME) {
           this.router.navigate(['/viewer'], { queryParams: { masterId } });
           return from(Promise.reject({ handled: true } as const));
         }
 
+        
         const bytes$ = versionId
           ? this.documentStorageService.downloadVersion(masterId, versionId)
           : this.documentStorageService.downloadBaseVersion(masterId);
@@ -654,10 +776,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       })
     ).subscribe({
       next: ({ file, fileName }) => {
+        
+        
         this._convertAndLoad(file, fileName);
       },
       error: (err) => {
         if (err?.handled) {
+          
           return;
         }
         if (err.status === 404) {
@@ -670,11 +795,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   updateTitle(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.documentMetadata.update(m => ({ ...m, title: input.value }));
   }
 
+  
   private loadTemplates(): void {
     this.documentService.getTemplates().subscribe({
       next: (templates) => this.templates.set(templates),
@@ -682,6 +809,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   goToDashboard(): void {
     const hasDocument = !!this.documentMasterId();
     const hasChanges = !!this.editorState()?.isModified;
@@ -702,6 +830,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showLeaveDialog.set(false);
   }
 
+  
   newDocument(): void {
     if (this.editorState()?.isModified) {
       if (!confirm('Masz niezapisane zmiany. Czy na pewno chcesz utworzyć nowy dokument?')) {
@@ -724,6 +853,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
                   mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
                   content: base64
                 }).pipe(
+                  
                   switchMap(result =>
                     this.documentStorageService.saveDocumentVersion(result.masterId, { content: base64 }).pipe(
                       map(saved => ({ masterId: result.masterId, versionId: saved.versionId }))
@@ -746,9 +876,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   openDocument(): void {
     const input = document.createElement('input');
     input.type = 'file';
+    
+    
     input.accept = '.docx,.doc,.pdf';
 
     input.onchange = (e) => {
@@ -762,12 +895,15 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         return;
       }
 
+      
+      
       this.loadDocument(file);
     };
 
     input.click();
   }
 
+  
   private async openPdfInViewer(file: File): Promise<void> {
     this.isLoading.set(true);
     this.errorMessage.set(null);
@@ -802,12 +938,15 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   private loadDocument(file: File, password?: string): void {
+    
     this.diskOriginalFile = file;
     this.loadedFromDisk.set(true);
     this._convertAndLoad(file, file.name, password, true);
   }
 
+  
   private _convertAndLoad(file: File, fileName: string, password?: string, announce = false): void {
     this.isLoading.set(true);
     this.errorMessage.set(null);
@@ -815,8 +954,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.documentService.openDocument(file, password).subscribe({
       next: (content) => {
         this._applyLoadedContent(content, fileName);
+        
+        
+        
         this.logOpenDiagnostics();
+        
+        
         if (content.isReadOnlyProtected === true) {
+          
+          
+          
           this.showInfo(READ_ONLY_PROTECTED_MESSAGE);
         } else if (announce) {
           this.showSuccess(`Otwarto dokument: ${fileName}`);
@@ -827,17 +974,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         this.isLoading.set(false);
         const code = err instanceof OpenDocumentError ? err.code : undefined;
 
+        
         if (code === 'PASSWORD_REQUIRED' || code === 'WRONG_PASSWORD') {
           this.openPasswordDialog(pwd => this._convertAndLoad(file, fileName, pwd, announce), code === 'WRONG_PASSWORD');
           return;
         }
 
+        
+        
         const defect = documentDefectMessage(err);
         if (defect) {
           this.showError(defect);
           return;
         }
 
+        
         if (err?.status === 404) {
           this.documentNotFound.set(true);
         } else {
@@ -847,12 +998,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   private _applyLoadedContent(content: DocumentContent, fileName: string): void {
+    
+    
+    
+    
     this.documentEditProtected.set(content.isReadOnlyProtected === true);
     this.documentContent.set(content.html);
     this.documentMetadata.set(content.metadata);
     this.documentStyles.set(content.styles || []);
     this.originalFileName.set(fileName);
+    
+    
+    
+    
     this.headerContent.set({
       html: content.header?.html || '',
       height: content.header?.height || 1.25,
@@ -878,9 +1038,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       this.documentPageSize.set(content.pageSize);
       this.pageSettings.update(s => ({ ...s, orientation: content.pageSize!.orientation }));
     }
+    
     this.sectionHeadersFooters.set(content.sectionHeadersFooters ?? null);
+    
     this.footnotes.set(content.footnotes ?? null);
     this.endnotes.set(content.endnotes ?? null);
+    
     this.footnoteNumberFormat.set(content.footnoteNumberFormat ?? null);
     this.endnoteNumberFormat.set(content.endnoteNumberFormat ?? null);
     if (this.editor) {
@@ -889,19 +1052,24 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.documentSignatures.set(content.metadata.signatures || []);
   }
 
+  
   showPasswordDialog = signal(false);
   passwordDialogValue = '';
   passwordDialogError = signal<string | null>(null);
+  
   private _passwordRetry: ((password: string) => void) | null = null;
 
+  
   private openPasswordDialog(retry: (password: string) => void, wrong: boolean): void {
     this._passwordRetry = retry;
     this.passwordDialogValue = '';
     this.passwordDialogError.set(wrong ? 'Nieprawidłowe hasło. Spróbuj ponownie.' : null);
     this.showPasswordDialog.set(true);
+    
     setTimeout(() => (document.querySelector('.password-dialog input') as HTMLInputElement | null)?.focus(), 50);
   }
 
+  
   confirmPasswordDialog(): void {
     const pwd = this.passwordDialogValue;
     if (!pwd) {
@@ -915,6 +1083,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     retry?.(pwd);
   }
 
+  
   cancelPasswordDialog(): void {
     this.showPasswordDialog.set(false);
     this.passwordDialogValue = '';
@@ -928,8 +1097,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
   saveDocument(): void {
     if (this.editingDisabled()) {
+      
       this.showError(this.documentEditProtected()
         ? 'Dokument jest chroniony przed edycją — zapis jest zablokowany.'
         : 'Tryb podglądu — dokument jest tylko do odczytu. Użyj „Pobierz dokument", aby zapisać kopię lokalnie.');
@@ -939,6 +1110,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
 
     const masterId = this.documentMasterId();
     if (!masterId) {
+      
       this.showError('Dokument nie jest powiązany z bazą — użyj „Pobierz dokument".');
       this.showMenu.set(false);
       return;
@@ -964,9 +1136,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   downloadDocument(): void {
     const masterId = this.documentMasterId();
     if (!masterId || !this.canUserDownload()) {
+      
+      
       this.showError('Pobieranie pliku na komputer nie jest dostępne dla tego dokumentu.');
       return;
     }
@@ -974,6 +1149,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const request = this.buildSaveRequest();
     const fileName = request.originalFileName;
 
+    
     try {
       const html = request.html;
       const tmp = document.createElement('div');
@@ -1020,6 +1196,8 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.isLoading.set(false);
+        
+        
         if (err?.status === 403) {
           this.userDownload.set(false);
           this.showError('Pobieranie pliku na komputer nie jest dostępne dla tego dokumentu.');
@@ -1030,14 +1208,17 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   downloadOriginalDocument(): void {
     this.showMenu.set(false);
 
     if (!this.canDownloadOriginal()) {
+      
       this.showError('Pobieranie oryginału nie jest dostępne dla tego dokumentu.');
       return;
     }
 
+    
     if (this.loadedFromDisk() && this.diskOriginalFile) {
       this.saveBlobToDisk(this.diskOriginalFile, this.diskOriginalFile.name);
       this.showSuccess('Pobrano oryginał dokumentu');
@@ -1065,6 +1246,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   private saveBlobToDisk(blob: Blob, fileName: string): void {
     const objectUrl = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -1076,6 +1258,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     window.URL.revokeObjectURL(objectUrl);
   }
 
+  
   openTemplate(templateId: string): void {
     this.isLoading.set(true);
     this.showTemplates.set(false);
@@ -1099,31 +1282,39 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   onCommand(event: { command: EditorCommand; value?: string }): void {
     this.editor?.executeCommand(event.command, event.value);
   }
 
+  
   onFontSizeChange(size: number): void {
     this.editor?.setFontSize(size);
   }
 
+  
   onFontFamilyChange(family: string): void {
     this.editor?.setFontFamily(family);
   }
 
+  
   onTextColorChange(color: string): void {
     this.editor?.setTextColor(color);
   }
 
+  
   onBackgroundColorChange(color: string): void {
     this.editor?.setBackgroundColor(color);
   }
 
+  
   onInsertLink(event: { url: string; text?: string }): void {
     this.editor?.insertLink(event.url, event.text);
   }
 
+  
   onInsertImage(): void {
+    
     this.editor?.saveSelection();
 
     const input = document.createElement('input');
@@ -1140,11 +1331,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     input.click();
   }
 
+  
   private uploadAndInsertImage(file: File): void {
+    
     const reader = new FileReader();
     reader.onload = (e) => {
       const base64 = e.target?.result as string;
       if (base64 && this.editor) {
+        
         this.editor.focus();
         this.editor.restoreSelection();
         this.editor.insertImage(base64, file.name);
@@ -1153,41 +1347,53 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     reader.readAsDataURL(file);
   }
 
+  
   onInsertTable(config: string): void {
     if (this.editor) {
       this.editor.insertTable(config);
       this.applyTableAutoFit(this.tableDialogData.autoFitBehavior, this.tableDialogData.fixedWidth);
+      
+      
+      queueMicrotask(() => this.detectTableContext());
     }
   }
 
+  
   onInsertFootnote(): void {
     this.editor?.addFootnoteAtCursor();
   }
 
+  
   onInsertEndnote(): void {
     this.editor?.addEndnoteAtCursor();
   }
 
+  
   onStyleChange(style: DocumentStyle): void {
+    
     if (this.editor) {
       this.editor.applyDocumentStyle(style);
     }
   }
 
+  
   private copiedFormat: any = null;
 
+  
   onCopyFormat(): void {
     if (this.editor) {
       this.copiedFormat = this.editor.getCurrentFormatting();
     }
   }
 
+  
   onPasteFormat(): void {
     if (this.editor && this.copiedFormat) {
       this.editor.applyFormatting(this.copiedFormat);
     }
   }
 
+  
   private lastSearchText = '';
 
   onSearchInDocument(event: { text: string; direction: 'next' | 'previous' }): void {
@@ -1196,9 +1402,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     let result: { count: number; currentIndex: number };
 
     if (event.text !== this.lastSearchText) {
+      
       this.lastSearchText = event.text;
       result = this.editor.searchText(event.text, event.direction);
     } else {
+      
       result = event.direction === 'next' ? this.editor.findNext() : this.editor.findPrevious();
     }
 
@@ -1230,6 +1438,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.lastSearchText = '';
   }
 
+  
   onContentChange(html: string): void {
     this.documentContent.set(html);
     this.documentMetadata.update(m => ({
@@ -1238,6 +1447,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  
   onHeaderChange(header: HeaderFooterContent): void {
     this.headerContent.set(header);
     this.documentMetadata.update(m => ({
@@ -1246,6 +1456,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  
   onFooterChange(footer: HeaderFooterContent): void {
     this.footerContent.set(footer);
     this.documentMetadata.update(m => ({
@@ -1254,31 +1465,58 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  
   onStateChange(state: EditorState): void {
     this.editorState.set(state);
     this.detectTableContext();
   }
 
+  
   private detectTableContext(): void {
     const selection = window.getSelection();
-    const editorEl = this.editor?.editorContent?.nativeElement;
-    const ctx = resolveTableContext(selection?.anchorNode, editorEl);
+    const anchorNode = selection?.anchorNode ?? null;
+    
+    
+    
+    const editorEl = this.editor?.findEditorContentContaining(anchorNode)
+      ?? this.editor?.editorContent?.nativeElement;
+    const ctx = resolveTableContext(anchorNode, editorEl);
 
-    if (ctx.placement === 'outside-editor') return;
+    
+    
+    
+    
+    if (ctx.placement === 'outside-editor') {
+      
+      
+      
+      const staleTable = this.activeTable();
+      if (staleTable && !staleTable.isConnected) {
+        this.isInTable.set(false);
+        this.activeTableCell.set(null);
+        this.activeTable.set(null);
+        this.syncTablePanel();
+      }
+      return;
+    }
 
     this.isInTable.set(ctx.placement === 'in-table');
     this.activeTableCell.set(ctx.cell);
     this.activeTable.set(ctx.table);
     if (ctx.placement === 'outside-table') {
+      
+      
       this.clearCellSelection();
     }
     this.syncTablePanel();
   }
 
+  
   onEditorSelectionChange(): void {
     this.detectTableContext();
   }
 
+  
   private syncTablePanel(): void {
     if (!this.isInTable() || this.editingDisabled()) {
       this.showTablePanel.set(false);
@@ -1288,22 +1526,29 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     if (this.tablePanelManuallyClosed) {
       return;
     }
+    
+    
+    
     if (this.showFindReplace()) {
       this.closeFindReplace();
     }
     this.showTablePanel.set(true);
   }
 
+  
   closeTablePanel(): void {
     this.showTablePanel.set(false);
     this.tablePanelManuallyClosed = true;
   }
 
+  
   @HostListener('document:keydown.escape', ['$event'])
   onEscapeKeydown(event: KeyboardEvent): void {
     if (event.defaultPrevented) return;
     if (this.isAnyDialogOpen() || this.showContextMenu()) return;
 
+    
+    
     if (this.editingSection() !== 'body') {
       event.preventDefault();
       this.editor?.stopEditingHeaderFooter();
@@ -1316,6 +1561,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeActiveSidePanel();
   }
 
+  
   closeActiveSidePanel(): void {
     const focusInPanel = !!(document.activeElement as HTMLElement | null)
       ?.closest('.search-panel, d2-table-properties-panel');
@@ -1331,6 +1577,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
   private isAnyDialogOpen(): boolean {
     return this.showTemplates()
       || this.showPageSetup()
@@ -1343,11 +1590,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       || this.showLeaveDialog();
   }
 
+  
   setZoom(level: number): void {
     this.zoomLevel.set(level);
     this.measureVRuler();
   }
 
+  
+  
   onRulerWheel(e: WheelEvent): void {
     const container = this.editorScrollContainer?.nativeElement;
     if (!container) return;
@@ -1361,30 +1611,39 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const scrollTop = container.scrollTop;
     const scale = this.zoomLevel() / 100;
 
+    
     if (this.verticalRulerBar?.nativeElement) {
       this.verticalRulerBar.nativeElement.scrollTop = scrollTop;
     }
 
+    
+    
     if (this.horizontalRulerInner?.nativeElement) {
       this.horizontalRulerInner.nativeElement.style.transform = `translateX(${-container.scrollLeft}px)`;
     }
     
+    
     const PAGE_HEIGHT = 1122;
-    const PAGE_GAP = 40;
-    const PADDING_TOP = 20;
+    const PAGE_GAP = 40; // gap między stronami + separator
+    const PADDING_TOP = 20; // padding containera
+    
     
     const scaledPageHeight = PAGE_HEIGHT * scale;
     const scaledGap = PAGE_GAP * scale;
     
+    
     const viewportCenter = scrollTop + (container.clientHeight / 2) - (PADDING_TOP * scale);
+    
     
     const currentPageNum = Math.floor(viewportCenter / (scaledPageHeight + scaledGap)) + 1;
     const maxPages = this.totalPages();
     
     this.currentPage.set(Math.min(Math.max(1, currentPageNum), maxPages));
     
+    
     if (maxPages > 1) {
       this.showPageIndicator.set(true);
+      
       
       if (this.pageIndicatorTimeout) {
         clearTimeout(this.pageIndicatorTimeout);
@@ -1395,27 +1654,35 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
   onPagesChange(pageCount: number): void {
     this.totalPages.set(pageCount);
+    
     if (this.currentPage() > pageCount) {
       this.currentPage.set(pageCount);
     }
+    
     this.ensureVRulerObserver();
     this.measureVRuler();
   }
 
+  
   printDocument(): void {
     window.print();
     this.showMenu.set(false);
   }
 
+  
   private showSuccess(message: string): void {
+    
+    
     this.errorMessage.set(null);
     this.infoMessage.set(null);
     this.successMessage.set(message);
     setTimeout(() => this.successMessage.set(null), 3000);
   }
 
+  
   private showInfo(message: string): void {
     this.errorMessage.set(null);
     this.successMessage.set(null);
@@ -1423,6 +1690,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     setTimeout(() => this.infoMessage.set(null), 5000);
   }
 
+  
   private showError(message: string): void {
     this.successMessage.set(null);
     this.infoMessage.set(null);
@@ -1430,44 +1698,55 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     setTimeout(() => this.errorMessage.set(null), 5000);
   }
 
+  
   toggleMenu(): void {
     const wasOpen = this.showMenu();
     this.closeAllMenus();
     this.showMenu.set(!wasOpen);
   }
 
+  
   toggleEditMenu(): void {
     const wasOpen = this.showEditMenu();
     this.closeAllMenus();
     this.showEditMenu.set(!wasOpen);
   }
 
+  
   toggleFormatMenu(): void {
     const wasOpen = this.showFormatMenu();
     this.closeAllMenus();
     this.showFormatMenu.set(!wasOpen);
   }
 
+  
   toggleInsertMenu(): void {
     const wasOpen = this.showInsertMenu();
     this.closeAllMenus();
     this.showInsertMenu.set(!wasOpen);
   }
 
+  
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
     const target = event.target as HTMLElement;
+    
     const isMenuArea = target.closest('.menu-bar') || 
                        target.closest('.dropdown-menu');
     const isShadingArea = target.closest('.shading-dropdown') || target.closest('.table-toolbar-btn-shading');
+    
     if (!isMenuArea && !isShadingArea) {
       this.closeAllMenus();
     }
+    
     if (!isShadingArea) {
       this.showShadingDropdown.set(false);
     }
   }
 
+  
+  
+  
 
   @HostListener('mousedown', ['$event'])
   onCellMouseDown(event: MouseEvent): void {
@@ -1479,6 +1758,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     if (cell && editorEl.contains(cell)) {
       this.cellSelectionStartCell = cell;
       this.isCellSelecting = false;
+      
       if (!event.shiftKey) {
         this.clearCellSelection();
       }
@@ -1497,11 +1777,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const editorEl = this.editor?.editorContent?.nativeElement;
 
     if (cell && editorEl && editorEl.contains(cell) && cell !== this.cellSelectionStartCell) {
+      
       const startTable = this.cellSelectionStartCell.closest('table');
       const endTable = cell.closest('table');
       if (startTable && startTable === endTable) {
         this.isCellSelecting = true;
         event.preventDefault();
+        
         window.getSelection()?.removeAllRanges();
         this.selectCellRange(this.cellSelectionStartCell, cell);
       }
@@ -1512,11 +1794,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   onCellMouseUp(event: MouseEvent): void {
     if (this.isCellSelecting) {
       this.isCellSelecting = false;
+      
       window.getSelection()?.removeAllRanges();
     }
     this.cellSelectionStartCell = null;
   }
 
+  
   private selectCellRange(start: HTMLTableCellElement, end: HTMLTableCellElement): void {
     const table = start.closest('table') as HTMLTableElement;
     if (!table) return;
@@ -1543,22 +1827,28 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.applyCellSelection(newSelection);
   }
 
+  
   private applyCellSelection(cells: Set<HTMLTableCellElement>): void {
+    
     const prev = this.selectedCells();
     prev.forEach(c => c.classList.remove('table-cell-selected'));
+    
     cells.forEach(c => c.classList.add('table-cell-selected'));
     this.selectedCells.set(cells);
   }
 
+  
   clearCellSelection(): void {
     const prev = this.selectedCells();
     prev.forEach(c => c.classList.remove('table-cell-selected'));
     this.selectedCells.set(new Set());
   }
 
+  
   @HostListener('contextmenu', ['$event'])
   onContextMenu(event: MouseEvent): void {
     const target = event.target as HTMLElement;
+    
     const isEditorArea = target.closest('.editor-main') || 
                          target.closest('d2-wysiwyg-editor') ||
                          target.closest('.paper-container');
@@ -1567,12 +1857,18 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       this.closeAllMenus();
       this.contextSubmenu.set(null);
 
+      
       const cellTarget = target.closest('td, th') as HTMLElement | null;
       this.contextMenuTargetCell.set(cellTarget);
 
+      
       const imgTarget = (target.tagName === 'IMG' ? target : target.closest('img')) as HTMLImageElement | null;
       this.contextMenuTargetImage.set(imgTarget);
 
+      
+      
+      
+      
       const margin = 8;
       const menuWidth = 260;
       const menuHeight = 420;
@@ -1587,6 +1883,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
   closeAllMenus(): void {
     this.showMenu.set(false);
     this.showEditMenu.set(false);
@@ -1602,6 +1899,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showShadingDropdown.set(false);
   }
 
+  
   finishDocument(): void {
     this.showMenu.set(false);
 
@@ -1626,7 +1924,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.sendDetachedFromUi.set(false);
     this.deliveryStatus.set('Sending');
     this.showSendErrorModal.set(false);
-    this.showSendingModal.set(true);
+    this.showSendingModal.set(true); // „Trwa wysyłka pliku do aplikacji zewnętrznej"
 
     this.finishSendSub?.unsubscribe();
     this.finishSendSub = this.documentService.saveDocument(this.buildSaveRequest()).pipe(
@@ -1634,27 +1932,34 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       switchMap(base64 => this.documentStorageService.finishAndSend(masterId, versionId, { content: base64 }))
     ).subscribe({
       next: result => {
+        
         if (this.sendDetachedFromUi()) return;
 
         this.deliveryId.set(result.deliveryId);
         this.deliveryStatus.set(result.status);
 
         if (result.delivered) {
+          
           this.showSendingModal.set(false);
           this.enterFinishedAndCloseTab();
           return;
         }
 
         if (result.status === 'Sending') {
+          
+          
           return;
         }
 
+        
         this.showSendingModal.set(false);
         this.showSendErrorModal.set(true);
       },
       error: () => {
+        
         if (this.sendCancelled() || this.sendDetachedFromUi()) return;
 
+        
         this.showSendingModal.set(false);
         this.deliveryStatus.set('RetryScheduled');
         this.showSendErrorModal.set(true);
@@ -1662,9 +1967,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   cancelSend(): void {
     this.sendCancelled.set(true);
-    this.finishSendSub?.unsubscribe();
+    this.finishSendSub?.unsubscribe(); // anuluje request w locie — next/error się nie wywoła
     this.showSendingModal.set(false);
 
     const masterId = this.documentMasterId();
@@ -1675,10 +1981,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
 
     this.documentStorageService.abortSend(masterId).subscribe({
       next: () => this.afterSendCancelled(),
+      
+      
       error: () => this.afterSendCancelled()
     });
   }
 
+  
   private afterSendCancelled(): void {
     this.isFinishing.set(false);
     this.sendCancelled.set(false);
@@ -1686,12 +1995,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showSuccess('Wysyłka anulowana. Możesz dalej edytować dokument.');
   }
 
+  
   closeSendingModal(): void {
     this.sendDetachedFromUi.set(true);
     this.showSendingModal.set(false);
     this.enterFinishedAndCloseTab();
   }
 
+  
   abortSend(): void {
     const masterId = this.documentMasterId();
     if (!masterId) return;
@@ -1699,7 +2010,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.documentStorageService.abortSend(masterId).subscribe({
       next: () => {
         this.showSendErrorModal.set(false);
-        this.isFinishing.set(false);
+        this.isFinishing.set(false); // powrót do edytora — „Zakończ" znów dostępne
         this.showSuccess('Wysyłka przerwana. Możesz dalej edytować dokument.');
       },
       error: () => {
@@ -1708,6 +2019,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   continueSendInBackground(): void {
     const masterId = this.documentMasterId();
     if (!masterId) return;
@@ -1724,6 +2036,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   private enterFinishedAndCloseTab(): void {
     this.isFinishing.set(false);
     this.stopAutoSave();
@@ -1733,13 +2046,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.tryCloseBrowserTab();
   }
 
+  
   private tryCloseBrowserTab(): void {
     try {
       window.close();
     } catch {
+      
     }
   }
 
+  
   closeFinishedTab(): void {
     this.tryCloseBrowserTab();
     clearTimeout(this.tabCloseHintTimer);
@@ -1747,6 +2063,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   }
 
   openReportEmail(): void {
+    
     this.closeAllMenus();
 
     const subject = encodeURIComponent('[Doc2 Editor] Zgłoszenie');
@@ -1757,10 +2074,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       this.buildDiagnosticsBlock()
     );
 
+    
     const to = environment.supportEmail ?? '';
     window.open(`mailto:${to}?subject=${subject}&body=${body}`, '_self');
   }
 
+  
   copyDiagnostics(): void {
     this.closeAllMenus();
     const text = this.formatDiagnostics(this.collectDiagnosticRows());
@@ -1769,8 +2088,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       .catch(() => this.notification.error('Nie udało się skopiować informacji diagnostycznych'));
   }
 
+  
   private collectDiagnosticRows(): Array<[string, string]> {
     const masterId = this.documentMasterId() ?? '—';
+    
+    
     const versionId = this.documentVersionId() ?? '—';
 
     const rows: Array<[string, string]> = [
@@ -1790,6 +2112,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       ['Ekran',            `${window.screen.width}×${window.screen.height}`],
     ];
 
+    
     const err = this.lastHttpError.lastError();
     if (err) {
       rows.push(['Ostatni błąd',  `HTTP ${err.status} ${err.method} ${err.url}`]);
@@ -1800,11 +2123,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return rows;
   }
 
+  
   private formatDiagnostics(rows: Array<[string, string]>): string {
     const labelWidth = Math.max(...rows.map(([k]) => k.length));
     return rows.map(([k, v]) => `  ${k.padEnd(labelWidth)} : ${v}`).join('\n');
   }
 
+  
   private buildDiagnosticsBlock(): string {
     const separator = '────────────────────────────────────────────';
     return (
@@ -1816,32 +2141,43 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     );
   }
 
+  
   setActiveSubmenu(submenu: string | null): void {
     this.activeSubmenu.set(submenu);
   }
 
+  
+  
+  
 
+  
   undo(): void {
     this.editor?.executeCommand('undo');
     this.closeAllMenus();
   }
 
+  
   redo(): void {
     this.editor?.executeCommand('redo');
     this.closeAllMenus();
   }
 
+  
   cut(): void {
     document.execCommand('cut');
     this.closeAllMenus();
   }
 
+  
   copy(): void {
     document.execCommand('copy');
     this.closeAllMenus();
   }
 
+  
   paste(): void {
+    
+    
     const target = this.editor?.captureSelectionBookmark() ?? null;
     this.closeAllMenus();
     navigator.clipboard.readText()
@@ -1849,26 +2185,37 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       .catch(() => { document.execCommand('paste'); });
   }
 
+  
   pasteWithoutFormatting(): void {
+    
+    
+    
+    
+    
     const target = this.editor?.captureSelectionBookmark() ?? null;
     this.closeAllMenus();
     navigator.clipboard.readText()
       .then(text => this.editor?.pastePlainTextAt(target, text))
-      .catch(() => {  });
+      .catch(() => { /* brak dostępu do schowka */ });
   }
 
+  
   selectAll(): void {
     this.editor?.executeCommand('selectAll');
     this.closeAllMenus();
   }
 
+  
   deleteSelection(): void {
     document.execCommand('delete');
     this.closeAllMenus();
   }
 
+  
   @HostListener('document:keydown', ['$event'])
   onGlobalKeydown(e: KeyboardEvent): void {
+    
+    
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
     const key = e.key.toLowerCase();
     if (key === 'f') {
@@ -1882,6 +2229,8 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       return;
     }
     if (key === 'a') {
+      
+      
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       e.preventDefault();
@@ -1889,6 +2238,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       return;
     }
 
+    
+    
+    
+    
     const target = e.target as HTMLElement | null;
     const tag = target?.tagName;
     const inContentEditable = !!target && (target.isContentEditable
@@ -1929,49 +2282,62 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
   openFindReplace(): void {
     this.showFindReplace.set(true);
+    
     this.showTablePanel.set(false);
     this.closeAllMenus();
   }
 
+  
+  
+  
 
+  
   toggleBold(): void {
     this.editor?.executeCommand('bold');
     this.closeAllMenus();
   }
 
+  
   toggleItalic(): void {
     this.editor?.executeCommand('italic');
     this.closeAllMenus();
   }
 
+  
   toggleUnderline(): void {
     this.editor?.executeCommand('underline');
     this.closeAllMenus();
   }
 
+  
   toggleStrikethrough(): void {
     this.editor?.executeCommand('strikethrough');
     this.closeAllMenus();
   }
 
+  
   toggleSuperscript(): void {
     this.editor?.executeCommand('superscript');
     this.closeAllMenus();
   }
 
+  
   toggleSubscript(): void {
     this.editor?.executeCommand('subscript');
     this.closeAllMenus();
   }
 
+  
   increaseFontSize(): void {
     const currentSize = this.editorState()?.currentStyle?.fontSize || 11;
     this.editor?.setFontSize(currentSize + 1);
     this.closeAllMenus();
   }
 
+  
   decreaseFontSize(): void {
     const currentSize = this.editorState()?.currentStyle?.fontSize || 11;
     if (currentSize > 1) {
@@ -1980,6 +2346,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  
   toUpperCase(): void {
     const selection = window.getSelection();
     if (selection && selection.toString()) {
@@ -1989,6 +2356,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  
   toLowerCase(): void {
     const selection = window.getSelection();
     if (selection && selection.toString()) {
@@ -1998,6 +2366,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  
   toTitleCase(): void {
     const selection = window.getSelection();
     if (selection && selection.toString()) {
@@ -2007,52 +2376,63 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  
   alignLeft(): void {
     this.editor?.executeCommand('justifyLeft');
     this.closeAllMenus();
   }
 
+  
   alignCenter(): void {
     this.editor?.executeCommand('justifyCenter');
     this.closeAllMenus();
   }
 
+  
   alignRight(): void {
     this.editor?.executeCommand('justifyRight');
     this.closeAllMenus();
   }
 
+  
   alignJustify(): void {
     this.editor?.executeCommand('justifyFull');
     this.closeAllMenus();
   }
 
+  
   increaseIndent(): void {
     this.editor?.executeCommand('indent');
     this.closeAllMenus();
   }
 
+  
   decreaseIndent(): void {
     this.editor?.executeCommand('outdent');
     this.closeAllMenus();
   }
 
+  
   setLineSpacingSingle(): void {
     this.setLineSpacing(1);
   }
 
+  
   setLineSpacing115(): void {
     this.setLineSpacing(1.15);
   }
 
+  
   setLineSpacing15(): void {
     this.setLineSpacing(1.5);
   }
 
+  
   setLineSpacingDouble(): void {
     this.setLineSpacing(2);
   }
 
+  
   private setLineSpacing(value: number): void {
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0) {
@@ -2061,33 +2441,40 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       if (block.nodeType === Node.TEXT_NODE) {
         block = block.parentNode!;
       }
+      
       while (block && !['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI'].includes((block as HTMLElement).tagName)) {
         block = block.parentNode!;
       }
       if (block) {
         applyWordLineSpacing(block as HTMLElement, value);
+        
         this.notifyEditorChange();
       }
     }
     this.closeAllMenus();
   }
 
+  
   addSpaceBefore(): void {
     this.setBlockSpacing('marginTop', '12pt');
   }
 
+  
   removeSpaceBefore(): void {
     this.setBlockSpacing('marginTop', '0');
   }
 
+  
   addSpaceAfter(): void {
     this.setBlockSpacing('paddingBottom', '12pt');
   }
 
+  
   removeSpaceAfter(): void {
     this.setBlockSpacing('paddingBottom', '0');
   }
 
+  
   private setBlockSpacing(property: 'marginTop' | 'paddingBottom', value: string): void {
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0) {
@@ -2101,6 +2488,8 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       }
       if (block) {
         (block as HTMLElement).style[property] = value;
+        
+        
         if (property === 'paddingBottom') {
           (block as HTMLElement).style.marginBottom = '';
         }
@@ -2109,29 +2498,36 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  
   insertBulletList(): void {
     this.editor?.executeCommand('insertUnorderedList');
     this.closeAllMenus();
   }
 
+  
   insertNumberedList(): void {
     this.editor?.executeCommand('insertOrderedList');
     this.closeAllMenus();
   }
 
+  
   clearFormatting(): void {
     this.editor?.executeCommand('removeFormat');
     this.closeAllMenus();
   }
 
+  
   openBarcodeDialog(): void {
+    
     this.editor?.saveSelection();
     this.showBarcodeDialog.set(true);
     this.closeAllMenus();
   }
 
+  
   onInsertBarcode(event: { base64Image: string; content: string; showValueBelow: boolean }): void {
     if (this.editor) {
+      
       this.editor.focus();
       this.editor.restoreSelection();
       if (event.showValueBelow) {
@@ -2143,54 +2539,69 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showBarcodeDialog.set(false);
   }
 
+  
   closeBarcodeDialog(): void {
     this.showBarcodeDialog.set(false);
   }
 
+  
   insertHorizontalLine(): void {
     this.editor?.insertHorizontalRule();
     this.closeAllMenus();
   }
 
+  
   insertPageBreak(): void {
     this.editor?.insertPageBreak();
     this.closeAllMenus();
   }
 
+  
   setColumns(count: number): void {
     this.editor?.setBaseColumns(count);
     this.closeAllMenus();
   }
 
+  
   currentColumnCount(): number {
     return this.editor?.getBaseColumnCount() ?? 1;
   }
 
+  
   insertColumnBreak(): void {
     this.editor?.insertColumnBreak();
     this.closeAllMenus();
   }
 
+  
   editHeader(): void {
     this.editor?.startEditingHeader();
   }
 
+  
   editFooter(): void {
     this.editor?.startEditingFooter();
   }
 
+  
+  
+  
   findText = signal('');
   replaceText = signal('');
+  
   findResultCount = signal(0);
   findCurrentIndex = signal(-1);
+  
   searchResults = signal<{ before: string; match: string; after: string }[]>([]);
 
+  
   private refreshSearchResults(result: { count: number; currentIndex: number }): void {
     this.findResultCount.set(result.count);
     this.findCurrentIndex.set(result.currentIndex);
     this.searchResults.set(this.editor?.getSearchSnippets() ?? []);
   }
 
+  
   onFindInput(value: string): void {
     this.findText.set(value);
     if (!value || !this.editor) {
@@ -2205,6 +2616,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.refreshSearchResults(this.editor.searchText(value, 'next'));
   }
 
+  
   findNext(): void {
     const text = this.findText();
     if (!text || !this.editor) return;
@@ -2214,6 +2626,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.refreshSearchResults(result);
   }
 
+  
   findPrev(): void {
     const text = this.findText();
     if (!text || !this.editor) return;
@@ -2223,11 +2636,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.refreshSearchResults(result);
   }
 
+  
   goToResult(index: number): void {
     const result = this.editor?.goToMatch(index);
     if (result) this.findCurrentIndex.set(result.currentIndex);
   }
 
+  
   closeFindReplace(): void {
     this.showFindReplace.set(false);
     this.editor?.clearSearchHighlights();
@@ -2235,9 +2650,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.findResultCount.set(0);
     this.findCurrentIndex.set(-1);
     this.searchResults.set([]);
+    
     this.syncTablePanel();
   }
 
+  
   replaceOne(): void {
     if (this.editingDisabled() || !this.editor || !this.findText()) return;
     if (this.findText() !== this.lastSearchText) {
@@ -2249,6 +2666,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.findCurrentIndex.set(result.currentIndex);
   }
 
+  
   replaceAll(): void {
     if (this.editingDisabled() || !this.editor || !this.findText()) return;
     if (this.findText() !== this.lastSearchText) {
@@ -2261,16 +2679,19 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showSuccess(`Zamieniono wszystkie wystąpienia "${this.findText()}"`);
   }
 
+  
   closeMenuOnOutsideClick(event: MouseEvent): void {
     this.showMenu.set(false);
     this.showTemplates.set(false);
   }
 
+  
   openPageSetup(): void {
     this.showPageSetup.set(true);
     this.showMenu.set(false);
   }
 
+  
   applyMarginPreset(preset: { name: string; margins: PageMargins }): void {
     this.pageSettings.update(s => ({
       ...s,
@@ -2278,6 +2699,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  
   updateMargin(side: keyof PageMargins, value: number): void {
     this.pageSettings.update(s => ({
       ...s,
@@ -2285,6 +2707,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  
   getMarginStyles(): { [key: string]: string } {
     const m = this.pageSettings().margins;
     const cmToPx = CSS_PX_PER_CM;
@@ -2296,10 +2719,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     };
   }
 
+  
   setOrientation(orientation: 'portrait' | 'landscape'): void {
     this.pageSettings.update(s => ({ ...s, orientation }));
   }
 
+  
   isPresetActive(preset: { name: string; margins: PageMargins }): boolean {
     const current = this.pageSettings().margins;
     return current.top === preset.margins.top &&
@@ -2308,14 +2733,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
            current.right === preset.margins.right;
   }
 
+  
   getPresetPreviewStyle(preset: { name: string; margins: PageMargins }): { [key: string]: string } {
     const m = preset.margins;
-    const scale = 2;
+    const scale = 2; // Skala dla miniaturki
     return {
       'padding': `${m.top * scale}px ${m.right * scale}px ${m.bottom * scale}px ${m.left * scale}px`
     };
   }
 
+  
   getPreviewStyle(): { [key: string]: string } {
     const settings = this.pageSettings();
     const isLandscape = settings.orientation === 'landscape';
@@ -2326,9 +2753,10 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     };
   }
 
+  
   getContentPreviewStyle(): { [key: string]: string } {
     const m = this.pageSettings().margins;
-    const scale = 4;
+    const scale = 4; // Skala dla podglądu
     return {
       'padding-top': `${m.top * scale}px`,
       'padding-bottom': `${m.bottom * scale}px`,
@@ -2337,12 +2765,18 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     };
   }
 
+  
   applyPageSettings(): void {
+    
     this.showPageSetup.set(false);
     this.showSuccess('Zastosowano ustawienia strony');
   }
 
+  
+  
+  
 
+  
   onOpenHeaderFooterSettings(data: {
     headerMargin: number;
     footerMargin: number;
@@ -2353,10 +2787,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showHeaderFooterDialog.set(true);
   }
 
+  
   closeHeaderFooterDialog(): void {
     this.showHeaderFooterDialog.set(false);
   }
 
+  
   updateHeaderFooterDialogData(field: string, value: number | boolean): void {
     this.headerFooterDialogData.update(data => ({
       ...data,
@@ -2364,14 +2800,19 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  
   applyHeaderFooterSettings(): void {
     const data = this.headerFooterDialogData();
     this.editor?.applyHeaderFooterSettings(data);
     this.closeHeaderFooterDialog();
   }
 
+  
+  
+  
 
   onEditorMouseUp(event: MouseEvent): void {
+    
     if (this.showContextMenu()) return;
 
     setTimeout(() => {
@@ -2394,7 +2835,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       let x = rect.left + rect.width / 2 - toolbarWidth / 2;
       let y = rect.top - toolbarHeight - margin;
 
+      
       x = Math.max(margin, Math.min(x, window.innerWidth - toolbarWidth - margin));
+      
       if (y < margin) {
         y = rect.bottom + margin;
       }
@@ -2402,7 +2845,38 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       this.miniToolbarX.set(x);
       this.miniToolbarY.set(y);
       this.showMiniToolbar.set(true);
+      this._armMiniToolbarAutoHide();
     }, 10);
+  }
+
+  
+  private _miniToolbarMoveAway: ((e: MouseEvent) => void) | null = null;
+
+  private _armMiniToolbarAutoHide(): void {
+    if (this._miniToolbarMoveAway) return;
+    const PROXIMITY_PX = 48;
+    this._miniToolbarMoveAway = (e: MouseEvent) => {
+      if (!this.showMiniToolbar()) {
+        this._disarmMiniToolbarAutoHide();
+        return;
+      }
+      const el = document.querySelector('.mini-toolbar') as HTMLElement | null;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const outside = e.clientX < r.left - PROXIMITY_PX || e.clientX > r.right + PROXIMITY_PX
+        || e.clientY < r.top - PROXIMITY_PX || e.clientY > r.bottom + PROXIMITY_PX;
+      if (outside) {
+        this.showMiniToolbar.set(false);
+        this._disarmMiniToolbarAutoHide();
+      }
+    };
+    document.addEventListener('mousemove', this._miniToolbarMoveAway);
+  }
+
+  private _disarmMiniToolbarAutoHide(): void {
+    if (!this._miniToolbarMoveAway) return;
+    document.removeEventListener('mousemove', this._miniToolbarMoveAway);
+    this._miniToolbarMoveAway = null;
   }
 
   onEditorMouseDown(event: MouseEvent): void {
@@ -2412,21 +2886,41 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
+  onEditorKeyDownHideMiniToolbar(): void {
+    if (this.showMiniToolbar()) this.showMiniToolbar.set(false);
+  }
+
+  
   onMiniToolbarMouseDown(event: MouseEvent): void {
     const target = event.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'SELECT') {
+    const control = target.closest('input, select, button') as HTMLElement | null;
+    if (!control) {
+      this.showMiniToolbar.set(false);
+      return;
+    }
+    
+    
+    if (control.tagName === 'SELECT' && event.detail >= 2) {
+      this.showMiniToolbar.set(false);
+      return;
+    }
+    if (control.tagName === 'INPUT' || control.tagName === 'SELECT') {
+      
       this.editor?.saveSelection();
     } else {
       event.preventDefault();
     }
   }
 
+  
   alignmentActive(align: 'left' | 'center' | 'right' | 'justify'): boolean {
     return (this.editorState()?.currentFormatting?.alignment ?? 'left') === align;
   }
 
   miniToolbarCommand(command: string): void {
     this.editor?.executeCommand(command as any);
+    
     setTimeout(() => {
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed) {
@@ -2487,6 +2981,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.editor?.executeCommand('outdent');
   }
 
+  
+  
+  
 
   closeContextMenu(): void {
     this.showContextMenu.set(false);
@@ -2543,7 +3040,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeContextMenu();
   }
 
+  
   setCellColor(color: string): void {
+    
     const customSelected = this.selectedCells();
     if (customSelected.size > 0) {
       customSelected.forEach(c => (c as HTMLElement).style.backgroundColor = color);
@@ -2558,6 +3057,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   clearCellColor(): void {
     const customSelected = this.selectedCells();
     if (customSelected.size > 0) {
@@ -2573,11 +3073,15 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
+  
+  
 
   private getContextCell(): HTMLElement | null {
     return this.contextMenuTargetCell() || this.activeTableCell();
   }
 
+  
   private createCellLike(reference: HTMLTableCellElement | undefined): HTMLTableCellElement {
     const td = document.createElement('td');
     const style = reference?.getAttribute('style');
@@ -2680,6 +3184,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeContextMenu();
   }
 
+  
+  
+  
 
   contextMenuAlignImageLeft(): void {
     const img = this.contextMenuTargetImage();
@@ -2717,16 +3224,22 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeContextMenu();
   }
 
+  
   private getSelectedCells(selection: Selection, editor: HTMLElement): HTMLElement[] {
+    
     const customSelected = this.selectedCells();
     if (customSelected.size > 0) {
       return Array.from(customSelected);
     }
 
+    
     const cell = this.activeTableCell();
     return cell ? [cell] : [];
   }
 
+  
+  
+  
 
   toggleToolsMenu(): void {
     const wasOpen = this.showToolsMenu();
@@ -2734,6 +3247,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showToolsMenu.set(!wasOpen);
   }
 
+  
+  
+  
 
   toggleViewMenu(): void {
     const wasOpen = this.showViewMenu();
@@ -2757,6 +3273,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  
   onRulerMarginsChange(margins: PageMargins): void {
     this.pageSettings.update(s => ({
       ...s,
@@ -2764,10 +3281,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }));
   }
 
+  
   onRulerDragGuide(e: { active: boolean; axis: 'horizontal' | 'vertical'; offsetPx: number }): void {
     this.rulerGuide.set({ ...e });
   }
 
+  
   onEditingSectionChange(section: 'header' | 'footer' | 'body'): void {
     this.editingSection.set(section);
     if (section === 'body') {
@@ -2775,10 +3294,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
   onSectionGeometryChange(geo: { section: 'header' | 'footer'; topCm: number; bottomCm: number }): void {
     this.sectionGeometry.set(geo);
   }
 
+  
   onVerticalRulerMarginsChange(margins: PageMargins): void {
     const section = this.editingSection();
     if (section === 'body') {
@@ -2789,17 +3310,18 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const geo = this.sectionGeometry();
     if (section === 'header') {
       const topCm = geo ? Math.max(0, geo.topCm) : 0;
-      const newBottomCm = pageH - margins.bottom;
+      const newBottomCm = pageH - margins.bottom; // dolna krawędź pasma nagłówka
       const newHeight = Math.round((newBottomCm - topCm) * 100) / 100;
       this.editor?.setHeaderHeight(newHeight);
     } else if (section === 'footer') {
-      const bottomCm = geo ? geo.bottomCm : pageH - margins.bottom;
-      const newTopCm = margins.top;
+      const bottomCm = geo ? geo.bottomCm : pageH - margins.bottom; // dolna krawędź pasma stopki
+      const newTopCm = margins.top; // górna krawędź pasma stopki
       const newHeight = Math.round((bottomCm - newTopCm) * 100) / 100;
       this.editor?.setFooterHeight(newHeight);
     }
   }
 
+  
   onRulerBlockIndentChange(indent: { start?: number; end?: number }): void {
     const blocks = this.getSelectedBlocks();
     if (blocks.length === 0) return;
@@ -2823,19 +3345,23 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       }
     }
 
+    
     this.currentBlockIndent.update(prev => ({
       start: indent.start !== undefined ? indent.start : prev.start,
       end: indent.end !== undefined ? indent.end : prev.end
     }));
 
+    
     this.editor?.triggerContentChange();
   }
 
+  
   @HostListener('document:selectionchange')
   onDocumentSelectionChange(): void {
     this.updateCurrentBlockIndent();
   }
 
+  
   private getSelectedBlocks(): HTMLElement[] {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) return [];
@@ -2861,6 +3387,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       const b = findBlock(range.startContainer);
       if (b) blocks.push(b);
     } else {
+      
       const walker = document.createTreeWalker(
         range.commonAncestorContainer,
         NodeFilter.SHOW_ELEMENT,
@@ -2872,11 +3399,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
           }
         }
       );
+      
       const startBlock = findBlock(range.startContainer);
       if (startBlock) blocks.push(startBlock);
       let node = walker.nextNode();
       while (node) {
         const el = node as HTMLElement;
+        
         blocks.push(el);
         node = walker.nextNode();
       }
@@ -2884,12 +3413,15 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       if (endBlock) blocks.push(endBlock);
     }
 
+    
+    
     const result: HTMLElement[] = [];
     for (const b of blocks) {
       if (seen.has(b)) continue;
       seen.add(b);
       result.push(b);
     }
+    
     const filtered = result.filter(el => {
       if (el.tagName === 'LI') {
         const parent = el.parentElement;
@@ -2898,6 +3430,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         }
       }
       if (el.tagName === 'IMG') {
+        
         let p = el.parentElement;
         while (p && !['P', 'DIV', 'FIGURE'].includes(p.tagName)) p = p.parentElement;
         if (p) {
@@ -2914,6 +3447,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return filtered;
   }
 
+  
   private updateCurrentBlockIndent(): void {
     const blocks = this.getSelectedBlocks();
     if (blocks.length === 0) {
@@ -2934,6 +3468,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.updateColumnRulerContext(block);
   }
 
+  
   private updateColumnRulerContext(block: HTMLElement): void {
     const band = block.closest<HTMLElement>('.docx-col-band');
     const editorContent = block.closest<HTMLElement>('.editor-content');
@@ -2958,6 +3493,8 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const pageRect = editorContent.getBoundingClientRect();
     const scale = editorContent.offsetWidth > 0 ? pageRect.width / editorContent.offsetWidth : 1;
     const containerRect = container.getBoundingClientRect();
+    
+    
     const contentLeftViewportPx = containerRect.left + padLeftPx * scale;
     const baseStartPx = (contentLeftViewportPx - pageRect.left) / scale;
 
@@ -2968,6 +3505,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       widthCm: round2(colWidthPx * cmPerPx)
     }));
 
+    
     const focusX = this.getSelectionFocusX() ?? block.getBoundingClientRect().left;
     const relPx = (focusX - contentLeftViewportPx) / scale;
     const activeIndex = Math.max(0, Math.min(count - 1, Math.floor(relPx / (colWidthPx + gapPx))));
@@ -2975,6 +3513,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.setColumnRuler({ segments, activeIndex });
   }
 
+  
   private getSelectionFocusX(): number | null {
     const sel = window.getSelection();
     if (!sel || !sel.focusNode) return null;
@@ -2984,6 +3523,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       r.collapse(true);
       const rect = r.getClientRects()[0];
       if (rect) return rect.left;
+      
       const el = sel.focusNode.nodeType === Node.ELEMENT_NODE
         ? sel.focusNode as HTMLElement
         : sel.focusNode.parentElement;
@@ -2993,6 +3533,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
   private setColumnRuler(next: { segments: RulerColumnSegment[]; activeIndex: number } | null): void {
     const prev = this.currentColumnRuler();
     if (prev === null && next === null) return;
@@ -3007,6 +3548,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.currentColumnRuler.set(next);
   }
 
+  
+  
+  
 
   openParagraphDialog(): void {
     this.closeAllMenus();
@@ -3019,9 +3563,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showParagraphDialog.set(false);
   }
 
+  
   private readCurrentParagraphSettings(): void {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
+      
+      
       this.paragraphData = { ...this._paragraphDefaults };
       return;
     }
@@ -3039,16 +3586,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       const el = block as HTMLElement;
       const style = window.getComputedStyle(el);
 
+      
       const textAlign = style.textAlign;
       if (textAlign === 'center') this.paragraphData.alignment = 'center';
       else if (textAlign === 'right' || textAlign === 'end') this.paragraphData.alignment = 'right';
       else if (textAlign === 'justify') this.paragraphData.alignment = 'justify';
       else this.paragraphData.alignment = 'left';
 
+      
+      
+      
       const pxToCm = (px: number) => Math.round((px / CSS_PX_PER_CM) * 10) / 10;
       this.paragraphData.indentLeft = pxToCm(parseFloat(style.marginLeft) || 0);
       this.paragraphData.indentRight = pxToCm(parseFloat(style.marginRight) || 0);
 
+      
       const textIndent = parseFloat(style.textIndent) || 0;
       if (textIndent > 0) {
         this.paragraphData.specialIndent = 'firstLine';
@@ -3060,14 +3612,22 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         this.paragraphData.specialIndent = 'none';
       }
 
+      
+      
+      
+      
       const pxToPt = (px: number) => Math.round((px * 72) / 96);
       this.paragraphData.spaceBefore = pxToPt(parseFloat(style.marginTop) || 0);
       this.paragraphData.spaceAfter = pxToPt(
         (parseFloat(style.marginBottom) || 0) + (parseFloat(style.paddingBottom) || 0));
 
+      
+      
+      
       const inlineLineHeight = el.style.lineHeight;
       const atLeastMax = /^max\(\s*([\d.]+)pt/.exec(inlineLineHeight);
       if (atLeastMax) {
+        
         this.paragraphData.lineSpacingType = 'atLeast';
         this.paragraphData.lineSpacingValue = parseFloat(atLeastMax[1]) || 12;
       } else if (inlineLineHeight.endsWith('pt')) {
@@ -3085,11 +3645,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         }
       }
 
+      
+      
       this.paragraphData.pageBreakBefore =
         /always|page/i.test(el.style.pageBreakBefore || el.style.breakBefore || '');
     }
   }
 
+  
   applyParagraphSettings(): void {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
@@ -3110,13 +3673,21 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       const el = block as HTMLElement;
       const cmToPx = (cm: number) => cm * CSS_PX_PER_CM;
 
+      
       el.style.textAlign = this.paragraphData.alignment;
 
+      
+      
+      
+      
       el.style.marginLeft = cmToPx(this.paragraphData.indentLeft) + 'px';
       el.style.marginRight = cmToPx(this.paragraphData.indentRight) + 'px';
+      
+      
       el.style.removeProperty('padding-left');
       el.style.removeProperty('padding-right');
 
+      
       if (this.paragraphData.specialIndent === 'firstLine') {
         el.style.textIndent = cmToPx(this.paragraphData.specialIndentBy) + 'px';
       } else if (this.paragraphData.specialIndent === 'hanging') {
@@ -3125,11 +3696,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         el.style.textIndent = '0';
       }
 
+      
+      
       const ptToPx = (pt: number) => (pt * 96) / 72;
       el.style.marginTop = ptToPx(this.paragraphData.spaceBefore) + 'px';
       el.style.paddingBottom = ptToPx(this.paragraphData.spaceAfter) + 'px';
       el.style.marginBottom = '';
 
+      
+      
+      
       switch (this.paragraphData.lineSpacingType) {
         case 'single':
           applyWordLineSpacing(el, 1);
@@ -3151,23 +3727,31 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
           break;
       }
 
+      
+      
+      
+      
       if (this.paragraphData.pageBreakBefore) {
         el.style.pageBreakBefore = 'always';
       } else if (/always|page/i.test(el.style.pageBreakBefore || el.style.breakBefore || '')) {
         el.style.pageBreakBefore = 'auto';
       }
 
+      
+      
       this.notifyEditorChange();
     }
 
     this.closeParagraphDialog();
   }
 
+  
   setParagraphAsDefault(): void {
     this._paragraphDefaults = { ...this.paragraphData };
     this.applyParagraphSettings();
   }
 
+  
   getLineSpacingUnit(): string {
     switch (this.paragraphData.lineSpacingType) {
       case 'atLeast':
@@ -3180,6 +3764,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
   getPreviewLineHeight(): string {
     switch (this.paragraphData.lineSpacingType) {
       case 'single': return '1';
@@ -3190,6 +3775,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
+  
+  
 
   openInsertTableDialog(): void {
     this.closeAllMenus();
@@ -3209,8 +3797,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showInsertTableDialog.set(false);
   }
 
+  
+  
+  
+  
   private static readonly TABLE_MIN_COLS = 1;
-  private static readonly TABLE_MAX_COLS = 63;
+  private static readonly TABLE_MAX_COLS = 63;   // limit Worda
   private static readonly TABLE_MIN_ROWS = 1;
   private static readonly TABLE_MAX_ROWS = 500;
 
@@ -3272,6 +3864,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   }
 
   applyInsertTable(): void {
+    
     if (this.insertTableValidationError()) {
       return;
     }
@@ -3290,9 +3883,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
 
     this.closeInsertTableDialog();
+    
+    
+    queueMicrotask(() => this.detectTableContext());
   }
 
+  
+  
+  
 
+  
   private notifyEditorChange(): void {
     const el = this.editor?.editorContent?.nativeElement;
     if (el) {
@@ -3300,6 +3900,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
   private getCellPosition(cell: HTMLTableCellElement): { rowIndex: number; colIndex: number } | null {
     const row = cell.parentElement as HTMLTableRowElement;
     if (!row) return null;
@@ -3311,6 +3912,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return { rowIndex, colIndex };
   }
 
+  
   tableInsertRowAbove(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3327,6 +3929,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableInsertRowBelow(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3344,6 +3947,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableInsertColLeft(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3359,6 +3963,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableInsertColRight(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3375,6 +3980,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableDeleteRow(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3389,6 +3995,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableDeleteCol(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3408,6 +4015,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableDeleteTable(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3420,6 +4028,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
+  
+  
 
   setTableBorderStyle(style: TableBorderLineStyle): void {
     this.tableBorderStyle.set(style);
@@ -3433,12 +4044,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     if (width >= 1 && width <= 12) this.tableBorderWidth.set(width);
   }
 
+  
   resetTableBorderSettings(): void {
     this.tableBorderColor.set(DEFAULT_TABLE_BORDER.color);
     this.tableBorderWidth.set(DEFAULT_TABLE_BORDER.width);
     this.tableBorderStyle.set(DEFAULT_TABLE_BORDER.style);
   }
 
+  
   applyTableBorderScope(scope: TableBorderScope): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3449,10 +4062,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   clearTableBorders(): void {
     this.applyTableBorderScope('none');
   }
 
+  
   restoreDefaultTableBorders(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3462,6 +4077,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   private resolveAutoTargetCells(table: HTMLTableElement): HTMLTableCellElement[] {
     const selected = Array.from(this.selectedCells());
     if (selected.length > 0) return selected;
@@ -3478,6 +4094,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     };
   }
 
+  
   tableMergeCells(): void {
     const customSelected = this.selectedCells();
     const cells = customSelected.size > 0
@@ -3489,6 +4106,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         })();
     if (cells.length < 2) return;
 
+    
     const firstCell = cells[0] as HTMLTableCellElement;
     let mergedContent = '';
     let minRow = Infinity, maxRow = -1, minCol = Infinity, maxCol = -1;
@@ -3505,6 +4123,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       maxCol = Math.max(maxCol, ci + (td.colSpan || 1) - 1);
     });
 
+    
     cells.forEach(c => {
       const txt = c.innerHTML.trim();
       if (txt && txt !== '&nbsp;' && txt !== '<br>') {
@@ -3512,12 +4131,14 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       }
     });
 
+    
     const colSpan = maxCol - minCol + 1;
     const rowSpan = maxRow - minRow + 1;
     firstCell.colSpan = colSpan;
     firstCell.rowSpan = rowSpan;
     firstCell.innerHTML = mergedContent || '<br>';
 
+    
     const table = this.activeTable();
     if (!table) return;
     for (let r = minRow; r <= maxRow; r++) {
@@ -3534,6 +4155,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableSplitCell(): void {
     const cell = this.activeTableCell();
     if (!cell) return;
@@ -3544,6 +4166,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const rs = cell.rowSpan || 1;
 
     if (cs <= 1 && rs <= 1) {
+      
       const pos = this.getCellPosition(cell);
       if (!pos) return;
       cell.colSpan = 1;
@@ -3559,16 +4182,19 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         }
       });
     } else {
+      
       const pos = this.getCellPosition(cell);
       if (!pos) return;
       cell.colSpan = 1;
       cell.rowSpan = 1;
+      
       const row = cell.parentElement as HTMLTableRowElement;
       for (let c = 1; c < cs; c++) {
         const newTd = row.insertCell(Array.from(row.cells).indexOf(cell) + 1);
         newTd.innerHTML = '<br>';
         newTd.style.cssText = 'border:1px solid #ccc;padding:8px;min-width:30px;';
       }
+      
       for (let r = 1; r < rs; r++) {
         const targetRow = table.rows[pos.rowIndex + r];
         if (!targetRow) continue;
@@ -3583,6 +4209,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableSplitTable(): void {
     const cell = this.activeTableCell();
     const table = this.activeTable();
@@ -3590,11 +4217,13 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     const pos = this.getCellPosition(cell);
     if (!pos || pos.rowIndex === 0) return;
 
+    
     const newTable = document.createElement('table');
     newTable.style.cssText = table.style.cssText;
     const rowsToMove = Array.from(table.rows).slice(pos.rowIndex);
     rowsToMove.forEach(row => newTable.appendChild(row));
 
+    
     const separator = document.createElement('p');
     separator.innerHTML = '&nbsp;';
     table.parentNode?.insertBefore(separator, table.nextSibling);
@@ -3602,6 +4231,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableAutoFitContents(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3613,6 +4243,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableAutoFitWindow(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3624,6 +4255,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableFixedWidth(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3632,6 +4264,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableDistributeRows(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3644,6 +4277,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   tableDistributeCols(): void {
     const table = this.activeTable();
     if (!table) return;
@@ -3657,6 +4291,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.notifyEditorChange();
   }
 
+  
   showTableGridLines = signal(true);
   tableToggleGridLines(): void {
     this.showTableGridLines.update(v => !v);
@@ -3673,9 +4308,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
+  
   shadingDropdownX = signal(0);
   shadingDropdownY = signal(0);
 
+  
   toggleShadingDropdown(event: MouseEvent): void {
     const btn = (event.target as HTMLElement).closest('.table-toolbar-btn-shading') as HTMLElement;
     if (btn) {
@@ -3686,6 +4323,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showShadingDropdown.update(v => !v);
   }
 
+  
   shadingColors = [
     '#FFFFFF', '#F2F2F2', '#D9D9D9', '#BFBFBF', '#A6A6A6', '#808080', '#595959', '#404040', '#262626', '#000000',
     '#FFF2CC', '#FFE599', '#FFD966', '#FFC000', '#BF9000', '#806000', '#FCE4D6', '#F8CBAD', '#F4B084', '#ED7D31',
@@ -3694,6 +4332,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     '#E6D5F5', '#D0B8E8', '#B490D0', '#7030A0', '#5B259A', '#3B1770'
   ];
 
+  
   private applyTableAutoFit(behavior: string, fixedWidth: number): void {
     setTimeout(() => {
       const editorEl = this.editor?.editorContent?.nativeElement;
@@ -3727,13 +4366,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }, 50);
   }
 
+  
 
+  
   openPropertiesDialog(): void {
     this.propertiesData.set({ ...this.documentMetadata() });
     this.showPropertiesDialog.set(true);
     this.closeAllMenus();
   }
 
+  
   saveProperties(): void {
     const props = this.propertiesData();
     this.documentMetadata.update(m => ({
@@ -3756,15 +4398,19 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showSuccess('Właściwości dokumentu zostały zaktualizowane');
   }
 
+  
   closePropertiesDialog(): void {
     this.showPropertiesDialog.set(false);
   }
 
+  
   updateProperty(key: string, value: string): void {
     this.propertiesData.update(p => ({ ...p, [key]: value }));
   }
 
+  
 
+  
   openSignatureDialog(): void {
     this.signatureDialogTab.set(
       this.documentSignatures().length > 0 ? 'list' : 'sign'
@@ -3780,10 +4426,12 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeAllMenus();
   }
 
+  
   closeSignatureDialog(): void {
     this.showSignatureDialog.set(false);
   }
 
+  
   onCertificateFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
@@ -3802,6 +4450,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     reader.readAsArrayBuffer(file);
   }
 
+  
   signDocument(): void {
     if (!this.signatureData.certificateBase64) {
       this.showError('Wybierz plik certyfikatu (.pfx/.p12)');
@@ -3857,6 +4506,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
+  
   insertSignatureLine(): void {
     const name = this.signatureData.signerName || '________________________';
     const title = this.signatureData.signerTitle || '';
