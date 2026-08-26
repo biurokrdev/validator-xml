@@ -1,6 +1,5 @@
 ﻿<div class="wysiwyg-editor-wrapper" [class.read-only]="readOnly" [class.band-editing]="editingSection() !== 'body'">
   <div class="pages-container">
-    
     @for (page of pageContents(); track $index) {
       <div class="page-wrapper">
         <div class="page"
@@ -10,7 +9,6 @@
              [style.--w-line-single]="documentDefaultLineSingle()"
              [attr.data-page-number]="$index + 1">
 
-          
           <div class="page-header"
                [class.editing]="editingSection() === 'header'"
                [style.margin-top.px]="headerOffsetPx($index)"
@@ -30,7 +28,6 @@
                 (beforeinput)="onEditorBeforeInput($event)"
                 (input)="onHeaderInput($event)"
               ></div>
-              
             } @else {
               <div class="header-display" [class.show-formatting-marks]="showFormattingMarks()" [innerHTML]="getHeaderContentSafe($index)"></div>
             }
@@ -41,6 +38,7 @@
               #pageEditor
               class="editor-content"
               [class.show-formatting-marks]="showFormattingMarks()"
+              [class.para-spacing-sum]="documentParagraphSpacingSum()"
               [attr.contenteditable]="readOnly ? 'false' : 'true'"
               spellcheck="false"
               [attr.data-page-index]="$index"
@@ -71,6 +69,7 @@
               #pageEditor
               class="editor-content"
               [class.show-formatting-marks]="showFormattingMarks()"
+              [class.para-spacing-sum]="documentParagraphSpacingSum()"
               [attr.contenteditable]="readOnly ? 'false' : 'true'"
               spellcheck="false"
               [attr.data-page-index]="$index"
@@ -97,7 +96,6 @@
             ></div>
           }
 
-          
           <div class="page-footer"
                [class.editing]="editingSection() === 'footer'"
                [style.margin-bottom.px]="footerOffsetPx($index)"
@@ -107,7 +105,6 @@
                (click)="startEditingFooter($event)"
                (dblclick)="startEditingFooter($event)">
             @if (editingSection() === 'footer' && $index === editingHfPageIndex()) {
-              
               <div
                 #footerContent
                 class="footer-editor-content"
@@ -123,7 +120,6 @@
             }
           </div>
 
-          
           @if (endnoteRegionFor($index); as enRegion) {
             <div class="endnotes-region"
                  role="region"
@@ -150,13 +146,11 @@
                        [attr.data-testid]="'endnote-content-' + entry.en.id"
                        [innerHTML]="endnoteSafeHtml(entry.en)"
                        (blur)="commitEndnoteContent(entry.en.id, $event)"></div>
-                  
                 </div>
               }
             </div>
           }
 
-          
           @if (footnoteRegionFor($index); as fnRegion) {
             <div class="footnotes-region"
                  role="region"
@@ -183,13 +177,11 @@
                        [attr.data-testid]="'footnote-content-' + entry.fn.id"
                        [innerHTML]="footnoteSafeHtml(entry.fn)"
                        (blur)="commitFootnoteContent(entry.fn.id, $event)"></div>
-                  
                 </div>
               }
             </div>
           }
 
-          
           @if (showMarginGuides) {
             <div class="margin-guides">
               <div class="margin-guide margin-guide-top" [style.top.px]="pageMarginPx($index, 'top')"></div>
@@ -200,7 +192,6 @@
           }
         </div>
 
-        
         @if ($index < pageContents().length - 1) {
           <div class="page-separator"></div>
         }

@@ -21,7 +21,6 @@ public class DocumentDefaultsAndTableSpacingFidelityTests
         _writer = new HtmlToDocxConverter();
     }
 
-
     private static MemoryStream BuildQutableLikeDocx()
     {
         var ms = new MemoryStream();
@@ -111,7 +110,6 @@ public class DocumentDefaultsAndTableSpacingFidelityTests
         return html.Substring(start, end - start + 1);
     }
 
-
     [Test]
     public void Read_DocDefaults_EmitsContainerDataAttributesAndLineHeight()
     {
@@ -134,7 +132,7 @@ public class DocumentDefaultsAndTableSpacingFidelityTests
         var cellParagraph = System.Text.RegularExpressions.Regex.Match(
             html, "<td[^>]*><p style=\"([^\"]*)\"");
         cellParagraph.Success.Should().BeTrue();
-        cellParagraph.Groups[1].Value.Should().Contain("padding-bottom:0pt;");
+        cellParagraph.Groups[1].Value.Should().Contain("margin-bottom:0pt;");
         cellParagraph.Groups[1].Value.Should().Contain("line-height:1.221;");
         cellParagraph.Groups[1].Value.Should().Contain("--w-line-tw:240;");
 
@@ -193,7 +191,6 @@ public class DocumentDefaultsAndTableSpacingFidelityTests
         html.Should().Contain("data-w-tw=\"3021\"");
     }
 
-
     [Test]
     public void Write_ContainerDefaults_RestoredIntoDocDefaults()
     {
@@ -205,7 +202,7 @@ public class DocumentDefaultsAndTableSpacingFidelityTests
         using var doc = WordprocessingDocument.Open(new MemoryStream(bytes), false);
         var docDefaults = doc.MainDocumentPart!.StyleDefinitionsPart!.Styles!.DocDefaults!;
         docDefaults.RunPropertiesDefault!.RunPropertiesBaseStyle!.GetFirstChild<FontSize>()!
-            .Val!.Value.Should().Be("24"); 
+            .Val!.Value.Should().Be("24");
         var spacing = docDefaults.ParagraphPropertiesDefault!.ParagraphPropertiesBaseStyle!
             .GetFirstChild<SpacingBetweenLines>()!;
         spacing.After!.Value.Should().Be("160");
@@ -221,7 +218,7 @@ public class DocumentDefaultsAndTableSpacingFidelityTests
         using var doc = WordprocessingDocument.Open(new MemoryStream(bytes), false);
         var docDefaults = doc.MainDocumentPart!.StyleDefinitionsPart!.Styles!.DocDefaults!;
         docDefaults.RunPropertiesDefault!.RunPropertiesBaseStyle!.GetFirstChild<FontSize>()!
-            .Val!.Value.Should().Be("22"); 
+            .Val!.Value.Should().Be("22");
         docDefaults.ParagraphPropertiesDefault!.ParagraphPropertiesBaseStyle!
             .GetFirstChild<SpacingBetweenLines>()!.Line!.Value.Should().Be("259");
     }
@@ -270,7 +267,7 @@ public class DocumentDefaultsAndTableSpacingFidelityTests
         var cells = doc.MainDocumentPart.Document.Body!.Descendants<TableCell>().ToList();
         cells[0].TableCellProperties!.TableCellWidth!.Width!.Value.Should().Be("3020");
         cells[1].TableCellProperties!.TableCellWidth!.Width!.Value.Should().Be("3021");
-        cells[2].TableCellProperties!.TableCellWidth!.Width!.Value.Should().Be("6041"); 
+        cells[2].TableCellProperties!.TableCellWidth!.Width!.Value.Should().Be("6041");
     }
 
     [Test]
@@ -283,9 +280,8 @@ public class DocumentDefaultsAndTableSpacingFidelityTests
 
         using var doc = WordprocessingDocument.Open(new MemoryStream(bytes), false);
         var grid = doc.MainDocumentPart!.Document.Body!.Descendants<TableGrid>().First();
-        grid.Elements<GridColumn>().First().Width!.Value.Should().Be("4500"); 
+        grid.Elements<GridColumn>().First().Width!.Value.Should().Be("4500");
     }
-
 
     [Test]
     public void RoundTrip_QutableScenario_IsStableAndSchemaValid()

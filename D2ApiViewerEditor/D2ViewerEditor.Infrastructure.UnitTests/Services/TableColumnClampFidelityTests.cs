@@ -37,8 +37,7 @@ public class TableColumnClampFidelityTests
         using (var docx = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document))
         {
             var mainPart = docx.AddMainDocumentPart();
-            using var w = new StreamWriter(mainPart.GetStream(FileMode.Create), Encoding.UTF8);
-            w.Write(doc);
+            mainPart.FeedXml(doc);
         }
         ms.Position = 0;
         return ms;
@@ -91,7 +90,7 @@ public class TableColumnClampFidelityTests
         colPx.Should().HaveCount(2);
         colPx.Sum().Should().BeInRange(798, 802, "tabela wystaje w marginesy jak w Wordzie");
         html.Should().Contain("data-w-tw=\"6000\"");
-        html.Should().NotContain("data-tbl-w-tw", "bez clampu nie ma potrzeby markera szerokości");
+        html.Should().Contain("data-tbl-w-tw=\"12000\"");
     }
 
     [Test]

@@ -12,9 +12,7 @@ import { MsalService } from '@azure/msal-angular';
 
 const msalStub = { instance: { getActiveAccount: () => null, getAllAccounts: () => [] } };
 
-
 const TEST_DIALOG_PASSWORD = `test-${Math.random().toString(36).slice(2)}`;
-
 
 describe('DocumentEditorComponent — ESC zamyka boczny panel', () => {
   let fixture: ComponentFixture<DocumentEditorComponent>;
@@ -68,7 +66,7 @@ describe('DocumentEditorComponent — ESC zamyka boczny panel', () => {
   it('nie zamyka panelu, gdy ESC obsłużył już bardziej szczegółowy handler (defaultPrevented)', () => {
     component.showFindReplace.set(true);
     const ev = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
-    ev.preventDefault(); // np. deselekcja obrazu w edytorze
+    ev.preventDefault();
     component.onEscapeKeydown(ev);
     expect(component.showFindReplace()).toBe(true);
   });
@@ -94,7 +92,6 @@ describe('DocumentEditorComponent — ESC zamyka boczny panel', () => {
     component.showTablePanel.set(true);
     esc();
     expect(component.showTablePanel()).toBe(false);
-    
     expect(() => esc()).not.toThrow();
   });
 });
@@ -119,7 +116,6 @@ describe('DocumentEditorComponent — przełączanie doku tabela ↔ wyszukiwani
     component = fixture.componentInstance;
   });
 
-  
   const sync = () => (component as any).syncTablePanel();
 
   it('ponowne zaznaczenie tabeli przy otwartym wyszukiwaniu przełącza dok na formatowanie tabeli', () => {
@@ -263,7 +259,6 @@ describe('DocumentEditorComponent — ESC zamyka edycję nagłówka/stopki', () 
     esc();
 
     expect(stopped).toBe(true);
-    
     expect(component.showFindReplace()).toBe(true);
   });
 
@@ -361,7 +356,6 @@ describe('DocumentEditorComponent — menu „Pomoc" i akcja „Zgłoś"', () =>
         { provide: DocumentStorageService, useValue: {} },
         { provide: Router, useValue: { navigate: () => {} } },
         { provide: ActivatedRoute, useValue: { queryParams: of({}) } },
-        
         { provide: BuildInfoService, useValue: {
             buildNumber: () => '1.0.0',
             environment: () => 'TEST',
@@ -401,7 +395,6 @@ describe('DocumentEditorComponent — menu „Pomoc" i akcja „Zgłoś"', () =>
 
   it('openReportEmail() zamyka otwarte menu „Pomoc" (akcja zamyka dropdown jak inne menu)', () => {
     component.showHelpMenu.set(true);
-    
     const origOpen = window.open;
     (window as any).open = () => null;
 
@@ -413,7 +406,6 @@ describe('DocumentEditorComponent — menu „Pomoc" i akcja „Zgłoś"', () =>
     }
   });
 
-  
   function captureMailBody(): string {
     let captured = '';
     const origOpen = window.open;
@@ -437,7 +429,6 @@ describe('DocumentEditorComponent — menu „Pomoc" i akcja „Zgłoś"', () =>
     expect(body).toContain('master-123');
     expect(body).toContain('Version ID');
     expect(body).toContain('version-456');
-    
     expect(body).not.toMatch(/Version ID\s*:\s*—/);
   });
 
@@ -450,7 +441,6 @@ describe('DocumentEditorComponent — menu „Pomoc" i akcja „Zgłoś"', () =>
     expect(body).toMatch(/Version ID\s*:\s*—/);
   });
 
-  
   function captureMailUrl(): string {
     let captured = '';
     const origOpen = window.open;
@@ -465,7 +455,6 @@ describe('DocumentEditorComponent — menu „Pomoc" i akcja „Zgłoś"', () =>
 
   it('openReportEmail() ustawia adresata wsparcia z konfiguracji', () => {
     const url = captureMailUrl();
-    
     expect(url).toMatch(/^mailto:test@testowy\.pl\?/);
   });
 
@@ -508,13 +497,11 @@ describe('DocumentEditorComponent — menu „Pomoc" i akcja „Zgłoś"', () =>
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
     try {
-      
       (component as unknown as { logOpenDiagnostics: () => void }).logOpenDiagnostics();
 
       expect(infoSpy).toHaveBeenCalledTimes(1);
       const msg = infoSpy.mock.calls[0][0] as string;
       expect(msg).toContain('[open]');
-      
       expect(msg).toContain('Master ID');
       expect(msg).toContain('master-777');
       expect(msg).toContain('Version ID');
@@ -675,7 +662,6 @@ describe('DocumentEditorComponent — showSaveState (widoczność autozapisu + p
   });
 });
 
-
 describe('DocumentEditorComponent — rozmiar strony (PageSize round-trip)', () => {
   let fixture: ComponentFixture<DocumentEditorComponent>;
   let component: DocumentEditorComponent;
@@ -727,15 +713,12 @@ describe('DocumentEditorComponent — rozmiar strony (PageSize round-trip)', () 
   });
 
   it('buildSaveRequest niesie EFEKTYWNY format numeracji przypisów (plik = ekran)', () => {
-    
     component.footnoteNumberFormat.set('upperRoman');
     component.endnoteNumberFormat.set('decimal');
     let req = (component as any).buildSaveRequest();
     expect(req.footnoteNumberFormat).toBe('upperRoman');
     expect(req.endnoteNumberFormat).toBe('decimal');
 
-    
-    
     component.footnoteNumberFormat.set(null);
     component.endnoteNumberFormat.set(null);
     req = (component as any).buildSaveRequest();
@@ -743,7 +726,6 @@ describe('DocumentEditorComponent — rozmiar strony (PageSize round-trip)', () 
     expect(req.endnoteNumberFormat).toBe('lowerRoman');
   });
 });
-
 
 describe('DocumentEditorComponent — „Ustaw jako domyślne" akapitu (Doc2-PAR-007)', () => {
   let fixture: ComponentFixture<DocumentEditorComponent>;
@@ -772,7 +754,6 @@ describe('DocumentEditorComponent — „Ustaw jako domyślne" akapitu (Doc2-PAR
 
     component.setParagraphAsDefault();
 
-    
     expect(component.paragraphData.alignment).toBe('center');
     expect(component.paragraphData.spaceAfter).toBe(24);
     expect(component.paragraphData.lineSpacingValue).toBe(2);
@@ -783,7 +764,6 @@ describe('DocumentEditorComponent — „Ustaw jako domyślne" akapitu (Doc2-PAR
     component.paragraphData.spaceBefore = 12;
     component.setParagraphAsDefault();
 
-    
     component.paragraphData.alignment = 'left';
     component.paragraphData.spaceBefore = 0;
     (component as any).readCurrentParagraphSettings();
@@ -797,12 +777,11 @@ describe('DocumentEditorComponent — „Ustaw jako domyślne" akapitu (Doc2-PAR
     component.setParagraphAsDefault();
 
     component.paragraphData.indentLeft = 99;
-    (component as any).readCurrentParagraphSettings(); // brak selekcji → seed z defaultu
+    (component as any).readCurrentParagraphSettings();
 
     expect(component.paragraphData.indentLeft).toBe(3);
   });
 });
-
 
 describe('DocumentEditorComponent — pozycja menu kontekstowego (Doc2-UI-006)', () => {
   let fixture: ComponentFixture<DocumentEditorComponent>;
@@ -871,7 +850,6 @@ describe('DocumentEditorComponent — pozycja menu kontekstowego (Doc2-UI-006)',
   });
 });
 
-
 describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)', () => {
   let fixture: ComponentFixture<DocumentEditorComponent>;
   let component: DocumentEditorComponent;
@@ -921,16 +899,13 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
     fixture = TestBed.createComponent(DocumentEditorComponent);
     component = fixture.componentInstance;
 
-    
     component.documentMasterId.set('m-1');
     component.documentVersionId.set('v-1');
     component.returnUrl.set('https://app.example.com/return');
     (component as any).blobToBase64 = () => Promise.resolve('PHA+PC9wPg==');
 
-    
-    
     originalWindowClose = window.close;
-    (window as any).close = () => { /* no-op */ };
+    (window as any).close = () => { };
   });
 
   afterEach(() => {
@@ -974,7 +949,7 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
 
     await vi.waitFor(() => expect(component.showSendErrorModal()).toBe(true));
     expect(component.showSendingModal()).toBe(false);
-    expect(component.workFinished()).toBe(false); // nie zamykamy karty — czekamy na decyzję
+    expect(component.workFinished()).toBe(false);
   });
 
   it('błąd HTTP pierwszej próby też pokazuje modal problemu', async () => {
@@ -1001,7 +976,7 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
 
       expect(abortCalls).toBe(1);
       expect(component.showSendErrorModal()).toBe(false);
-      expect(component.isFinishing()).toBe(false); // znów można edytować / kliknąć „Zakończ"
+      expect(component.isFinishing()).toBe(false);
       expect(component.workFinished()).toBe(false);
       expect(closeAttempts).toBe(0);
     } finally {
@@ -1032,7 +1007,7 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
 
   it('wielokrotne kliknięcie „Zakończ" nie tworzy wielu równoległych flow', async () => {
     component.finishDocument();
-    component.finishDocument(); // zablokowane guardem isFinishing
+    component.finishDocument();
     component.finishDocument();
 
     await vi.waitFor(() => expect(finishCalls).toBe(1));
@@ -1048,9 +1023,6 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
     expect(component.isFinishing()).toBe(false);
   });
 
-  
-  
-  
   describe('dokument chroniony przed edycją (isReadOnlyProtected)', () => {
     const content = (isReadOnlyProtected: boolean) => ({
       html: '<p>Plik tylko do odczytu</p>',
@@ -1069,15 +1041,11 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
 
       expect(component.documentEditProtected()).toBe(true);
       expect(component.editingDisabled()).toBe(true);
-      
       expect(showError).not.toHaveBeenCalled();
       expect(showSuccess).not.toHaveBeenCalled();
       expect(showInfo).not.toHaveBeenCalled();
     });
 
-    
-    
-    
     it('otwarcie chronionego dokumentu pokazuje JEDEN komunikat read-only jako INFO, bez sukcesu i błędu', () => {
       openResult = of(content(true));
 
@@ -1110,7 +1078,6 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
       expect(component.errorMessage()).toBeNull();
     });
 
-    
     it('showError zdejmuje wcześniejszy komunikat sukcesu (i odwrotnie)', () => {
       (component as any).showSuccess('Otwarto dokument: x');
       (component as any).showError('Tylko do odczytu');
@@ -1140,20 +1107,18 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
     });
   });
 
-  
   it('wynik ze statusem „Sending" (delivered=false) NIE pokazuje modalu błędu', async () => {
     finishResult = { next: { deliveryId: 'd-1', status: 'Sending', documentStatus: 'Sending', delivered: false, error: null } };
 
     component.finishDocument();
 
     await vi.waitFor(() => expect(finishCalls).toBe(1));
-    expect(component.showSendErrorModal()).toBe(false);   // NIE traktujemy jako błąd
-    expect(component.showSendingModal()).toBe(true);       // okno informacyjne zostaje
+    expect(component.showSendErrorModal()).toBe(false);
+    expect(component.showSendingModal()).toBe(true);
     expect(component.deliveryStatus()).toBe('Sending');
     expect(component.workFinished()).toBe(false);
   });
 
-  
   it('„Przerwij wysyłkę" w trakcie wysyłki anuluje (abortSend) i nie pokazuje błędu', async () => {
     vi.spyOn(component as any, 'showSuccess').mockImplementation(() => {});
 
@@ -1169,9 +1134,8 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
     expect(component.isFinishing()).toBe(false);
   });
 
-  
   it('„Zamknij" w trakcie wysyłki zamyka okno bez błędu, a spóźniony błąd nie wyskakuje', async () => {
-    finishResult = { next: deliveryFailed }; // request zakończy się błędem PO zamknięciu okna
+    finishResult = { next: deliveryFailed };
 
     component.finishDocument();
     component.closeSendingModal();
@@ -1180,10 +1144,9 @@ describe('DocumentEditorComponent — flow „Zakończ" (synchroniczna wysyłka)
     expect(component.workFinished()).toBe(true);
 
     await vi.waitFor(() => expect(finishCalls).toBe(1));
-    expect(component.showSendErrorModal()).toBe(false); // zamknięcie ≠ błąd, mimo nieudanego requestu
+    expect(component.showSendErrorModal()).toBe(false);
   });
 });
-
 
 describe('DocumentEditorComponent — „Pobierz oryginał dokumentu"', () => {
   let component: DocumentEditorComponent;
@@ -1254,7 +1217,6 @@ describe('DocumentEditorComponent — „Pobierz oryginał dokumentu"', () => {
   });
 });
 
-
 describe('DocumentEditorComponent — dialog hasła', () => {
   let fixture: ComponentFixture<DocumentEditorComponent>;
   let component: DocumentEditorComponent;
@@ -1299,14 +1261,13 @@ describe('DocumentEditorComponent — dialog hasła', () => {
 
   it('confirm z hasłem zamyka dialog', () => {
     component.showPasswordDialog.set(true);
-    component.passwordDialogValue = TEST_DIALOG_PASSWORD; // brak pliku oczekującego → tylko zamknięcie
+    component.passwordDialogValue = TEST_DIALOG_PASSWORD;
 
     component.confirmPasswordDialog();
 
     expect(component.showPasswordDialog()).toBe(false);
   });
 });
-
 
 describe('DocumentEditorComponent — dialog hasła wyzwalany przy konwersji', () => {
   let fixture: ComponentFixture<DocumentEditorComponent>;
@@ -1347,11 +1308,10 @@ describe('DocumentEditorComponent — dialog hasła wyzwalany przy konwersji', (
     openResult = throwError(() => new OpenDocumentError('zabezpieczony', 'PASSWORD_REQUIRED'));
     (component as any)._convertAndLoad(new File([], 'tajne.docx'), 'tajne.docx');
 
-    openResult = of({ html: '<p>ok</p>', metadata: {}, styles: [] }); // poprawne hasło → sukces
+    openResult = of({ html: '<p>ok</p>', metadata: {}, styles: [] });
     component.passwordDialogValue = TEST_DIALOG_PASSWORD;
     component.confirmPasswordDialog();
 
-    
     expect(openCalls[openCalls.length - 1][1]).toBe(TEST_DIALOG_PASSWORD);
     expect(component.showPasswordDialog()).toBe(false);
   });
@@ -1365,7 +1325,6 @@ describe('DocumentEditorComponent — dialog hasła wyzwalany przy konwersji', (
     expect(component.passwordDialogError()).toBeTruthy();
   });
 });
-
 
 describe('DocumentEditorComponent — globalne skróty edycji (Ctrl+Z/Y/X/C/V)', () => {
   let fixture: ComponentFixture<DocumentEditorComponent>;
@@ -1387,7 +1346,6 @@ describe('DocumentEditorComponent — globalne skróty edycji (Ctrl+Z/Y/X/C/V)',
     component = fixture.componentInstance;
   });
 
-  
   function ctrlKey(key: string, opts: { target?: EventTarget; shift?: boolean; alt?: boolean } = {}): KeyboardEvent {
     let prevented = false;
     const ev = {
@@ -1406,8 +1364,6 @@ describe('DocumentEditorComponent — globalne skróty edycji (Ctrl+Z/Y/X/C/V)',
 
   function editableDiv(): HTMLElement {
     const div = document.createElement('div');
-    
-    
     div.setAttribute('contenteditable', 'true');
     document.body.appendChild(div);
     return div;
@@ -1521,7 +1477,6 @@ describe('DocumentEditorComponent — globalne skróty edycji (Ctrl+Z/Y/X/C/V)',
   });
 });
 
-
 describe('DocumentEditorComponent — otwarcie PDF z edytora → podgląd (/viewer)', () => {
   let component: DocumentEditorComponent;
   let navigateToDocument: ReturnType<typeof vi.fn>;
@@ -1579,6 +1534,70 @@ describe('DocumentEditorComponent — otwarcie PDF z edytora → podgląd (/view
   });
 });
 
+describe('DocumentEditorComponent — otwarcie DOCX z edytora → nowy dokument + nawigacja', () => {
+  let component: DocumentEditorComponent;
+  let navigateToEditableDocument: ReturnType<typeof vi.fn>;
+  let uploadDocument: ReturnType<typeof vi.fn>;
+  let saveDocumentVersion: ReturnType<typeof vi.fn>;
+  let convertAndLoad: ReturnType<typeof vi.fn>;
+
+  async function setup(uploadResult: unknown): Promise<void> {
+    navigateToEditableDocument = vi.fn();
+    uploadDocument = vi.fn().mockReturnValue(uploadResult);
+    saveDocumentVersion = vi.fn().mockReturnValue(of({ versionId: 'v-new' }));
+    await TestBed.configureTestingModule({
+      imports: [DocumentEditorComponent],
+      providers: [
+        { provide: DocumentService, useValue: { getTemplates: () => of([]) } },
+        {
+          provide: DocumentStorageService,
+          useValue: { fileToBase64: vi.fn().mockResolvedValue('ZG9jeA=='), uploadDocument, saveDocumentVersion },
+        },
+        { provide: DocumentNavigationService, useValue: { navigateToEditableDocument, navigateToDocument: vi.fn() } },
+        { provide: Router, useValue: { navigate: vi.fn() } },
+        { provide: ActivatedRoute, useValue: { queryParams: of({}) } },
+        { provide: BuildInfoService, useValue: {} },
+        { provide: MsalService, useValue: msalStub },
+      ],
+    }).compileComponents();
+    component = TestBed.createComponent(DocumentEditorComponent).componentInstance;
+    convertAndLoad = vi.fn();
+    (component as any)._convertAndLoad = convertAndLoad;
+  }
+
+  it('DOCX: upload (v1) + wersja edytowalna (v2) + nawigacja na nowe id; bez wczytywania do bieżącego widoku', async () => {
+    await setup(of({ masterId: 'm-new' }));
+    component.documentMasterId.set('m-old');
+    component.documentVersionId.set('v-old');
+
+    await (component as any).openDocxAsNewDocument(new File(['x'], 'umowa.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }));
+
+    expect(uploadDocument).toHaveBeenCalledWith({
+      name: 'umowa.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      content: 'ZG9jeA==',
+    });
+    expect(saveDocumentVersion).toHaveBeenCalledWith('m-new', { content: 'ZG9jeA==' });
+    expect(navigateToEditableDocument).toHaveBeenCalledWith('m-new', 'v-new');
+    expect(convertAndLoad).not.toHaveBeenCalled();
+    expect(component.documentMasterId()).toBe('m-old');
+    expect(component.documentVersionId()).toBe('v-old');
+  });
+
+  it('.doc dostaje application/msword (jak dashboard)', async () => {
+    await setup(of({ masterId: 'm-new' }));
+    await (component as any).openDocxAsNewDocument(new File(['x'], 'stary.doc'));
+    expect(uploadDocument.mock.calls[0][0].mimeType).toBe('application/msword');
+  });
+
+  it('błąd uploadu → komunikat, bez nawigacji, spinner zdjęty', async () => {
+    await setup(throwError(() => new Error('boom')));
+    await (component as any).openDocxAsNewDocument(new File(['x'], 'umowa.docx'));
+    expect(navigateToEditableDocument).not.toHaveBeenCalled();
+    expect(component.isLoading()).toBe(false);
+    expect(component.errorMessage()).toContain('dokumentu');
+  });
+});
 
 describe('DocumentEditorComponent — kontekst tabeli: strony, martwy DOM, determinizm (Problem 11)', () => {
   let fixture: ComponentFixture<DocumentEditorComponent>;
@@ -1625,7 +1644,6 @@ describe('DocumentEditorComponent — kontekst tabeli: strony, martwy DOM, deter
     const page1 = mount(document.createElement('div'));
     const page2 = mount(document.createElement('div'));
     page2.innerHTML = '<table><tbody><tr><td>x</td></tr></tbody></table>';
-    
     (component as any).editor = {
       findEditorContentContaining: (n: Node) => (page2.contains(n) ? page2 : null),
       editorContent: { nativeElement: page1 },
@@ -1646,7 +1664,7 @@ describe('DocumentEditorComponent — kontekst tabeli: strony, martwy DOM, deter
     component.activeTableCell.set(detachedCell);
     component.isInTable.set(true);
     component.showTablePanel.set(true);
-    window.getSelection()?.removeAllRanges(); // brak selekcji → placement 'outside-editor'
+    window.getSelection()?.removeAllRanges();
 
     (component as any).detectTableContext();
 
@@ -1681,7 +1699,7 @@ describe('DocumentEditorComponent — kontekst tabeli: strony, martwy DOM, deter
 
     component.applyInsertTable();
     expect(component.showInsertTableDialog()).toBe(false);
-    await Promise.resolve(); // queueMicrotask
+    await Promise.resolve();
 
     expect(detectSpy).toHaveBeenCalled();
   });
@@ -1695,8 +1713,209 @@ describe('DocumentEditorComponent — kontekst tabeli: strony, martwy DOM, deter
     const detectSpy = vi.spyOn(component as any, 'detectTableContext').mockImplementation(() => {});
 
     component.onInsertTable('3x3');
-    await Promise.resolve(); // queueMicrotask
+    await Promise.resolve();
 
     expect(detectSpy).toHaveBeenCalled();
+  });
+});
+
+describe('DocumentEditorComponent — malarz formatów', () => {
+  let component: DocumentEditorComponent;
+  let applied: unknown[];
+
+  const surface = (cls: string) => {
+    const host = document.createElement('div');
+    host.className = cls;
+    const child = document.createElement('span');
+    child.textContent = 'tekst do pomalowania';
+    host.appendChild(child);
+    document.body.appendChild(host);
+    return child;
+  };
+
+  const selectInside = (el: Node, collapsed = false) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    if (collapsed) range.collapse(true);
+    vi.spyOn(window, 'getSelection').mockReturnValue({
+      rangeCount: 1,
+      isCollapsed: collapsed,
+      getRangeAt: () => range,
+    } as unknown as Selection);
+  };
+
+  const mouseUpOn = (target: Element | null) =>
+    component.onFormatPainterMouseUp({ target } as unknown as MouseEvent);
+
+  beforeEach(async () => {
+    applied = [];
+    await TestBed.configureTestingModule({
+      imports: [DocumentEditorComponent],
+      providers: [
+        { provide: DocumentService, useValue: { getTemplates: () => of([]) } },
+        { provide: DocumentStorageService, useValue: {} },
+        { provide: Router, useValue: { navigate: () => {} } },
+        { provide: ActivatedRoute, useValue: { queryParams: of({}) } },
+        { provide: BuildInfoService, useValue: {} },
+        { provide: MsalService, useValue: msalStub },
+      ],
+    }).compileComponents();
+    component = TestBed.createComponent(DocumentEditorComponent).componentInstance;
+
+    (component as any).editor = {
+      getCurrentFormatting: () => ({ bold: true, fontSize: 15 }),
+      applyFormatting: (f: unknown) => applied.push(f),
+    };
+    (component as any).toolbar = {
+      formatPainterActive: () => (component as any)._painterArmed ?? false,
+      applyFormatPainter: () => { (component as any)._painterArmed = false; component.onPasteFormat(); },
+      deactivateFormatPainter: () => { (component as any)._painterArmed = false; },
+    };
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+  });
+
+  const arm = () => { component.onCopyFormat(); (component as any)._painterArmed = true; };
+
+  it('zaznaczenie w treści przy uzbrojonym pędzlu APLIKUJE formatowanie (regresja: nic się nie działo)', () => {
+    arm();
+    const el = surface('editor-content');
+    selectInside(el);
+
+    mouseUpOn(el);
+
+    expect(applied).toHaveLength(1);
+    expect(applied[0]).toEqual({ bold: true, fontSize: 15 });
+  });
+
+  it('puszczenie myszy poza tekstem, ale z zaznaczeniem w treści → maluje', () => {
+    arm();
+    const el = surface('editor-content');
+    selectInside(el);
+    const margin = document.createElement('div');
+    margin.className = 'page';
+    document.body.appendChild(margin);
+
+    mouseUpOn(margin);
+
+    expect(applied).toHaveLength(1);
+  });
+
+  it('działa także w paśmie nagłówka/stopki', () => {
+    arm();
+    const el = surface('header-editor-content');
+    selectInside(el);
+
+    mouseUpOn(el);
+
+    expect(applied).toHaveLength(1);
+  });
+
+  it('zaznaczenie poza powierzchnią edytowalną nie maluje', () => {
+    arm();
+    const outside = document.createElement('p');
+    outside.textContent = 'poza edytorem';
+    document.body.appendChild(outside);
+    selectInside(outside);
+
+    mouseUpOn(outside);
+
+    expect(applied).toHaveLength(0);
+  });
+
+  it('zaznaczenie przez granicę stron (dwa .editor-content) maluje', () => {
+    arm();
+    const p1 = surface('editor-content');
+    const p2 = surface('editor-content');
+    const range = document.createRange();
+    range.setStart(p1.firstChild!, 0);
+    range.setEnd(p2.firstChild!, 3);
+    vi.spyOn(window, 'getSelection').mockReturnValue({
+      rangeCount: 1, isCollapsed: false, getRangeAt: () => range,
+    } as unknown as Selection);
+
+    mouseUpOn(p2);
+
+    expect(applied).toHaveLength(1);
+  });
+
+  it('pędzel rozbraja się po jednym użyciu (jak w Wordzie)', () => {
+    arm();
+    const el = surface('editor-content');
+    selectInside(el);
+
+    mouseUpOn(el);
+    mouseUpOn(el);
+
+    expect(applied).toHaveLength(1);
+  });
+
+  it('puszczenie myszy NA PASKU narzędzi to klik uzbrajający — nie maluje', () => {
+    arm();
+    const el = surface('editor-content');
+    selectInside(el);
+    const toolbarEl = document.createElement('d2-editor-toolbar');
+    const btn = document.createElement('button');
+    toolbarEl.appendChild(btn);
+    document.body.appendChild(toolbarEl);
+
+    mouseUpOn(btn);
+
+    expect(applied).toHaveLength(0);
+  });
+
+  it('zwinięta karetka (sam klik, bez zaznaczenia) nie maluje', () => {
+    arm();
+    const el = surface('editor-content');
+    selectInside(el, true);
+
+    mouseUpOn(el);
+
+    expect(applied).toHaveLength(0);
+  });
+
+  it('dokument w trybie tylko do odczytu nie daje się pomalować', () => {
+    arm();
+    component.readOnly.set(true);
+    const el = surface('editor-content');
+    selectInside(el);
+
+    mouseUpOn(el);
+
+    expect(applied).toHaveLength(0);
+  });
+
+  it('wejściem jest onCellMouseUp — delegacja do malarza musi zostać', () => {
+    arm();
+    const el = surface('editor-content');
+    selectInside(el);
+
+    component.onCellMouseUp({ target: el } as unknown as MouseEvent);
+
+    expect(applied).toHaveLength(1);
+  });
+
+  it('nieuzbrojony pędzel ignoruje zaznaczenia', () => {
+    component.onCopyFormat();
+    const el = surface('editor-content');
+    selectInside(el);
+
+    mouseUpOn(el);
+
+    expect(applied).toHaveLength(0);
+  });
+
+  it('klik w pędzel BEZ zaznaczenia rozbraja przycisk i mówi dlaczego', () => {
+    (component as any).editor.getCurrentFormatting = () => null;
+    const err = vi.spyOn(component as any, 'showError').mockImplementation(() => {});
+    (component as any)._painterArmed = true;
+
+    component.onCopyFormat();
+
+    expect((component as any)._painterArmed).toBe(false);
+    expect(err).toHaveBeenCalled();
   });
 });

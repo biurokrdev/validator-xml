@@ -92,7 +92,7 @@ public class LineSpacingMappingTests
         using var doc = WordprocessingDocument.Open(new MemoryStream(bytes), false);
         var spacing = doc.MainDocumentPart!.Document!.Body!
             .Descendants<SpacingBetweenLines>().Single();
-        spacing.Line!.Value.Should().Be("360"); 
+        spacing.Line!.Value.Should().Be("360");
         spacing.LineRule!.Value.Should().Be(LineSpacingRuleValues.Exact);
     }
 
@@ -127,7 +127,7 @@ public class LineSpacingMappingTests
         ParagraphCss(new SpacingBetweenLines { Line = "360", LineRule = LineSpacingRuleValues.AtLeast })
             .Should().Contain("--w-line-rule:atLeast;");
         ParagraphCss(new SpacingBetweenLines { Line = "360", LineRule = LineSpacingRuleValues.Exact })
-            .Should().NotContain("--w-line-rule");
+            .Should().Contain("--w-line-rule:exact;").And.NotContain("atLeast");
     }
 
     [Test]
@@ -191,7 +191,8 @@ public class LineSpacingMappingTests
             AfterAutoSpacing = true
         });
         css.Should().Contain("--w-before-auto:1;").And.Contain("--w-after-auto:1;");
-        css.Should().NotContain("margin-top:", "strona auto nie emituje wartości before");
+        css.Should().Contain("margin-top:14pt;").And.NotContain("margin-top:12pt;");
+        css.Should().Contain("margin-bottom:14pt;");
 
         var bytes = new HtmlToDocxConverter().Convert($"<p style=\"{css}\">Tekst</p>");
 
@@ -207,6 +208,6 @@ public class LineSpacingMappingTests
     {
         var css = ParagraphCss(new SpacingBetweenLines { Before = "240", After = "200" });
         css.Should().Contain("margin-top:12pt;");
-        css.Should().Contain("padding-bottom:10pt;");
+        css.Should().Contain("margin-bottom:10pt;");
     }
 }

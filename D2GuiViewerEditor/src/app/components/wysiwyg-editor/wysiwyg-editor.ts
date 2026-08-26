@@ -514,7 +514,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this._safeFooterCache.clear();
   }
 
-
   private readonly _footnotes = signal<Footnote[]>([]);
   readonly footnoteList = computed(() => this._footnotes());
 
@@ -738,7 +737,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (removedFromDom) this.contentChange.emit(this.getContent());
   }
 
-
   private readonly _endnotes = signal<Endnote[]>([]);
   readonly endnoteList = computed(() => this._endnotes());
 
@@ -918,7 +916,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (removedFromDom) this.contentChange.emit(this.getContent());
   }
 
-
   onEditorClick(ev: MouseEvent): void {
     this._navigateToNoteFromRef(ev);
     this._navigateFromInternalAnchor(ev);
@@ -1023,13 +1020,14 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   private _headerEvenHtml = signal<string>('');
   private _footerOddHtml = signal<string>('');
   private _footerEvenHtml = signal<string>('');
-  private _headerHeight = signal<number>(1.27); // domyślnie 1.27 cm (jak w Google Docs)
-  private _footerHeight = signal<number>(1.27); // domyślnie 1.27 cm
+  private _headerHeight = signal<number>(1.27);
+  private _footerHeight = signal<number>(1.27);
   documentDefaultFontSize = signal<string | null>(null);
   documentDefaultFontFamily = signal<string | null>(null);
   documentDefaultLineHeight = signal<string | null>(null);
   documentDefaultParagraphSpacing = signal<string | null>(null);
   documentDefaultParagraphSpacingBefore = signal<string | null>(null);
+  documentParagraphSpacingSum = signal<boolean>(false);
   documentDefaultLineTw = signal<string | null>(null);
 
   documentDefaultLineSingle(): string {
@@ -1060,7 +1058,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const pagesArr = this.pageContents();
     return pagesArr.map((_, i) => this._computeFooterContent(i));
   });
-
 
   editorState = signal<EditorState>({
     isModified: false,
@@ -1515,9 +1512,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     document.addEventListener('mouseup', onImageMouseUp);
   }
 
-
-  private readonly TABLE_EDGE_THRESHOLD = 6; // px od krawędzi
-  private readonly EMPTY_CELL_EDGE_THRESHOLD = 2; // px od krawędzi
+  private readonly TABLE_EDGE_THRESHOLD = 6;
+  private readonly EMPTY_CELL_EDGE_THRESHOLD = 2;
 
   private detectTableResizeHit(event: MouseEvent, threshold: number = this.TABLE_EDGE_THRESHOLD): {
     type: 'col' | 'row' | 'table';
@@ -1773,7 +1769,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-
   private handleEditorDragStart(event: DragEvent): void {
     const rawTarget = event.target as Node | null;
     const target: HTMLElement | null = rawTarget instanceof HTMLElement
@@ -1831,7 +1826,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
   }
 
-
   private handleTextBoxMouseDown(event: MouseEvent, target: HTMLElement): void {
     const textbox = target.closest('.docx-textbox') as HTMLElement | null;
     if (!textbox) return;
@@ -1869,7 +1863,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       this.selectedTextBox = null;
     }
   }
-
 
   private selectedShape: HTMLElement | null = null;
 
@@ -2065,7 +2058,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     textbox.classList.toggle('tb-edge', onEdge);
     this.edgeCursorTextBox = textbox;
   }
-
 
   private _pageVisualScale(page: HTMLElement): number {
     const rect = page.getBoundingClientRect();
@@ -2430,7 +2422,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this._isInternalUpdate = false;
     this.saveToUndoStack();
     this.updateState();
-    this.updateFormattingState(); // Aktualizuj też stan formatowania
+    this.updateFormattingState();
     this._scheduleAnchorBadgeRefresh();
   }
 
@@ -2505,7 +2497,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
     this.insertText(normalizeWhitespace(plain));
   }
-
 
   private handleCopyOrCut(e: ClipboardEvent, cut: boolean): void {
     const sel = window.getSelection();
@@ -2583,6 +2574,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private stripClipboardArtifacts(root: ParentNode): void {
+    root.querySelectorAll('tr[data-repeated-header]').forEach(el => el.remove());
     root.querySelectorAll('[data-split-table-id],[data-split-row-id],[data-split-cont]').forEach(el => {
       el.removeAttribute('data-split-table-id');
       el.removeAttribute('data-split-row-id');
@@ -2593,7 +2585,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   private prepareClipboardFragment(html: string): DocumentFragment | null {
     const tpl = document.createElement('template');
-    tpl.innerHTML = html; // template nie wykonuje skryptów ani nie ładuje zasobów
+    tpl.innerHTML = html;
 
     tpl.content.querySelectorAll('script,style,link,meta,title,iframe,object,embed,base,form,input,button,textarea,select')
       .forEach(n => n.remove());
@@ -2962,7 +2954,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const prevFragment = this._siblingTableFragment(table, -1);
     const lastRow = prevFragment?.rows[prevFragment.rows.length - 1];
     if (lastRow?.cells.length) { this._focusTableCell(lastRow.cells[lastRow.cells.length - 1]); return true; }
-    return true; // pierwsza komórka tabeli: jak Word — nic, ale bez outdentu
+    return true;
   }
 
   private _isCaretAtBlockStart(): boolean {
@@ -3005,6 +2997,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const range = sel.getRangeAt(0);
     const span = document.createElement('span');
     span.setAttribute('style', 'display:inline-block;min-width:2em');
+    span.setAttribute('contenteditable', 'false');
     span.textContent = '\t';
     range.insertNode(span);
 
@@ -3396,7 +3389,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
       const span = document.createElement('span');
       span.style.fontSize = `${size}pt`;
-      span.innerHTML = '\u200B'; // Zero-width space
+      span.innerHTML = '\u200B';
 
       range.insertNode(span);
 
@@ -3833,7 +3826,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!editor || !bookmark || !editor.contains(bookmark.startContainer)) return;
 
     const range = bookmark.cloneRange();
-    range.deleteContents(); // replace the target selection when it was non-empty
+    range.deleteContents();
 
     const lines = text.split('\n');
     let lastNode: Node | null;
@@ -3932,6 +3925,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         if (attr.name.startsWith('data-split')) el.removeAttribute(attr.name);
       }
       el.classList.remove('fmt-trailing-br');
+      el.classList.remove('fmt-page-top');
       if (!el.getAttribute('class')) el.removeAttribute('class');
       return el;
     };
@@ -4302,7 +4296,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!editor) return;
 
     const normalized = this.normalizeLinkUrl(url);
-    if (!normalized) return; // pusty/niepoprawny URL — nie rób nic
+    if (!normalized) return;
 
     const live = window.getSelection();
     const liveInEditor = !!live && live.rangeCount > 0 && this.isSelectionInEditor(live);
@@ -4478,7 +4472,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const computedStyle = window.getComputedStyle(element);
 
       const fontSizePx = parseFloat(computedStyle.fontSize);
-      fontSize = Math.round(fontSizePx * 0.75); // px to pt (96dpi / 72pt)
+      fontSize = Math.round(fontSizePx * 0.75);
 
       fontFamily = computedStyle.fontFamily.replace(/['"]/g, '').split(',')[0].trim();
 
@@ -4672,7 +4666,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         await navigator.clipboard.writeText(normalized);
         console.log('Skopiowano', normalized.length, 'znaków do schowka.');
       };
-    } catch { /* ignore */ }
+    } catch { }
 
     this.editorState.update(state => ({
       ...state,
@@ -4684,7 +4678,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     this.stateChange.emit(this.editorState());
   }
-
 
   setActivePage(index: number, _ev: Event): void {
     const refs = this.pageEditorRefs?.toArray() ?? [];
@@ -4731,7 +4724,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     sel.removeAllRanges();
     sel.addRange(range);
   }
-
 
   private _setPendingInlineStyle(
     patch: { fontFamily?: string; fontSize?: string },
@@ -4825,7 +4817,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this._clearPendingInlineStyle();
   }
 
-
   private static readonly UNCHECKED_BULLET_CODES = new Set([0x71, 0xa8, 0x6f, 0x72]);
   private static readonly CHECKED_BULLET_CODES = new Set([0xfe, 0xfd, 0xfc]);
   private static readonly UNCHECKED_BULLET_GLYPHS = new Set(['☐', '❑', '□', '❒', '◻']);
@@ -4848,7 +4839,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!/^(ul|ol)$/i.test(container.tagName) || !container.hasAttribute('data-num-id')) return;
 
     const state = this._checkboxBulletState(container);
-    if (!state) return; // punktor tej listy nie jest checkboxem — nic nie rób
+    if (!state) return;
 
     const solo = this._isolateListItem(container, li);
     const targetLvlText = state.checked ? state.uncheckedLvlText : state.checkedLvlText;
@@ -4994,9 +4985,11 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       this.documentDefaultLineHeight.set(null);
       this.documentDefaultParagraphSpacing.set(null);
       this.documentDefaultParagraphSpacingBefore.set(null);
+      this.documentParagraphSpacingSum.set(false);
       this.documentDefaultLineTw.set(null);
       return null;
     }
+    this.documentParagraphSpacingSum.set(container.getAttribute('data-para-spacing-sum') === '1');
     if (container.style.fontSize) this.documentDefaultFontSize.set(container.style.fontSize);
     if (container.style.fontFamily) this.documentDefaultFontFamily.set(container.style.fontFamily);
     this.documentDefaultLineHeight.set(container.style.lineHeight || null);
@@ -5172,6 +5165,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const fontsReady: Promise<unknown> =
       fontSet && typeof fontSet.ready?.then === 'function' ? fontSet.ready : Promise.resolve();
     Promise.all([fontsReady, this._pendingImagesSettled()])
+      .then(() => new Promise<void>(resolve => setTimeout(resolve, 0)))
       .then(() => {
         if (this._isDestroyed || gen !== this._resourceRepaginateGen) return;
         this._tableMeasureCache.clear();
@@ -5229,6 +5223,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       }
       const mergedInput: HTMLElement[] = [];
       for (const b of allBlocks) {
+        this._stripFmtPageTop(b);
         const prev = mergedInput[mergedInput.length - 1];
         if (b.getAttribute('data-split-para') === 'cont' && prev && prev.tagName === b.tagName) {
           while (b.firstChild) prev.appendChild(b.firstChild);
@@ -5249,7 +5244,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           b.getAttribute('data-split-table-id') === prev.getAttribute('data-split-table-id')
         ) {
           const targetBody = prev.querySelector('tbody') ?? prev;
-          this._tableDirectRows(b as HTMLTableElement).forEach(tr => targetBody.appendChild(tr));
+          this._tableSourceRows(b as HTMLTableElement).forEach(tr => targetBody.appendChild(tr));
           continue;
         }
         premerged.push(b);
@@ -5297,7 +5292,16 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const cs = getComputedStyle(probeEd);
       const innerW = probeEd.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
       const baseContentPx = contentWidthPx(baseGeo);
-      const widthScale = innerW > 0 && baseContentPx > 0 ? innerW / baseContentPx : 1;
+      const page0 = probeEd.closest('.page') as HTMLElement | null;
+      const domGeometryStale = !!page0 && page0.clientWidth > 0
+        && Math.abs(page0.clientWidth - baseGeo.widthCm * CSS_PX_PER_CM) > 1;
+      if (domGeometryStale && !this._staleGeometryRerun) {
+        this._staleGeometryRerun = true;
+        this._flushPaginateSoon();
+      } else if (!domGeometryStale) {
+        this._staleGeometryRerun = false;
+      }
+      const widthScale = !domGeometryStale && innerW > 0 && baseContentPx > 0 ? innerW / baseContentPx : 1;
       const measurerWidthFor = (geo: PageGeometry): number => columnWidthPx(geo) * widthScale;
       const lineHeightPx =
         parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2 || 16;
@@ -5393,30 +5397,123 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         }
       };
 
+      const suppressTopMarginHere = (blk: HTMLElement): boolean => {
+        if (pages.length === 1) return false;
+        const page = pages[pages.length - 1];
+        if (page.some(b => this._isSectionBreakMarker(b))) return false;
+        if (page.some(b => !this._isSectionBreakMarker(b))) return false;
+        return this._isPageTopSpacingBlock(blk) && !this._hasPageBreakBeforeStyle(blk);
+      };
+
+      const placedHeights = new Map<HTMLElement, number>();
+      const pullKeepNextChain = (): HTMLElement[] => {
+        const page = pages[pages.length - 1];
+        const pulled: HTMLElement[] = [];
+        while (page.length > 1) {
+          const last = page[page.length - 1];
+          if (!this._keepsWithNext(last) || this._footnoteIdsIn(last).length > 0) break;
+          page.pop();
+          currentHeight -= placedHeights.get(last) ?? 0;
+          placedHeights.delete(last);
+          this._stripFmtPageTop(last);
+          pulled.unshift(last);
+        }
+        return pulled;
+      };
+
       const pushMeasured = (block: HTMLElement, h: number) => {
         let blk = block;
         let bh = h;
+        let topCut = 0;
+        const applyPageTop = () => {
+          topCut = 0;
+          if (!suppressTopMarginHere(blk)) return;
+          topCut = this._blockMarginTopPx(blk, measurer);
+          if (topCut > 0) bh = Math.max(0, bh - topCut);
+        };
+        applyPageTop();
         let blkExtra = fnProspectiveReserve(this._footnoteIdsIn(blk));
         while (currentHeight + bh > fnEffAvail(blkExtra)) {
           const pageHasContent = pages[pages.length - 1].length > 0;
-          const parts = this._splitBlockAtBudget(
-            blk, fnEffAvail(blkExtra) - currentHeight, measurer, lineHeightPx);
+          const parts = this._keepsLinesTogether(blk) ? null : this._splitBlockAtBudget(
+            blk, fnEffAvail(blkExtra) - currentHeight + topCut, measurer, lineHeightPx);
           if (!parts) {
             if (!pageHasContent) break;
+            const pulled = pullKeepNextChain();
             openPage();
+            for (const pb of pulled) pushMeasured(pb, measureBlock(pb));
             blkExtra = fnProspectiveReserve(this._footnoteIdsIn(blk));
+            applyPageTop();
             continue;
           }
+          if (topCut > 0) parts[0].classList.add('fmt-page-top');
           commitFootnotes(parts[0]);
           pages[pages.length - 1].push(parts[0]);
+          placedHeights.set(parts[0], Math.max(0, fnEffAvail(blkExtra) - currentHeight));
           openPage();
           blk = parts[1];
           bh = measureBlock(blk);
+          topCut = 0;
           blkExtra = fnProspectiveReserve(this._footnoteIdsIn(blk));
         }
+        if (topCut > 0) blk.classList.add('fmt-page-top');
         commitFootnotes(blk);
         pages[pages.length - 1].push(blk);
+        placedHeights.set(blk, bh);
         currentHeight += bh;
+      };
+
+      const placeTable = (tableBlock: HTMLElement, runHeightHint: number | null) => {
+          const marginBottomPx = parseFloat(getComputedStyle(tableBlock).marginBottom) || 0;
+          const tableMargins = Math.max(0, this._measureTableVerticalMargins(
+            tableBlock as HTMLTableElement, measurer) - marginBottomPx);
+          const freshColumnBudget = Math.max(80, columnHeight - tableMargins);
+          const usedInColumn = columnHeight > 0 ? (currentHeight - columnBase) % columnHeight : 0;
+          let split = this._splitTableForPagination(
+            tableBlock as HTMLTableElement,
+            Math.max(80, columnHeight - usedInColumn - tableMargins),
+            freshColumnBudget,
+            measurer,
+            lineHeightPx
+          );
+          const advanceColumnOrPage = () => {
+            const nextColumnTop = columnBase
+              + (Math.floor((currentHeight - columnBase) / columnHeight) + 1) * columnHeight;
+            if (nextColumnTop < availableHeight) {
+              currentHeight = nextColumnTop;
+            } else {
+              openPage();
+            }
+          };
+          for (let i = 0; i < split.length; i++) {
+            let frag = split[i];
+            let h = i === 0 && split.length === 1 && runHeightHint !== null
+              ? runHeightHint
+              : measureBlock(frag);
+            if (i > 0) {
+              advanceColumnOrPage();
+            } else {
+              const used = columnHeight > 0 ? (currentHeight - columnBase) % columnHeight : 0;
+              const remaining = columnHeight - used;
+              if (h > remaining + 0.5 + marginBottomPx && pages[pages.length - 1].length > 0) {
+                advanceColumnOrPage();
+                if (split.length > 1) {
+                  split = this._splitTableForPagination(
+                    tableBlock as HTMLTableElement,
+                    freshColumnBudget,
+                    freshColumnBudget,
+                    measurer,
+                    lineHeightPx
+                  );
+                  frag = split[0];
+                  h = measureBlock(frag);
+                }
+              }
+            }
+            pages[pages.length - 1].push(frag);
+            commitFootnotes(frag);
+            currentHeight += h;
+          }
       };
 
       let bi = 0;
@@ -5486,72 +5583,21 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
           bi++;
           continue;
         }
-        if (block.tagName === 'TABLE') {
-          const tableMargins = this._measureTableVerticalMargins(
-            block as HTMLTableElement, measurer);
-          const freshColumnBudget = Math.max(80, columnHeight - tableMargins);
-          const usedInColumn = columnHeight > 0 ? (currentHeight - columnBase) % columnHeight : 0;
-          let split = this._splitTableForPagination(
-            block as HTMLTableElement,
-            Math.max(80, columnHeight - usedInColumn - tableMargins),
-            freshColumnBudget,
-            measurer,
-            lineHeightPx
-          );
-          const advanceColumnOrPage = () => {
-            const nextColumnTop = columnBase
-              + (Math.floor((currentHeight - columnBase) / columnHeight) + 1) * columnHeight;
-            if (nextColumnTop < availableHeight) {
-              currentHeight = nextColumnTop;
-            } else {
-              openPage();
-            }
-          };
-          for (let i = 0; i < split.length; i++) {
-            let frag = split[i];
-            let h = measureBlock(frag);
-            if (i > 0) {
-              advanceColumnOrPage();
-            } else {
-              const used = columnHeight > 0 ? (currentHeight - columnBase) % columnHeight : 0;
-              const remaining = columnHeight - used;
-              if (h > remaining + 0.5 && pages[pages.length - 1].length > 0) {
-                advanceColumnOrPage();
-                if (split.length > 1) {
-                  split = this._splitTableForPagination(
-                    block as HTMLTableElement,
-                    freshColumnBudget,
-                    freshColumnBudget,
-                    measurer,
-                    lineHeightPx
-                  );
-                  frag = split[0];
-                  h = measureBlock(frag);
-                }
-              }
-            }
-            pages[pages.length - 1].push(frag);
-            commitFootnotes(frag);
-            currentHeight += h;
-          }
-          bi++;
-          continue;
-        }
         let runEnd = bi;
         while (
           runEnd < allBlocks.length &&
           !this._isSectionBreakMarker(allBlocks[runEnd]) &&
           !this._isPageBreakBlock(allBlocks[runEnd]) &&
           !this._hasPageBreakBeforeStyle(allBlocks[runEnd]) &&
-          !this._isColumnBreakBlock(allBlocks[runEnd]) &&
-          allBlocks[runEnd].tagName !== 'TABLE'
+          !this._isColumnBreakBlock(allBlocks[runEnd])
         ) {
           runEnd++;
         }
         const run = allBlocks.slice(bi, runEnd);
         const heights = measureRun(run);
         for (let k = 0; k < run.length; k++) {
-          pushMeasured(run[k], heights[k]);
+          if (run[k].tagName === 'TABLE') placeTable(run[k], heights[k]);
+          else pushMeasured(run[k], heights[k]);
         }
         bi = runEnd;
       }
@@ -5715,7 +5761,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!this.showFormattingMarks()) return;
 
     const pages = Array.from(host.querySelectorAll<HTMLElement>('.page'));
-    let budget = 20000; // twardy limit znaczników — patologiczne dokumenty nie zamrożą UI
+    let budget = 20000;
 
     const CONTAINERS = '.editor-content, .page-overflow-content, .header-display, .footer-display,'
       + ' .header-editor-content, .footer-editor-content, .footnote-item-content';
@@ -5844,10 +5890,20 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
   private _createBlockMeasurer(cs: CSSStyleDeclaration, widthPx: number): HTMLElement {
     const measurer = document.createElement('div');
-    measurer.className = 'editor-content';
+    measurer.className = this.documentParagraphSpacingSum()
+      ? 'editor-content para-spacing-sum'
+      : 'editor-content';
+    const lineHeight = this.documentDefaultLineHeight() || cs.lineHeight;
+    const vars = [
+      ['--doc-par-margin', this.documentDefaultParagraphSpacing()],
+      ['--doc-par-margin-top', this.documentDefaultParagraphSpacingBefore()],
+      ['--w-line-tw', this.documentDefaultLineTw()],
+      ['--w-line-single', this.documentDefaultLineSingle()],
+    ].filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}:${v};`).join('');
     measurer.style.cssText =
       `position:absolute;left:-99999px;top:0;width:${widthPx}px;padding:0;border:0;` +
-      `font-family:${cs.fontFamily};font-size:${cs.fontSize};line-height:${cs.lineHeight};visibility:hidden;`;
+      `font-family:${cs.fontFamily};font-size:${cs.fontSize};line-height:${lineHeight};visibility:hidden;` +
+      vars;
     return measurer;
   }
 
@@ -5859,7 +5915,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     measurer.innerHTML = '';
     for (const b of blocks) measurer.appendChild(b.cloneNode(true));
     const sentinel = document.createElement('div');
-    sentinel.style.cssText = 'margin:0;padding:0;border:0;height:0;';
+    sentinel.style.cssText = 'margin:0;padding:0;border:0;height:0;clear:both;';
     measurer.appendChild(sentinel);
     const kids = Array.from(measurer.children) as HTMLElement[];
     const tops = kids.map(k => k.getBoundingClientRect().top);
@@ -5873,6 +5929,32 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (this._blockRunMeasureCache.size >= 500) this._blockRunMeasureCache.clear();
     this._blockRunMeasureCache.set(key, out);
     return out;
+  }
+
+  private _blockMarginTopPx(block: HTMLElement, measurer: HTMLElement): number {
+    const key = measurer.style.cssText + '|mt|' + block.outerHTML;
+    const cached = this._blockRunMeasureCache.get(key);
+    if (cached !== undefined) return cached[0] ?? 0;
+    measurer.innerHTML = '';
+    const clone = block.cloneNode(true) as HTMLElement;
+    measurer.appendChild(clone);
+    const mt = parseFloat(getComputedStyle(clone).marginTop) || 0;
+    if (this._blockRunMeasureCache.size >= 500) this._blockRunMeasureCache.clear();
+    this._blockRunMeasureCache.set(key, [mt]);
+    return mt;
+  }
+
+  private _isPageTopSpacingBlock(el: HTMLElement): boolean {
+    return /^(P|H[1-6]|BLOCKQUOTE|PRE)$/.test(el.tagName);
+  }
+
+  private _stripFmtPageTop(root: Element | ParentNode): void {
+    const strip = (el: Element) => {
+      el.classList.remove('fmt-page-top');
+      if (!el.getAttribute('class')) el.removeAttribute('class');
+    };
+    if ((root as Element).classList?.contains('fmt-page-top')) strip(root as Element);
+    root.querySelectorAll('.fmt-page-top').forEach(strip);
   }
 
   private _splitBlockAtBudget(
@@ -6049,7 +6131,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       let nodeBottom = 0;
       const nodeRects = probe.getClientRects();
       for (let i = 0; i < nodeRects.length; i++) nodeBottom = Math.max(nodeBottom, nodeRects[i].bottom);
-      if (nodeRects.length === 0 || nodeBottom <= limitY + EPS) continue; // cały węzeł się mieści
+      if (nodeRects.length === 0 || nodeBottom <= limitY + EPS) continue;
 
       for (let i = 0; i < len; i++) {
         probe.setStart(text, i);
@@ -6067,8 +6149,22 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     return Array.from(table.rows);
   }
 
+  private _tableSourceRows(table: HTMLTableElement): HTMLTableRowElement[] {
+    return this._tableDirectRows(table).filter(tr => !tr.hasAttribute('data-repeated-header'));
+  }
+
+  private _repeatingHeaderRows(rows: HTMLTableRowElement[]): HTMLTableRowElement[] {
+    const out: HTMLTableRowElement[] = [];
+    for (const r of rows) {
+      if (r.getAttribute('data-tbl-header') !== '1' || r.hasAttribute('data-repeated-header')) break;
+      out.push(r);
+    }
+    return out;
+  }
+
   private _rowCanSplit(table: HTMLTableElement, row: HTMLTableRowElement): boolean {
     if (row.getAttribute('data-cant-split') === '1') return false;
+    if (row.getAttribute('data-cant-split-eff') === '1') return false;
     if (row.getAttribute('data-tbl-header') === '1') return false;
     if (row.getAttribute('data-row-hrule') === 'exact') return false;
     const rows = this._tableDirectRows(table);
@@ -6086,7 +6182,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     table: HTMLTableElement,
     row: HTMLTableRowElement,
     measurer: HTMLElement
-  ): { contentWidthPx: number; blockTops: number[]; blockBottoms: number[] }[] {
+  ): { contentWidthPx: number; blockTops: number[]; blockBottoms: number[]; bottomExtraPx?: number }[] {
     const t = table.cloneNode(false) as HTMLTableElement;
     const colgroup = table.querySelector(':scope > colgroup');
     if (colgroup) t.appendChild(colgroup.cloneNode(true));
@@ -6107,6 +6203,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         contentWidthPx,
         blockTops: blocks.map(b => b.getBoundingClientRect().top - rowTop),
         blockBottoms: blocks.map(b => b.getBoundingClientRect().bottom - rowTop),
+        bottomExtraPx: (parseFloat(cs.paddingBottom) || 0) + (parseFloat(cs.borderBottomWidth) || 0),
       };
     });
     measurer.innerHTML = '';
@@ -6178,6 +6275,8 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
 
     const EPS = 0.5;
     const cs = getComputedStyle(measurer);
+    const contentBudgetPx = budgetPx - Math.max(0, ...layout.map(l => l.bottomExtraPx ?? 0));
+    if (contentBudgetPx < lineHeightPx) return null;
     const headCells: HTMLElement[][] = [];
     const tailCells: HTMLElement[][] = [];
     let anyHeadContent = false;
@@ -6192,16 +6291,18 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         const top = info.blockTops[j] ?? 0;
         const bottom = info.blockBottoms[j] ?? 0;
         const blk = blocks[j].cloneNode(true) as HTMLElement;
-        if (bottom <= budgetPx + EPS) {
+        if (bottom <= contentBudgetPx + EPS) {
           head.push(blk);
-        } else if (top >= budgetPx - EPS) {
+        } else if (top >= contentBudgetPx - EPS) {
+          tail.push(blk);
+        } else if (this._keepsLinesTogether(blk)) {
           tail.push(blk);
         } else {
           const cellMeasurer = this._createBlockMeasurer(cs, info.contentWidthPx);
           document.body.appendChild(cellMeasurer);
           let parts: [HTMLElement, HTMLElement] | null;
           try {
-            parts = this._splitBlockAtBudget(blk, budgetPx - top, cellMeasurer, lineHeightPx);
+            parts = this._splitBlockAtBudget(blk, contentBudgetPx - top, cellMeasurer, lineHeightPx);
           } finally {
             cellMeasurer.remove();
           }
@@ -6256,6 +6357,10 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const measureRows = (subset: HTMLTableRowElement[]): number =>
       this._measureTableRowsHeight(table, subset, measurer);
 
+    const headerRows = this._repeatingHeaderRows(rows);
+    const headerH = headerRows.length > 0 && headerRows.length < rows.length ? measureRows(headerRows) : 0;
+    const contAvail = Math.max(80, fullAvail - headerH);
+
     const chunks: HTMLTableRowElement[][] = [];
     let bucket: HTMLTableRowElement[] = [];
     let avail = firstAvail;
@@ -6270,19 +6375,19 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
         }
         const bucketH = bucket.length > 0 ? measureRows(bucket) : 0;
         const parts = this._rowCanSplit(table, row)
-          ? this._splitRowAtBudget(table, row, avail - bucketH, measurer, lineHeightPx)
+          ? this._splitRowAtBudget(table, row, avail - bucketH - 3, measurer, lineHeightPx)
           : null;
         if (parts) {
           chunks.push([...bucket, parts[0]]);
           bucket = [];
-          avail = fullAvail;
+          avail = contAvail;
           row = parts[1];
           continue;
         }
         if (bucket.length > 0) {
           chunks.push(bucket);
           bucket = [];
-          avail = fullAvail;
+          avail = contAvail;
           continue;
         }
         bucket = [row];
@@ -6295,10 +6400,19 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const splitId = chunks.length > 1 ? (existingId ?? `st-${++this._splitTableSeq}`) : existingId;
     const colgroup = table.querySelector(':scope > colgroup');
 
-    return chunks.map(subset => {
+    return chunks.map((subset, ci) => {
       const t = table.cloneNode(false) as HTMLTableElement;
       if (colgroup) t.appendChild(colgroup.cloneNode(true));
       const tbody = document.createElement('tbody');
+      if (ci > 0 && headerH > 0) {
+        for (const hr of headerRows) {
+          const copy = hr.cloneNode(true) as HTMLTableRowElement;
+          copy.setAttribute('data-repeated-header', '1');
+          copy.setAttribute('contenteditable', 'false');
+          copy.removeAttribute('data-split-row-id');
+          tbody.appendChild(copy);
+        }
+      }
       subset.forEach(r => tbody.appendChild(r.cloneNode(true)));
       t.appendChild(tbody);
       if (splitId) t.setAttribute('data-split-table-id', splitId);
@@ -6307,6 +6421,16 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
   }
 
   private _splitTableSeq = 0;
+
+  private _staleGeometryRerun = false;
+
+  private _keepsWithNext(el: HTMLElement): boolean {
+    return /(?:page-)?break-after\s*:\s*avoid\b/i.test(el.getAttribute?.('style') ?? '');
+  }
+
+  private _keepsLinesTogether(el: HTMLElement): boolean {
+    return /(?:page-)?break-inside\s*:\s*avoid\b/i.test(el.getAttribute?.('style') ?? '');
+  }
 
   private _hasPageBreakBeforeStyle(el: HTMLElement): boolean {
     const style = el.getAttribute?.('style') ?? '';
@@ -6340,7 +6464,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       let next = first.nextElementSibling;
       while (next && next.tagName === 'TABLE' && next.getAttribute('data-split-table-id') === id) {
         handled.add(next);
-        this._tableDirectRows(next as HTMLTableElement).forEach(tr => targetBody.appendChild(tr));
+        this._tableSourceRows(next as HTMLTableElement).forEach(tr => targetBody.appendChild(tr));
         const toRemove = next;
         next = next.nextElementSibling;
         toRemove.remove();
@@ -6646,7 +6770,13 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     while ((node = walker.nextNode())) {
       const nl = node.textContent?.length ?? 0;
       if (r <= nl) {
-        range.setStart(node, r);
+        const atom = (node.parentElement ?? null)?.closest?.('[contenteditable="false"]');
+        if (atom && block.contains(atom) && atom !== block) {
+          if (r <= 0) range.setStartBefore(atom);
+          else range.setStartAfter(atom);
+        } else {
+          range.setStart(node, r);
+        }
         range.collapse(true);
         sel.removeAllRanges();
         sel.addRange(range);
@@ -6656,7 +6786,12 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       lastNode = node;
     }
     if (lastNode) {
-      range.setStart(lastNode, lastNode.textContent?.length ?? 0);
+      const atom = (lastNode.parentElement ?? null)?.closest?.('[contenteditable="false"]');
+      if (atom && block.contains(atom) && atom !== block) {
+        range.setStartAfter(atom);
+      } else {
+        range.setStart(lastNode, lastNode.textContent?.length ?? 0);
+      }
     } else {
       range.setStart(block, 0);
     }
@@ -6747,6 +6882,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     stripListLabelAttributes(clone);
 
     this._stripFmtTrailingBr(clone);
+    this._stripFmtPageTop(clone);
 
     this._unwrapImageWrappers(clone);
 
@@ -6898,7 +7034,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!element) return null;
 
     const computedStyle = window.getComputedStyle(element);
-    
+
     return {
       bold: document.queryCommandState('bold'),
       italic: document.queryCommandState('italic'),
@@ -6907,7 +7043,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       subscript: document.queryCommandState('subscript'),
       superscript: document.queryCommandState('superscript'),
       fontFamily: computedStyle.fontFamily.replace(/['"]/g, '').split(',')[0].trim(),
-      fontSize: parseInt(computedStyle.fontSize),
+      fontSize: Math.round(parseFloat(computedStyle.fontSize) * 0.75),
       textColor: this.rgbToHex(computedStyle.color),
       backgroundColor: computedStyle.backgroundColor === 'rgba(0, 0, 0, 0)' ? '' : this.rgbToHex(computedStyle.backgroundColor)
     };
@@ -6921,42 +7057,20 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       return;
     }
 
-    if (format.bold) document.execCommand('bold', false);
-    if (format.italic) document.execCommand('italic', false);
-    if (format.underline) document.execCommand('underline', false);
-    if (format.strikethrough) document.execCommand('strikeThrough', false);
-    if (format.subscript) document.execCommand('subscript', false);
-    if (format.superscript) document.execCommand('superscript', false);
+    const setMark = (state: boolean, queryName: string, command: EditorCommand) => {
+      if (document.queryCommandState(queryName) !== state) this.executeCommand(command);
+    };
+    setMark(!!format.bold, 'bold', 'bold');
+    setMark(!!format.italic, 'italic', 'italic');
+    setMark(!!format.underline, 'underline', 'underline');
+    setMark(!!format.strikethrough, 'strikeThrough', 'strikethrough');
+    setMark(!!format.subscript, 'subscript', 'subscript');
+    setMark(!!format.superscript, 'superscript', 'superscript');
 
-    if (format.fontFamily) {
-      document.execCommand('fontName', false, format.fontFamily);
-    }
-    if (format.fontSize) {
-      const range = selection.getRangeAt(0);
-      const span = document.createElement('span');
-      span.style.fontSize = format.fontSize + 'px';
-      
-      try {
-        const contents = range.extractContents();
-        span.appendChild(contents);
-        range.insertNode(span);
-        selection.selectAllChildren(span);
-      } catch (e) {
-        document.execCommand('fontSize', false, '7');
-        const fontElements = this.editorContent?.nativeElement.querySelectorAll('font[size="7"]');
-        fontElements?.forEach((el: Element) => {
-          (el as HTMLElement).removeAttribute('size');
-          (el as HTMLElement).style.fontSize = format.fontSize + 'px';
-        });
-      }
-    }
-
-    if (format.textColor) {
-      document.execCommand('foreColor', false, format.textColor);
-    }
-    if (format.backgroundColor) {
-      document.execCommand('hiliteColor', false, format.backgroundColor);
-    }
+    if (format.fontFamily) this.setFontFamily(format.fontFamily);
+    if (format.fontSize) this.setFontSize(format.fontSize);
+    if (format.textColor) this.setTextColor(format.textColor);
+    if (format.backgroundColor) this.setBackgroundColor(format.backgroundColor);
 
     const html = this.editorContent?.nativeElement?.innerHTML || '';
     this._content.set(html);
@@ -6977,7 +7091,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     
     return `#${r}${g}${b}`;
   }
-
 
   startEditingHeader(event?: MouseEvent): void {
     if (this.readOnly) return;
@@ -7289,7 +7402,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     };
   }
 
-
   onHeaderFooterToolbarMouseDown(event: MouseEvent): void {
     const target = event.target as HTMLElement;
     if (target.tagName !== 'INPUT' && target.tagName !== 'SELECT' && target.tagName !== 'TEXTAREA') {
@@ -7512,7 +7624,6 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       return { top: r.top - base, height: r.height };
     });
   }
-
 
   private searchHighlights: HTMLElement[] = [];
   private currentHighlightIndex = -1;

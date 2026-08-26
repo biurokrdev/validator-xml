@@ -1,0 +1,46 @@
+# Backend
+**/bin/
+**/obj/
+**/TestResults/
+backend/*.user
+backend/.vs/
+backend/.vscode/
+
+# Secrets — NIGDY nie commituj!
+**/*.secrets.json
+
+# Benchmark / fidelity artifacts (generowane)
+**/BenchmarkDotNet.Artifacts/
+**/fidelity-reports/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/*.log
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# OS
+.DS_Store
+Thumbs.db
+
+/.ai
+/.claude
+/Nie miesci sie.docx
+/Tekst artykułu.docx
+/Dokument_kolumnowy.docx
+/OBSERVABILITY_DASHBOARDS.md
+/docx-spacing-usecases-ms-word.docx
+/Dokument_kolumnowy.docx
+/Nie miesci sie.docx
+/OBSERVABILITY_DASHBOARDS.html
+/table-text-layout-usecases-ms-word.docx
+/qutable.docx
+/table-pagination-usecases-ms-word.docx

@@ -21,7 +21,6 @@ public class TableStyleFidelityTests
         _writer = new HtmlToDocxConverter();
     }
 
-
     private delegate void DocxCustomizer(MainDocumentPart mainPart, Body body);
 
     private static MemoryStream BuildDocx(Style? tableStyle, TableProperties tblPr, int rows = 3, int cols = 2,
@@ -99,7 +98,6 @@ public class TableStyleFidelityTests
             result.Add(m.Groups[1].Value);
         return result;
     }
-
 
     [Test]
     public void Read_TableGridStyle_BordersComeFromStyle()
@@ -453,7 +451,6 @@ public class TableStyleFidelityTests
         CellStyles(html)[0].Should().MatchRegex("background-color:#(7F|80)(7F|80)(7F|80)");
     }
 
-
     [Test]
     public void Read_RowHeights_UseHeightCssAndDataAttributes()
     {
@@ -523,10 +520,9 @@ public class TableStyleFidelityTests
         var html = _reader.Convert(BuildDocx(null, tblPr, rows: 1, cols: 2)).Html;
         var tag = FirstTableTag(html);
         tag.Should().Contain("border-collapse:separate")
-            .And.Contain("border-spacing:4px")
+            .And.Contain("border-spacing:8px")
             .And.Contain("data-cell-spacing-tw=\"60\"");
     }
-
 
     private static Table FirstTable(byte[] docx)
     {
@@ -768,7 +764,6 @@ public class TableStyleFidelityTests
             "szerokość podwójnej linii nie może puchnąć w round-tripie");
     }
 
-
     [Test]
     public void Write_MixedMultiValueLonghands_ResolvePerSide()
     {
@@ -862,7 +857,6 @@ public class TableStyleFidelityTests
             cellBorders.Elements<BorderType>().Should()
                 .OnlyContain(b => b.Val != null && b.Val.Value == BorderValues.Nil);
     }
-
 
     [Test]
     public void Read_TableWithoutAnyBorders_MarksCellsForEditorGridlines()
