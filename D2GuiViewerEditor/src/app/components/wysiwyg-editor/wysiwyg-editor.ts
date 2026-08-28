@@ -2891,6 +2891,11 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       }
     }
 
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.shiftKey) {
+      const dir = e.key === 'ArrowRight' ? 'right' : 'left';
+      setTimeout(() => this._escapeTabCarrier(dir), 0);
+    }
+
     if (e.key === 'Tab') {
       e.preventDefault();
       if (this._handleTableTab(e.shiftKey)) return;
@@ -2945,6 +2950,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       const newRow = this._appendTableRowLike(table);
       this._focusTableCell(newRow.cells[0]);
       this.onContentChange();
+      this._flushPaginateSoon();
       return true;
     }
 
@@ -2996,7 +3002,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (!sel || sel.rangeCount === 0) return;
     const range = sel.getRangeAt(0);
     const span = document.createElement('span');
-    span.setAttribute('style', 'display:inline-block;min-width:2em');
+    span.setAttribute('style', 'display:inline-block;min-width:2em;white-space:pre;tab-size:2em');
     span.setAttribute('contenteditable', 'false');
     span.textContent = '\t';
     range.insertNode(span);
@@ -3008,6 +3014,61 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     sel.addRange(caret);
     this.savedSelection = caret.cloneRange();
     this.onContentChange();
+    this._schedulePaginate('tab-insert');
+  }
+
+  private _escapeTabCarrier(direction: 'left' | 'right'): void {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const node = range.startContainer;
+    const isCarrier = (n: Node | null | undefined): n is HTMLElement =>
+      !!n && n.nodeType === Node.ELEMENT_NODE && (n as Element).tagName === 'SPAN'
+      && (n as Element).getAttribute('contenteditable') === 'false' && /^\t?$/.test(n.textContent ?? '');
+    let carrier: HTMLElement | null = null;
+    if (node.nodeType === Node.TEXT_NODE) {
+      const c = node.parentElement?.closest('span[contenteditable="false"]') ?? null;
+      if (isCarrier(c)) carrier = c;
+    } else {
+      const el = node as Element;
+      const adjacent = direction === 'right' ? el.childNodes[range.startOffset - 1] : el.childNodes[range.startOffset];
+      if (isCarrier(adjacent)) carrier = adjacent;
+      else if (isCarrier(el)) carrier = el as HTMLElement;
+    }
+    if (!carrier) return;
+    const editor = this.getActiveEditor();
+    if (!editor || !editor.contains(carrier)) return;
+    let edge: Node = carrier;
+    while (edge.parentElement && edge.parentElement !== editor && edge.parentElement.tagName === 'SPAN'
+      && edge.parentElement.childNodes.length === 1) {
+      edge = edge.parentElement;
+    }
+    const block = (carrier.closest('p,li,td,th,h1,h2,h3,h4,h5,h6,div') as HTMLElement | null) ?? editor;
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, {
+      acceptNode: (n) => (n.parentElement?.closest('[contenteditable="false"]') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+    });
+    let target: Text | null = null;
+    if (direction === 'right') {
+      walker.currentNode = edge;
+      const n = walker.nextNode();
+      if (n && !edge.contains(n)) target = n as Text;
+    } else {
+      walker.currentNode = edge;
+      const n = walker.previousNode();
+      if (n && !edge.contains(n)) target = n as Text;
+    }
+    const out = document.createRange();
+    if (target) {
+      out.setStart(target, direction === 'right' ? 0 : target.length);
+    } else if (direction === 'right') {
+      out.setStartAfter(edge);
+    } else {
+      out.setStartBefore(edge);
+    }
+    out.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(out);
+    this.savedSelection = out.cloneRange();
   }
 
   private _siblingTableFragment(table: HTMLTableElement, direction: 1 | -1): HTMLTableElement | null {

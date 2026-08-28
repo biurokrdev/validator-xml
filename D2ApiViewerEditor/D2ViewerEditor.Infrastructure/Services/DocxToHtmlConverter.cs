@@ -2766,7 +2766,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
             }
             else
             {
-                html.Append("<span style=\"display:inline-block;min-width:2em;white-space:pre;\" contenteditable=\"false\">\t</span>");
+                html.Append("<span style=\"display:inline-block;min-width:2em;white-space:pre;tab-size:2em;\" contenteditable=\"false\">\t</span>");
             }
             html.Append("<span class=\"docx-tab-text\" style=\"white-space:pre;\">")
                 .Append(segments[k])
@@ -3682,7 +3682,7 @@ public class DocxToHtmlConverter : IDocxToHtmlConverter
                 if (br.Type?.Value == BreakValues.Column) return "<div class=\"docx-column-break\"></div>";
                 return "<br/>";
             case TabChar _:
-                return "<span style=\"display:inline-block;min-width:2em;\" contenteditable=\"false\">\t</span>";
+                return "<span style=\"display:inline-block;min-width:2em;white-space:pre;tab-size:2em;\" contenteditable=\"false\">\t</span>";
             case Drawing drawing:
                 return ConvertDrawingToHtml(drawing, document, sourcePart);
             case Picture picture:

@@ -168,7 +168,8 @@
 
 .editor-content span[style*='min-width:2em'],
 .page-overflow-content span[style*='min-width:2em'] {
-  white-space: normal !important;
+  white-space: pre !important;
+  tab-size: 2em;
 }
 
 .page :is(p, h1, h2, h3, h4, h5, h6, li):not(:has([data-pos-mode])):not([style*='background-color']):not([style*='border']) {
@@ -607,7 +608,8 @@ span.docx-tab-leader[data-leader='heavy']::after {
 
 :is(.header-editor-content, .footer-editor-content, .header-display, .footer-display)
   span[style*='min-width:2em'] {
-  white-space: normal !important;
+  white-space: pre !important;
+  tab-size: 2em;
 }
 
 :is(.editor-content, .header-editor-content, .footer-editor-content) .editor-image-wrapper:hover {
@@ -1424,7 +1426,8 @@ body.image-moving * {
 }
 
 .footnote-item-content span[style*='min-width:2em'] {
-  white-space: normal !important;
+  white-space: pre !important;
+  tab-size: 2em;
 }
 
 :is(.editor-content, .page-overflow-content, .header-editor-content, .footer-editor-content,

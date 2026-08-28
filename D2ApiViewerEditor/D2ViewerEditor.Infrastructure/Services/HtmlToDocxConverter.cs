@@ -279,6 +279,7 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
             }
 
             PreserveNoteProperties(origMain, targetMain);
+            PreserveEditProtection(origMain, targetMain, target);
 
             target.Save();
         }
@@ -316,6 +317,49 @@ public class HtmlToDocxConverter : IHtmlToDocxConverter
         if (endnoteFmt != null)
             settings.AppendChild(new EndnoteDocumentWideProperties(new NumberingFormat { Val = endnoteFmt }));
         settings.Save();
+    }
+
+    private static void PreserveEditProtection(MainDocumentPart origMain, MainDocumentPart targetMain, WordprocessingDocument target)
+    {
+        var origSettings = origMain.DocumentSettingsPart?.Settings;
+        var protection = origSettings?.GetFirstChild<DocumentProtection>();
+        var enforced = protection != null && protection.Enforcement?.Value == true
+            && protection.Edit != null && protection.Edit.Value != DocumentProtectionValues.None;
+        var writeProtection = origSettings?.GetFirstChild<WriteProtection>();
+        var writeProtected = writeProtection != null
+            && (writeProtection.Recommended?.Value == true
+                || !string.IsNullOrEmpty(writeProtection.Hash?.Value)
+                || !string.IsNullOrEmpty(writeProtection.HashValue?.Value));
+
+        if (enforced || writeProtected)
+        {
+            var settingsPart = targetMain.DocumentSettingsPart ?? targetMain.AddNewPart<DocumentSettingsPart>();
+            settingsPart.Settings ??= new Settings();
+            var settings = settingsPart.Settings;
+            if (writeProtected && settings.GetFirstChild<WriteProtection>() == null)
+                settings.PrependChild((WriteProtection)writeProtection!.CloneNode(true));
+            if (enforced && settings.GetFirstChild<DocumentProtection>() == null)
+            {
+                var clone = (DocumentProtection)protection!.CloneNode(true);
+                OpenXmlElement? before = settings.GetFirstChild<DefaultTabStop>()
+                    ?? (OpenXmlElement?)settings.GetFirstChild<CharacterSpacingControl>()
+                    ?? settings.GetFirstChild<Compatibility>();
+                if (before != null) settings.InsertBefore(clone, before);
+                else settings.AppendChild(clone);
+            }
+            settings.Save();
+        }
+
+        var origCustom = (origMain.OpenXmlPackage as WordprocessingDocument)?.CustomFilePropertiesPart;
+        var markedFinal = origCustom?.Properties?.Elements<DocumentFormat.OpenXml.CustomProperties.CustomDocumentProperty>()
+            .Any(p => p.Name?.Value == "_MarkAsFinal"
+                      && (string.Equals(p.VTBool?.Text, "true", StringComparison.OrdinalIgnoreCase) || p.VTBool?.Text == "1")) == true;
+        if (markedFinal && target.CustomFilePropertiesPart == null)
+        {
+            var part = target.AddCustomFilePropertiesPart();
+            using var src = origCustom!.GetStream(FileMode.Open, FileAccess.Read);
+            part.FeedData(src);
+        }
     }
 
     private static void PreserveNoteProperties(MainDocumentPart origMain, MainDocumentPart targetMain)
