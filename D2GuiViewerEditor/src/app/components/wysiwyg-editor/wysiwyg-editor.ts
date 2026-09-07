@@ -14,9 +14,9 @@ import {
   ViewChildren,
   QueryList,
   ViewEncapsulation,
-  input
+  input,
+  ChangeDetectionStrategy
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import {
@@ -144,9 +144,10 @@ interface PageColumnBand {
 @Component({
   selector: 'd2-wysiwyg-editor',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './wysiwyg-editor.html',
   styleUrl: './wysiwyg-editor.scss',
+  changeDetection: ChangeDetectionStrategy.Eager,
   encapsulation: ViewEncapsulation.None
 })
 export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
@@ -514,6 +515,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this._safeFooterCache.clear();
   }
 
+
   private readonly _footnotes = signal<Footnote[]>([]);
   readonly footnoteList = computed(() => this._footnotes());
 
@@ -737,6 +739,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (removedFromDom) this.contentChange.emit(this.getContent());
   }
 
+
   private readonly _endnotes = signal<Endnote[]>([]);
   readonly endnoteList = computed(() => this._endnotes());
 
@@ -916,6 +919,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     if (removedFromDom) this.contentChange.emit(this.getContent());
   }
 
+
   onEditorClick(ev: MouseEvent): void {
     this._navigateToNoteFromRef(ev);
     this._navigateFromInternalAnchor(ev);
@@ -1058,6 +1062,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     const pagesArr = this.pageContents();
     return pagesArr.map((_, i) => this._computeFooterContent(i));
   });
+
 
   editorState = signal<EditorState>({
     isModified: false,
@@ -1512,6 +1517,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     document.addEventListener('mouseup', onImageMouseUp);
   }
 
+
   private readonly TABLE_EDGE_THRESHOLD = 6;
   private readonly EMPTY_CELL_EDGE_THRESHOLD = 2;
 
@@ -1769,6 +1775,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+
   private handleEditorDragStart(event: DragEvent): void {
     const rawTarget = event.target as Node | null;
     const target: HTMLElement | null = rawTarget instanceof HTMLElement
@@ -1826,6 +1833,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
   }
 
+
   private handleTextBoxMouseDown(event: MouseEvent, target: HTMLElement): void {
     const textbox = target.closest('.docx-textbox') as HTMLElement | null;
     if (!textbox) return;
@@ -1863,6 +1871,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       this.selectedTextBox = null;
     }
   }
+
 
   private selectedShape: HTMLElement | null = null;
 
@@ -2058,6 +2067,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     textbox.classList.toggle('tb-edge', onEdge);
     this.edgeCursorTextBox = textbox;
   }
+
 
   private _pageVisualScale(page: HTMLElement): number {
     const rect = page.getBoundingClientRect();
@@ -2497,6 +2507,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     }
     this.insertText(normalizeWhitespace(plain));
   }
+
 
   private handleCopyOrCut(e: ClipboardEvent, cut: boolean): void {
     const sel = window.getSelection();
@@ -4740,6 +4751,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this.stateChange.emit(this.editorState());
   }
 
+
   setActivePage(index: number, _ev: Event): void {
     const refs = this.pageEditorRefs?.toArray() ?? [];
     if (refs[index]) {
@@ -4785,6 +4797,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     sel.removeAllRanges();
     sel.addRange(range);
   }
+
 
   private _setPendingInlineStyle(
     patch: { fontFamily?: string; fontSize?: string },
@@ -4877,6 +4890,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     this.savedSelection = newRange.cloneRange();
     this._clearPendingInlineStyle();
   }
+
 
   private static readonly UNCHECKED_BULLET_CODES = new Set([0x71, 0xa8, 0x6f, 0x72]);
   private static readonly CHECKED_BULLET_CODES = new Set([0xfe, 0xfd, 0xfc]);
@@ -7153,6 +7167,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     return `#${r}${g}${b}`;
   }
 
+
   startEditingHeader(event?: MouseEvent): void {
     if (this.readOnly) return;
     if (this.editingSection() === 'header') return;
@@ -7463,6 +7478,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
     };
   }
 
+
   onHeaderFooterToolbarMouseDown(event: MouseEvent): void {
     const target = event.target as HTMLElement;
     if (target.tagName !== 'INPUT' && target.tagName !== 'SELECT' && target.tagName !== 'TEXTAREA') {
@@ -7685,6 +7701,7 @@ export class WysiwygEditorComponent implements AfterViewInit, OnDestroy {
       return { top: r.top - base, height: r.height };
     });
   }
+
 
   private searchHighlights: HTMLElement[] = [];
   private currentHighlightIndex = -1;

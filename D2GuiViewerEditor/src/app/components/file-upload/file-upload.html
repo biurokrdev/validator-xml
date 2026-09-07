@@ -1,0 +1,100 @@
+<div class="upload-container">
+  <h2>Przesyłanie pliku ZIP</h2>
+
+  <div class="upload-section">
+    <div class="file-input-wrapper">
+      <input
+        type="file"
+        (change)="onFileSelected($event)"
+        accept=".zip"
+        id="fileInput"
+        class="file-input"
+      />
+      <label for="fileInput" class="file-label">
+        📁 Wybierz plik ZIP
+      </label>
+      @if (selectedFile) {
+        <span class="file-name">
+          {{ selectedFile.name }} ({{ formatFileSize(selectedFile.size) }})
+        </span>
+      }
+    </div>
+
+    <button
+      (click)="uploadFile()"
+      [disabled]="!selectedFile || isUploading"
+      class="upload-button"
+    >
+      {{ isUploading ? 'Przesyłanie...' : 'Prześlij plik' }}
+    </button>
+  </div>
+
+  @if (errorMessage) {
+    <div class="error-message">
+      ⚠️ {{ errorMessage }}
+    </div>
+  }
+
+  @if (uploadResponse) {
+    <div class="response-section">
+      <div class="success-header">
+        <span class="success-icon">✅</span>
+        <h3>{{ uploadResponse.message }}</h3>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-card">
+          <div class="summary-label">Nazwa pliku</div>
+          <div class="summary-value">{{ uploadResponse.fileName }}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Rozmiar archiwum</div>
+          <div class="summary-value">{{ formatFileSize(uploadResponse.fileSize!) }}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Liczba plików</div>
+          <div class="summary-value highlight">{{ uploadResponse.filesCount }}</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Data przetworzenia</div>
+          <div class="summary-value">{{ uploadResponse.processedAt | date:'medium' }}</div>
+        </div>
+      </div>
+
+      @if (uploadResponse.files && uploadResponse.files.length > 0) {
+        <div class="files-list">
+          <h4>📂 Zawartość archiwum ({{ uploadResponse.filesCount }} plików):</h4>
+          @for (file of uploadResponse.files; track file) {
+            <div class="file-item">
+              <div class="file-header">
+                <span class="file-icon">
+                  {{ file.fileType === 'JSON' ? '📄' : file.fileType === 'Word Document' ? '📝' : file.fileType === 'Certificate' ? '🔐' : '📎' }}
+                </span>
+                <span class="file-name-display">{{ file.fileName }}</span>
+                <span class="file-type-badge">{{ file.fileType }}</span>
+              </div>
+              <div class="file-details">
+                <span>📁 {{ file.fullPath }}</span>
+                <span>📏 {{ formatFileSize(file.fileSize) }}</span>
+                <span>🗜️ {{ formatFileSize(file.compressedSize) }}</span>
+                <span>📅 {{ file.lastModified | date:'short' }}</span>
+              </div>
+              @if (file.content) {
+                <div class="file-content">
+                  <details>
+                    <summary>📝 Podgląd zawartości JSON</summary>
+                    <pre>{{ file.content | json }}</pre>
+                  </details>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="empty-archive">
+          <p>📭 Archiwum jest puste lub nie zawiera obsługiwanych plików.</p>
+        </div>
+      }
+    </div>
+  }
+</div>

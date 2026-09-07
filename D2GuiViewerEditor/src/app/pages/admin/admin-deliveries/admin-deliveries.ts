@@ -1,5 +1,4 @@
-import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, computed, inject, OnDestroy, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subscription, interval } from 'rxjs';
@@ -12,8 +11,9 @@ import {
 @Component({
   selector: 'd2-admin-deliveries',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [FormsModule],
   templateUrl: './admin-deliveries.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-deliveries.scss'
 })
 export class AdminDeliveriesComponent implements OnInit, OnDestroy {
