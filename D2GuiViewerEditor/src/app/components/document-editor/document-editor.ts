@@ -43,7 +43,7 @@ import {
   Endnote
 } from '../../models/document.model';
 import { BuildInfoService } from '../../core/services/build-info.service';
-import { DocumentNavigationService } from '../../core/services/document-navigation.service';
+import { DocumentNavigationService, MIME_PDF, OPENED_FILE_NAME_STATE_KEY } from '../../core/services/document-navigation.service';
 import { LastHttpErrorService } from '../../core/services/last-http-error.service';
 import { NotificationService } from '../../core/services/notification.service';
 import { FontProviderService } from '../../services/font-provider.service';
@@ -164,6 +164,9 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   private diskOriginalFile: File | null = null;
 
   readonly canDownloadOriginal = computed(() => this.loadedFromDisk() || this.userDownload());
+
+  readonly isGeneratingPdf = signal<boolean>(false);
+  readonly pendingPdfPreviewUrl = signal<string | null>(null);
 
   showSaveState = signal<boolean>(true);
   private finishSendSub?: Subscription;
@@ -472,7 +475,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     ).subscribe(({ masterId, versionId }) => {
       this.documentVersionId.set(versionId ?? null);
       this.readOnly.set(!versionId);
-      this.loadFromStorage(masterId!, versionId ?? null);
+      this.loadFromStorage(masterId!, versionId ?? null, this.consumeOpenedFileName());
     });
 
     const account = this.msal.instance.getActiveAccount() ?? this.msal.instance.getAllAccounts()[0] ?? null;
@@ -623,7 +626,16 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   private static readonly DOC_MIME = 'application/msword';
   private static readonly PDF_MIME = 'application/pdf';
 
-  private loadFromStorage(masterId: string, versionId: string | null): void {
+  private consumeOpenedFileName(): string | null {
+    const state = window.history.state as Record<string, unknown> | null;
+    const name = state?.[OPENED_FILE_NAME_STATE_KEY];
+    if (typeof name !== 'string' || !name) return null;
+    const { [OPENED_FILE_NAME_STATE_KEY]: _consumed, ...rest } = state!;
+    window.history.replaceState(rest, '');
+    return name;
+  }
+
+  private loadFromStorage(masterId: string, versionId: string | null, openedFileName: string | null = null): void {
     this.isLoading.set(true);
     this.errorMessage.set(null);
     this.documentMasterId.set(masterId);
@@ -663,7 +675,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       })
     ).subscribe({
       next: ({ file, fileName }) => {
-        this._convertAndLoad(file, fileName);
+        this._convertAndLoad(file, fileName, undefined, !!openedFileName, openedFileName ?? undefined);
       },
       error: (err) => {
         if (err?.handled) {
@@ -798,7 +810,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         )
       ).subscribe({
         next: ({ masterId, versionId }) => {
-          this.documentNavigation.navigateToEditableDocument(masterId, versionId);
+          this.documentNavigation.navigateToEditableDocument(masterId, versionId, { openedFileName: file.name });
         },
         error: (err) => {
           this.isLoading.set(false);
@@ -846,7 +858,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     });
   }
 
-  private _convertAndLoad(file: File, fileName: string, password?: string, announce = false): void {
+  private _convertAndLoad(file: File, fileName: string, password?: string, announce = false, displayName?: string): void {
     this.isLoading.set(true);
     this.errorMessage.set(null);
 
@@ -857,7 +869,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         if (content.isReadOnlyProtected === true) {
           this.showInfo(READ_ONLY_PROTECTED_MESSAGE);
         } else if (announce) {
-          this.showSuccess(`Otwarto dokument: ${fileName}`);
+          this.showSuccess(`Otwarto dokument: ${displayName ?? fileName}`);
         }
         this.isLoading.set(false);
       },
@@ -866,7 +878,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         const code = err instanceof OpenDocumentError ? err.code : undefined;
 
         if (code === 'PASSWORD_REQUIRED' || code === 'WRONG_PASSWORD') {
-          this.openPasswordDialog(pwd => this._convertAndLoad(file, fileName, pwd, announce), code === 'WRONG_PASSWORD');
+          this.openPasswordDialog(pwd => this._convertAndLoad(file, fileName, pwd, announce, displayName), code === 'WRONG_PASSWORD');
           return;
         }
 
@@ -1101,6 +1113,73 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
         this.showError('Nie udało się pobrać oryginału dokumentu.');
       }
     });
+  }
+
+  generatePdf(): void {
+    this.showMenu.set(false);
+    if (this.isGeneratingPdf()) return;
+
+    const request = this.buildSaveRequest();
+    if (!request.html || !request.html.trim()) {
+      this.showError('Dokument jest pusty — nie ma czego pokazać w PDF.');
+      return;
+    }
+
+    const pdfName = `${request.originalFileName.replace(/\.docx?$/i, '') || 'dokument'}.pdf`;
+    this.pendingPdfPreviewUrl.set(null);
+
+    this.isGeneratingPdf.set(true);
+    this.isLoading.set(true);
+    this.documentService.generatePdf(request).pipe(
+      switchMap((buffer) => {
+        if (!buffer || buffer.byteLength === 0) {
+          throw new Error('Usługa konwersji zwróciła pusty plik PDF.');
+        }
+        return this.documentStorageService.uploadDocument({
+          name: pdfName,
+          mimeType: MIME_PDF,
+          content: this.documentStorageService.bytesToBase64(new Uint8Array(buffer)),
+        });
+      })
+    ).subscribe({
+      next: (result) => {
+        this.isGeneratingPdf.set(false);
+        this.isLoading.set(false);
+        const url = this.documentNavigation.documentUrl(result.masterId, MIME_PDF);
+        if (!this.openPdfPreviewWindow(url)) {
+          this.pendingPdfPreviewUrl.set(url);
+        }
+      },
+      error: (err) => {
+        this.isGeneratingPdf.set(false);
+        this.isLoading.set(false);
+        this.showError(err instanceof Error && err.message ? err.message : 'Nie udało się wygenerować pliku PDF.');
+      }
+    });
+  }
+
+  openPendingPdfPreview(): void {
+    const url = this.pendingPdfPreviewUrl();
+    if (!url) return;
+    if (this.openPdfPreviewWindow(url)) {
+      this.pendingPdfPreviewUrl.set(null);
+    } else {
+      this.showError('Przeglądarka blokuje wyskakujące okna dla tej strony — zezwól na nie i spróbuj ponownie.');
+    }
+  }
+
+  dismissPendingPdfPreview(): void {
+    this.pendingPdfPreviewUrl.set(null);
+  }
+
+  private openPdfPreviewWindow(url: string): boolean {
+    const width = Math.round(Math.max(800, (window.screen?.availWidth ?? 1400) * 0.9));
+    const height = Math.round(Math.max(600, (window.screen?.availHeight ?? 900) * 0.9));
+    const left = Math.round(((window.screen?.availWidth ?? width) - width) / 2);
+    const top = Math.round(((window.screen?.availHeight ?? height) - height) / 2);
+    const features = `popup=yes,width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`;
+    const handle = window.open(url, '_blank', features);
+    return !!handle;
   }
 
   private saveBlobToDisk(blob: Blob, fileName: string): void {
@@ -1390,6 +1469,7 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   @HostListener('document:keydown.escape', ['$event'])
   onEscapeKeydown(event: Event): void {
     if (event.defaultPrevented) return;
+
     if (this.isAnyDialogOpen() || this.showContextMenu()) return;
 
     if (this.toolbar?.formatPainterActive()) {
@@ -1561,7 +1641,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
       this.showShadingDropdown.set(false);
     }
   }
-
 
   @HostListener('mousedown', ['$event'])
   onCellMouseDown(event: MouseEvent): void {
@@ -1916,7 +1995,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.activeSubmenu.set(submenu);
   }
 
-
   undo(): void {
     this.editor?.executeCommand('undo');
     this.closeAllMenus();
@@ -2030,7 +2108,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showTablePanel.set(false);
     this.closeAllMenus();
   }
-
 
   toggleBold(): void {
     this.editor?.executeCommand('bold');
@@ -2436,7 +2513,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showSuccess('Zastosowano ustawienia strony');
   }
 
-
   onOpenHeaderFooterSettings(data: {
     headerMargin: number;
     footerMargin: number;
@@ -2463,7 +2539,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.editor?.applyHeaderFooterSettings(data);
     this.closeHeaderFooterDialog();
   }
-
 
   onEditorMouseUp(event: MouseEvent): void {
     if (this.showContextMenu()) return;
@@ -2624,7 +2699,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.editor?.executeCommand('outdent');
   }
 
-
   closeContextMenu(): void {
     this.showContextMenu.set(false);
     this.contextSubmenu.set(null);
@@ -2709,7 +2783,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.showShadingDropdown.set(false);
     this.notifyEditorChange();
   }
-
 
   private getContextCell(): HTMLElement | null {
     return this.contextMenuTargetCell() || this.activeTableCell();
@@ -2817,7 +2890,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeContextMenu();
   }
 
-
   contextMenuAlignImageLeft(): void {
     const img = this.contextMenuTargetImage();
     if (img) {
@@ -2864,13 +2936,11 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     return cell ? [cell] : [];
   }
 
-
   toggleToolsMenu(): void {
     const wasOpen = this.showToolsMenu();
     this.closeAllMenus();
     this.showToolsMenu.set(!wasOpen);
   }
-
 
   toggleViewMenu(): void {
     const wasOpen = this.showViewMenu();
@@ -3144,7 +3214,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.currentColumnRuler.set(next);
   }
 
-
   openParagraphDialog(): void {
     this.closeAllMenus();
     this.readCurrentParagraphSettings();
@@ -3325,7 +3394,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }
   }
 
-
   openInsertTableDialog(): void {
     this.closeAllMenus();
     if (this.savedTableDimensions) {
@@ -3427,7 +3495,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.closeInsertTableDialog();
     queueMicrotask(() => this.detectTableContext());
   }
-
 
   private notifyEditorChange(): void {
     const el = this.editor?.editorContent?.nativeElement;
@@ -3555,7 +3622,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     this.tablePanelManuallyClosed = false;
     this.notifyEditorChange();
   }
-
 
   setTableBorderStyle(style: TableBorderLineStyle): void {
     this.tableBorderStyle.set(style);
@@ -3863,7 +3929,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
     }, 50);
   }
 
-
   openPropertiesDialog(): void {
     this.propertiesData.set({ ...this.documentMetadata() });
     this.showPropertiesDialog.set(true);
@@ -3899,7 +3964,6 @@ export class DocumentEditorComponent implements OnInit, OnDestroy {
   updateProperty(key: string, value: string): void {
     this.propertiesData.update(p => ({ ...p, [key]: value }));
   }
-
 
   openSignatureDialog(): void {
     this.signatureDialogTab.set(

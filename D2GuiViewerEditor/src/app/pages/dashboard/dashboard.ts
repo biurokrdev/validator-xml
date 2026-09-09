@@ -40,7 +40,6 @@ export class DashboardComponent {
 
   private activeSubscription: Subscription | null = null;
 
-
   private ensureEditorAccess(): boolean {
     if (this.canUseEditor()) {
       return true;
@@ -161,7 +160,7 @@ export class DashboardComponent {
           )
         ).subscribe({
           next: ({ masterId, versionId }) => {
-            this.documentNavigation.navigateToEditableDocument(masterId, versionId);
+            this.documentNavigation.navigateToEditableDocument(masterId, versionId, { openedFileName: file.name });
           },
           error: (err) => {
             this.isLoading.set(false);

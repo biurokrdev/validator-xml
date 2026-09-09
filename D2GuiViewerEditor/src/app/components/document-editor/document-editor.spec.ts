@@ -1,6 +1,6 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { vi } from 'vitest';
-import { of, throwError } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DocumentEditorComponent } from './document-editor';
 import { DocumentService, OpenDocumentError } from '../../services/document.service';
@@ -1218,6 +1218,200 @@ describe('DocumentEditorComponent — „Pobierz oryginał dokumentu"', () => {
   });
 });
 
+describe('DocumentEditorComponent — „Generuj PDF"', () => {
+  let component: DocumentEditorComponent;
+  let generateCalls: Array<Record<string, unknown>>;
+  let uploadCalls: Array<{ name: string; mimeType: string; content: string }>;
+  let generateResponse: () => Observable<ArrayBuffer>;
+  let uploadResponse: () => Observable<{ masterId: string; versionId: string; fileName: string; createdAt: string }>;
+  let openSpy: ReturnType<typeof vi.spyOn>;
+  const VIEWER_URL = '/viewer?masterId=pdf-master-1';
+
+  beforeEach(async () => {
+    generateCalls = [];
+    uploadCalls = [];
+    generateResponse = () => of(new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer);
+    uploadResponse = () => of({ masterId: 'pdf-master-1', versionId: 'v1', fileName: 'umowa.pdf', createdAt: '' });
+    openSpy = vi.spyOn(window, 'open').mockReturnValue({ closed: false } as unknown as Window);
+
+    await TestBed.configureTestingModule({
+      imports: [DocumentEditorComponent],
+      providers: [
+        {
+          provide: DocumentService,
+          useValue: {
+            getTemplates: () => of([]),
+            generatePdf: (req: Record<string, unknown>) => { generateCalls.push(req); return generateResponse(); },
+          },
+        },
+        {
+          provide: DocumentStorageService,
+          useValue: {
+            uploadDocument: (req: { name: string; mimeType: string; content: string }) => { uploadCalls.push(req); return uploadResponse(); },
+            bytesToBase64: (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)),
+          },
+        },
+        { provide: Router, useValue: { navigate: () => {} } },
+        { provide: ActivatedRoute, useValue: { queryParams: of({}) } },
+        { provide: BuildInfoService, useValue: buildInfoStub() },
+        { provide: MsalService, useValue: msalStub },
+        { provide: DocumentNavigationService, useValue: { documentUrl: (id: string) => `/viewer?masterId=${id}` } },
+      ],
+    }).compileComponents();
+    component = TestBed.createComponent(DocumentEditorComponent).componentInstance;
+    component.documentContent.set('<p>Bieżący stan edytora</p>');
+    component.originalFileName.set('umowa.docx');
+  });
+
+  afterEach(() => openSpy.mockRestore());
+
+  it('wysyła bieżący stan edytora, wgrywa PDF jak plik z dysku i otwiera /viewer w osobnym oknie DOPIERO po uploadzie', async () => {
+    component.generatePdf();
+
+    await vi.waitFor(() => expect(openSpy).toHaveBeenCalledTimes(1));
+    expect(openSpy).toHaveBeenCalledWith(VIEWER_URL, '_blank', expect.stringContaining('popup=yes'));
+    expect(openSpy.mock.calls[0][2]).toMatch(/width=\d+,height=\d+/);
+    expect(generateCalls).toHaveLength(1);
+    expect(generateCalls[0]['html']).toContain('Bieżący stan edytora');
+    expect(uploadCalls).toEqual([{ name: 'umowa.pdf', mimeType: 'application/pdf', content: btoa('%PDF') }]);
+    expect(component.pendingPdfPreviewUrl()).toBeNull();
+    expect(component.isGeneratingPdf()).toBe(false);
+    expect(component.isLoading()).toBe(false);
+    expect(component.documentContent()).toContain('Bieżący stan edytora');
+    expect(component.documentMasterId()).toBeNull();
+  });
+
+  it('pusty dokument nie woła API ani nie otwiera okna', () => {
+    vi.spyOn(component as any, 'showError').mockImplementation(() => {});
+    component.documentContent.set('   ');
+
+    component.generatePdf();
+
+    expect(generateCalls).toHaveLength(0);
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('błąd konwersji: brak okna, komunikat błędu, pozycja menu odblokowana', async () => {
+    const errorSpy = vi.spyOn(component as any, 'showError').mockImplementation(() => {});
+    generateResponse = () => throwError(() => new Error('boom'));
+
+    component.generatePdf();
+
+    await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled());
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(uploadCalls).toHaveLength(0);
+    expect(component.isGeneratingPdf()).toBe(false);
+    expect(component.isLoading()).toBe(false);
+  });
+
+  it('błąd uploadu PDF też nie otwiera okna i pokazuje błąd', async () => {
+    const errorSpy = vi.spyOn(component as any, 'showError').mockImplementation(() => {});
+    uploadResponse = () => throwError(() => new Error('upload'));
+
+    component.generatePdf();
+
+    await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled());
+    expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it('zablokowany popup → pasek z przyciskiem; klik w przycisk otwiera okno i chowa pasek (edytor NIE nawiguje)', async () => {
+    openSpy.mockReturnValue(null);
+
+    component.generatePdf();
+
+    await vi.waitFor(() => expect(component.pendingPdfPreviewUrl()).toBe(VIEWER_URL));
+    expect(openSpy).toHaveBeenCalledTimes(1);
+
+    openSpy.mockReturnValue({ closed: false } as unknown as Window);
+    component.openPendingPdfPreview();
+
+    expect(openSpy).toHaveBeenCalledTimes(2);
+    expect(openSpy.mock.calls[1][0]).toBe(VIEWER_URL);
+    expect(component.pendingPdfPreviewUrl()).toBeNull();
+  });
+
+  it('pasek można zamknąć bez otwierania', async () => {
+    openSpy.mockReturnValue(null);
+    component.generatePdf();
+    await vi.waitFor(() => expect(component.pendingPdfPreviewUrl()).toBe(VIEWER_URL));
+
+    component.dismissPendingPdfPreview();
+
+    expect(component.pendingPdfPreviewUrl()).toBeNull();
+    expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DocumentEditorComponent — „Otwarto dokument" po wczytaniu z dysku (loadFromStorage)', () => {
+  let component: DocumentEditorComponent;
+  let openCalls: any[][];
+
+  beforeEach(async () => {
+    openCalls = [];
+    await TestBed.configureTestingModule({
+      imports: [DocumentEditorComponent],
+      providers: [
+        { provide: DocumentService, useValue: {
+            getTemplates: () => of([]),
+            openDocument: (...args: any[]) => { openCalls.push(args); return of({ html: '<p>ok</p>', metadata: {}, images: [], styles: [] }); }
+        } },
+        { provide: DocumentStorageService, useValue: {
+            getDocumentMetadata: () => of({ mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', returnUrl: null, classification: null, userDownload: true, showSaveState: true }),
+            downloadVersion: () => of(new Blob(['docx'])),
+            downloadBaseVersion: () => of(new Blob(['docx'])),
+        } },
+        { provide: Router, useValue: { navigate: () => {} } },
+        { provide: ActivatedRoute, useValue: { queryParams: of({}) } },
+        { provide: BuildInfoService, useValue: buildInfoStub() },
+        { provide: MsalService, useValue: msalStub },
+      ],
+    }).compileComponents();
+    component = TestBed.createComponent(DocumentEditorComponent).componentInstance;
+    window.history.replaceState(null, '');
+  });
+
+  afterEach(() => window.history.replaceState(null, ''));
+
+  it('z nazwą pliku ze stanu nawigacji → toast z PRAWDZIWĄ nazwą (nie technicznym „dokument.docx")', async () => {
+    (component as any).loadFromStorage('m-1', 'v-2', 'Umowa najmu.docx');
+
+    await vi.waitFor(() => expect(component.successMessage()).toBe('Otwarto dokument: Umowa najmu.docx'));
+    expect(openCalls).toHaveLength(1);
+    expect(component.errorMessage()).toBeNull();
+  });
+
+  it('bez nazwy (wejście z aplikacji zewnętrznej / odświeżenie) → bez toastu', async () => {
+    (component as any).loadFromStorage('m-1', 'v-2');
+
+    await vi.waitFor(() => expect(openCalls).toHaveLength(1));
+    expect(component.successMessage()).toBeNull();
+  });
+
+  it('consumeOpenedFileName zdejmuje nazwę ze stanu JEDNORAZOWO (F5 nie toastuje ponownie)', () => {
+    window.history.replaceState({ openedFileName: 'plik.docx', navigationId: 7 }, '');
+
+    expect((component as any).consumeOpenedFileName()).toBe('plik.docx');
+    expect((component as any).consumeOpenedFileName()).toBeNull();
+    expect(window.history.state).toEqual({ navigationId: 7 });
+  });
+
+  it('consumeOpenedFileName ignoruje brak stanu i wartości niebędące tekstem', () => {
+    expect((component as any).consumeOpenedFileName()).toBeNull();
+    window.history.replaceState({ openedFileName: 42 }, '');
+    expect((component as any).consumeOpenedFileName()).toBeNull();
+  });
+
+  it('dokument chroniony read-only nadal daje INFO, nie sukces — także z nazwą z dysku', async () => {
+    const svc = TestBed.inject(DocumentService) as any;
+    svc.openDocument = () => of({ html: '<p>ro</p>', metadata: {}, images: [], styles: [], isReadOnlyProtected: true });
+
+    (component as any).loadFromStorage('m-1', 'v-2', 'chroniony.docx');
+
+    await vi.waitFor(() => expect(component.infoMessage()).toContain('tylko do odczytu'));
+    expect(component.successMessage()).toBeNull();
+  });
+});
+
 describe('DocumentEditorComponent — dialog hasła', () => {
   let fixture: ComponentFixture<DocumentEditorComponent>;
   let component: DocumentEditorComponent;
@@ -1579,7 +1773,7 @@ describe('DocumentEditorComponent — otwarcie DOCX z edytora → nowy dokument 
       content: 'ZG9jeA==',
     });
     expect(saveDocumentVersion).toHaveBeenCalledWith('m-new', { content: 'ZG9jeA==' });
-    expect(navigateToEditableDocument).toHaveBeenCalledWith('m-new', 'v-new');
+    expect(navigateToEditableDocument).toHaveBeenCalledWith('m-new', 'v-new', { openedFileName: 'umowa.docx' });
     expect(convertAndLoad).not.toHaveBeenCalled();
     expect(component.documentMasterId()).toBe('m-old');
     expect(component.documentVersionId()).toBe('v-old');
