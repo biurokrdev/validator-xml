@@ -170,6 +170,14 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
     }
   }
 
+  private awaitWithTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`${label}: brak odpowiedzi pdf.js przez ${Math.round(ms / 1000)} s — renderowanie strony przerwane`)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  }
+
   private showPageError(wrapper: HTMLDivElement, pageNum: number, err: unknown): void {
     wrapper.innerHTML = '';
     wrapper.classList.add('pdf-page-error');
@@ -189,8 +197,10 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
   }
 
   private async renderPage(pageNum: number, wrapper: HTMLDivElement): Promise<void> {
-    const page = await this.pdfDoc!.getPage(pageNum);
+    const t0 = performance.now();
+    const page = await this.awaitWithTimeout(this.pdfDoc!.getPage(pageNum), 30_000, `getPage(${pageNum})`);
     const viewport = page.getViewport({ scale: this.scale() });
+    const tPage = performance.now();
 
     wrapper.style.position = 'relative';
     wrapper.style.width    = `${viewport.width}px`;
@@ -202,7 +212,14 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
     canvas.width  = viewport.width;
     canvas.style.display = 'block';
     wrapper.appendChild(canvas);
-    await page.render({ canvas, viewport }).promise;
+    const renderTask = page.render({ canvas, viewport });
+    try {
+      await this.awaitWithTimeout(renderTask.promise, 60_000, `render(${pageNum})`);
+    } catch (err) {
+      renderTask.cancel();
+      throw err;
+    }
+    const tRender = performance.now();
 
     const textContainer = document.createElement('div');
     textContainer.className = 'textLayer';
@@ -213,11 +230,12 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
     wrapper.appendChild(textContainer);
 
     const textLayer = new TextLayer({
-      textContentSource: await page.getTextContent(),
+      textContentSource: await this.awaitWithTimeout(page.getTextContent(), 30_000, `getTextContent(${pageNum})`),
       container: textContainer,
       viewport,
     });
-    await textLayer.render();
+    await this.awaitWithTimeout(textLayer.render(), 30_000, `textLayer(${pageNum})`);
+    console.debug(`[PdfViewer] strona ${pageNum}/${this.pdfDoc!.numPages}: getPage ${Math.round(tPage - t0)} ms, render ${Math.round(tRender - tPage)} ms, tekst ${Math.round(performance.now() - tRender)} ms`);
 
     const walker = document.createTreeWalker(textContainer, NodeFilter.SHOW_TEXT);
     let tn: Text | null;
