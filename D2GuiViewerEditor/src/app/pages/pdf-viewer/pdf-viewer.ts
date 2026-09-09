@@ -151,16 +151,41 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
       { root: container.closest('.pdf-scroll-area'), threshold: 0.1 }
     );
 
-    for (let pageNum = 1; pageNum <= this.pdfDoc.numPages; pageNum++) {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'pdf-page-wrapper';
-      wrapper.dataset['page'] = String(pageNum);
-      container.appendChild(wrapper);
-      this.intersectionObserver.observe(wrapper);
-      await this.renderPage(pageNum, wrapper);
+    try {
+      for (let pageNum = 1; pageNum <= this.pdfDoc.numPages; pageNum++) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'pdf-page-wrapper';
+        wrapper.dataset['page'] = String(pageNum);
+        container.appendChild(wrapper);
+        this.intersectionObserver.observe(wrapper);
+        try {
+          await this.renderPage(pageNum, wrapper);
+        } catch (err) {
+          console.error(`[PdfViewer] Nie udało się wyrenderować strony ${pageNum}/${this.pdfDoc.numPages}:`, err);
+          this.showPageError(wrapper, pageNum, err);
+        }
+      }
+    } finally {
+      this.isRendering.set(false);
     }
+  }
 
-    this.isRendering.set(false);
+  private showPageError(wrapper: HTMLDivElement, pageNum: number, err: unknown): void {
+    wrapper.innerHTML = '';
+    wrapper.classList.add('pdf-page-error');
+    if (!wrapper.style.height) {
+      wrapper.style.minHeight = '200px';
+    }
+    const box = document.createElement('div');
+    box.className = 'pdf-page-error-box';
+    const title = document.createElement('p');
+    title.className = 'pdf-page-error-title';
+    title.textContent = `Nie udało się wyrenderować strony ${pageNum}.`;
+    const detail = document.createElement('p');
+    detail.className = 'pdf-page-error-detail';
+    detail.textContent = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    box.append(title, detail);
+    wrapper.appendChild(box);
   }
 
   private async renderPage(pageNum: number, wrapper: HTMLDivElement): Promise<void> {
