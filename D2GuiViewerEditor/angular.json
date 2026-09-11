@@ -39,6 +39,26 @@
                 "output": "/"
               },
               {
+                "glob": "**/*.bcmap",
+                "input": "node_modules/pdfjs-dist/cmaps",
+                "output": "/pdfjs/cmaps"
+              },
+              {
+                "glob": "**/*.{pfb,ttf}",
+                "input": "node_modules/pdfjs-dist/standard_fonts",
+                "output": "/pdfjs/standard_fonts"
+              },
+              {
+                "glob": "**/*.{wasm,js}",
+                "input": "node_modules/pdfjs-dist/wasm",
+                "output": "/pdfjs/wasm"
+              },
+              {
+                "glob": "**/*.icc",
+                "input": "node_modules/pdfjs-dist/iccs",
+                "output": "/pdfjs/iccs"
+              },
+              {
                 "glob": "**/*",
                 "input": "src/assets",
                 "output": "/assets"

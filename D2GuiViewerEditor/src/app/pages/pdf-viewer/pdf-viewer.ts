@@ -18,6 +18,14 @@ import { DocumentClassificationBadgeComponent } from '../../components/document-
 
 GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
+const PDFJS_ASSET_URLS = {
+  cMapUrl: '/pdfjs/cmaps/',
+  cMapPacked: true,
+  standardFontDataUrl: '/pdfjs/standard_fonts/',
+  wasmUrl: '/pdfjs/wasm/',
+  iccUrl: '/pdfjs/iccs/',
+} as const;
+
 @Component({
   selector: 'd2-pdf-viewer',
   standalone: true,
@@ -107,7 +115,7 @@ export class PdfViewerComponent implements OnInit, OnDestroy {
         data[i] = binary.charCodeAt(i);
       }
 
-      const loadingTask = getDocument({ data });
+      const loadingTask = getDocument({ data, ...PDFJS_ASSET_URLS });
       this.pdfDoc = await loadingTask.promise;
       this.totalPages.set(this.pdfDoc.numPages);
       this.isLoading.set(false);
