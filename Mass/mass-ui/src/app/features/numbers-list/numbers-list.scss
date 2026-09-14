@@ -1,0 +1,47 @@
+:host {
+  display: block;
+}
+
+.stats-panel {
+  border-left: 4px solid #1d6b35;
+
+  .headline {
+    font-size: 1.05rem;
+    margin-bottom: 0.6rem;
+
+    b {
+      font-size: 1.25rem;
+    }
+
+    &.empty {
+      color: #8f2626;
+    }
+  }
+
+  .stat-line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 0.5rem;
+    padding: 0.35rem 0;
+    border-top: 1px solid #eef1f6;
+    font-size: 0.9rem;
+
+    .stat-type {
+      font-weight: 600;
+      min-width: 10.5rem;
+    }
+
+    .sep {
+      color: #b3bccd;
+    }
+
+    button {
+      margin-left: auto;
+    }
+
+    &.empty .stat-type {
+      color: #8f2626;
+    }
+  }
+}

@@ -1,0 +1,167 @@
+<h1>Numery nadawcze R</h1>
+
+<section class="card stats-panel" data-testid="stats">
+  <div class="headline" data-testid="stats-headline" [class.empty]="totalAvailable() === 0">
+    @if (totalAvailable() > 0) {
+      Zostało <b data-testid="stats-total-available">{{ totalAvailable() }}</b>
+      {{ plural(totalAvailable(), 'numer', 'numery', 'numerów') }} do wykorzystania.
+    } @else {
+      Brak numerów do wykorzystania. Zasil pulę nowym przedziałem.
+    }
+  </div>
+
+  @for (s of stats(); track s.type) {
+    <div class="stat-line" [attr.data-testid]="'stat-' + s.type" [class.empty]="s.available === 0">
+      <span class="stat-type">{{ typeLabel[s.type] }}</span>
+      <span>
+        zostało <b data-testid="stat-available">{{ s.available }}</b>
+        {{ plural(s.available, 'numer', 'numery', 'numerów') }} do wykorzystania
+      </span>
+      <span class="sep">·</span>
+      <span><b data-testid="stat-reserved">{{ s.reserved }}</b> {{ plural(s.reserved, 'zarezerwowany', 'zarezerwowane', 'zarezerwowanych') }}</span>
+      <span class="sep">·</span>
+      <span><b data-testid="stat-used">{{ s.used }}</b> {{ plural(s.used, 'użyty', 'użyte', 'użytych') }}</span>
+      <span class="sep">·</span>
+      <span><b data-testid="stat-cancelled">{{ s.cancelled }}</b> {{ plural(s.cancelled, 'anulowany', 'anulowane', 'anulowanych') }}</span>
+      <span class="sep">·</span>
+      <span>razem <b data-testid="stat-total">{{ s.total }}</b></span>
+      <button
+        type="button"
+        class="small secondary"
+        (click)="acquire(s.type)"
+        [disabled]="s.available === 0"
+        [attr.data-testid]="'acquire-' + s.type"
+      >
+        Pobierz kolejny numer
+      </button>
+    </div>
+  } @empty {
+    <div class="muted">Brak danych o puli.</div>
+  }
+</section>
+
+<section class="card">
+  <form class="row" (ngSubmit)="applyFilters()">
+    <label class="field">
+      Typ
+      <select [ngModel]="type()" (ngModelChange)="type.set($event)" name="type" data-testid="filter-type">
+        <option value="">wszystkie</option>
+        @for (t of types; track t) {
+          <option [value]="t">{{ typeLabel[t] }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      Stan
+      <select [ngModel]="state()" (ngModelChange)="state.set($event)" name="state" data-testid="filter-state">
+        <option value="">wszystkie</option>
+        @for (s of states; track s) {
+          <option [value]="s">{{ stateLabel[s] }}</option>
+        }
+      </select>
+    </label>
+
+    <label class="field">
+      Fragment numeru
+      <input
+        class="mono"
+        type="text"
+        [ngModel]="search()"
+        (ngModelChange)="search.set($event)"
+        name="search"
+        placeholder="np. 0075900773 lub RR47"
+        data-testid="filter-search"
+      />
+    </label>
+
+    <label class="field">
+      Na stronie
+      <select [ngModel]="pageSize()" (ngModelChange)="pageSize.set(+$event); applyFilters()" name="pageSize" data-testid="filter-page-size">
+        <option [value]="25">25</option>
+        <option [value]="50">50</option>
+        <option [value]="100">100</option>
+      </select>
+    </label>
+
+    <button type="submit" data-testid="filter-apply">Filtruj</button>
+    <button type="button" class="secondary" (click)="resetFilters()" data-testid="filter-reset">Wyczyść</button>
+  </form>
+</section>
+
+@if (error()) {
+  <div class="alert error" role="alert" data-testid="list-error">{{ error() }}</div>
+}
+@if (notice()) {
+  <div class="alert success" role="status" data-testid="list-notice">{{ notice() }}</div>
+}
+
+<section class="card">
+  <div class="muted" data-testid="list-summary">
+    @if (result(); as r) {
+      Znaleziono {{ r.totalCount }} numerów, strona {{ r.page }} z {{ r.totalPages }}.
+    } @else if (loading()) {
+      Ładowanie…
+    }
+  </div>
+
+  <table class="grid" data-testid="numbers-table">
+    <thead>
+      <tr>
+        <th>Numer</th>
+        <th>Typ</th>
+        <th>Stan</th>
+        <th>Edytor</th>
+        <th>Zmieniono</th>
+        <th>Akcje</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of items(); track item.id) {
+        <tr [attr.data-testid]="'row-' + item.fullNumber" [attr.data-state]="item.state">
+          <td class="mono" data-testid="cell-number">{{ item.fullNumber }}</td>
+          <td>{{ typeLabel[item.type] }}</td>
+          <td><span class="badge" [class]="'badge ' + item.state" data-testid="cell-state">{{ stateLabel[item.state] }}</span></td>
+          <td>{{ item.editor }}</td>
+          <td>{{ item.changeDate | date: 'yyyy-MM-dd HH:mm' }}</td>
+          <td class="actions">
+            @for (a of actionsFor(item); track a) {
+              <button
+                type="button"
+                class="small"
+                [class.secondary]="a !== 'Use'"
+                [class.danger]="a === 'Cancel'"
+                [disabled]="busyNumber() === item.fullNumber"
+                (click)="change(item, a)"
+                [attr.data-testid]="'action-' + a"
+              >
+                {{ actionLabel[a] }}
+              </button>
+            }
+            @if (actionsFor(item).length === 0) {
+              <span class="muted">brak</span>
+            }
+          </td>
+        </tr>
+      } @empty {
+        <tr>
+          <td colspan="6" class="muted" data-testid="empty-row">
+            @if (loading()) {
+              Ładowanie…
+            } @else {
+              Brak numerów spełniających kryteria.
+            }
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+
+  @if (totalPages() > 1) {
+    <div class="pager">
+      <button type="button" class="small secondary" (click)="goTo(page() - 1)" [disabled]="page() <= 1" data-testid="pager-prev">‹ Poprzednia</button>
+      <span data-testid="pager-info">{{ page() }} / {{ totalPages() }}</span>
+      <button type="button" class="small secondary" (click)="goTo(page() + 1)" [disabled]="page() >= totalPages()" data-testid="pager-next">Następna ›</button>
+    </div>
+  }
+</section>

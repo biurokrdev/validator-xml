@@ -1,0 +1,46 @@
+<header class="topbar">
+  <div class="brand">Mass · numery R</div>
+
+  <nav data-testid="sections">
+    @for (s of sections; track s.id) {
+      <button
+        type="button"
+        class="section-btn"
+        [class.active]="active() === s.id"
+        [attr.aria-pressed]="active() === s.id"
+        (click)="show(s.id)"
+        [attr.data-testid]="'nav-' + s.id"
+      >
+        {{ s.label }}
+      </button>
+    }
+  </nav>
+
+  <label class="editor">
+    Edytor
+    <input
+      type="text"
+      maxlength="256"
+      [ngModel]="api.editor()"
+      (ngModelChange)="api.editor.set($event)"
+      data-testid="editor-input"
+    />
+  </label>
+</header>
+
+<main class="content" [attr.data-section]="active()">
+  <ng-container [ngTemplateOutlet]="activeTemplate()" />
+</main>
+
+<!-- Sekcje strony: renderowana jest tylko aktywna, pozostałe nie istnieją w DOM. -->
+<ng-template #numbersTpl>
+  <app-numbers-list />
+</ng-template>
+
+<ng-template #importTpl>
+  <app-import-range />
+</ng-template>
+
+<ng-template #checkTpl>
+  <app-number-check />
+</ng-template>

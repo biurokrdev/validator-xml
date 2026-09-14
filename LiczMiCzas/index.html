@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LiczMiCzas – Timer zadań Azure Boards</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script>
+    // Motyw ustawiany przed renderem, żeby uniknąć mignięcia jasnego tła.
+    (function () {
+      var t;
+      try { t = localStorage.getItem("liczmiczas.theme"); } catch (e) {}
+      document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
+    })();
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="18" height="18"><path fill="#fff" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM8 3a5 5 0 1 1 0 10A5 5 0 0 1 8 3zm-.75 2v3.31l2.47 1.48.77-1.28-1.74-1.04V5h-1.5z"/></svg>
+      </span>
+      <nav class="breadcrumb" aria-label="Nawigacja">
+        <span class="crumb org">LiczMiCzas</span>
+        <span class="sep">/</span>
+        <span class="crumb">Boards</span>
+        <span class="sep">/</span>
+        <span class="crumb current">Timer zadań</span>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <div class="clock">
+        <span id="clock-date"></span>
+        <span id="clock-time"></span>
+      </div>
+      <button type="button" class="btn icon-btn" id="settings-open" title="Ustawienia" aria-label="Ustawienia">
+        <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M8.6 1.5a1 1 0 0 0-1 .85l-.25 1.7a6.6 6.6 0 0 0-1.6.93l-1.6-.64a1 1 0 0 0-1.23.43l-1.4 2.43a1 1 0 0 0 .23 1.28l1.36 1.06a6.7 6.7 0 0 0 0 1.85l-1.36 1.06a1 1 0 0 0-.23 1.28l1.4 2.43a1 1 0 0 0 1.23.43l1.6-.64c.49.38 1.03.7 1.6.93l.25 1.7a1 1 0 0 0 1 .85h2.8a1 1 0 0 0 1-.85l.25-1.7c.57-.23 1.11-.55 1.6-.93l1.6.64a1 1 0 0 0 1.23-.43l1.4-2.43a1 1 0 0 0-.23-1.28l-1.36-1.06a6.7 6.7 0 0 0 0-1.85l1.36-1.06a1 1 0 0 0 .23-1.28l-1.4-2.43a1 1 0 0 0-1.23-.43l-1.6.64a6.6 6.6 0 0 0-1.6-.93l-.25-1.7a1 1 0 0 0-1-.85H8.6zM10 7a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
+      </button>
+      <button type="button" class="btn icon-btn" id="theme-toggle" title="Przełącz motyw jasny / ciemny" aria-label="Przełącz motyw">
+        <svg class="icon-sun" viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M10 6a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0-4.5a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1.5zm0 15a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5a.75.75 0 0 1 .75-.75zM1.5 10a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 1.5 10zm15 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75zM3.99 3.99a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 0 1-1.06 1.06L3.99 5.05a.75.75 0 0 1 0-1.06zm9.9 9.9a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 1 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06zm2.12-9.9a.75.75 0 0 1 0 1.06l-1.06 1.06a.75.75 0 0 1-1.06-1.06l1.06-1.06a.75.75 0 0 1 1.06 0zm-9.9 9.9a.75.75 0 0 1 0 1.06l-1.06 1.06a.75.75 0 0 1-1.06-1.06l1.06-1.06a.75.75 0 0 1 1.06 0z"/></svg>
+        <svg class="icon-moon" viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M11.5 2.5a7.5 7.5 0 1 0 6 12 6 6 0 0 1-6-12z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- LEWA KOLUMNA -->
+    <div class="col">
+      <!-- Nowe zadanie -->
+      <section class="panel">
+        <h2>Nowe zadanie</h2>
+        <form id="task-form" class="task-form" autocomplete="off">
+          <label>
+            <span>ID (Azure)</span>
+            <input type="text" id="f-wi" placeholder="np. 12345" list="wi-suggestions" />
+            <datalist id="wi-suggestions"></datalist>
+          </label>
+          <label class="grow">
+            <span>Tytuł zadania</span>
+            <input type="text" id="f-title" placeholder="Opis zadania" list="title-suggestions" />
+            <datalist id="title-suggestions"></datalist>
+          </label>
+          <label>
+            <span>Typ</span>
+            <select id="f-type">
+              <option value="praca">praca</option>
+              <option value="org">organizacyjne</option>
+            </select>
+          </label>
+          <label>
+            <span>Estymata (czas)</span>
+            <input type="text" id="f-est" placeholder="np. 8:30" inputmode="decimal" />
+          </label>
+          <button type="submit" class="btn primary" title="Dodaje zadanie i od razu startuje licznik">▶ Zadanie</button>
+        </form>
+      </section>
+
+      <!-- Oś czasu -->
+      <section class="panel">
+        <div class="list-head">
+          <h2>Dzisiaj <span class="muted" id="list-date"></span></h2>
+        </div>
+        <div class="filter-bar">
+          <svg class="filter-icon" viewBox="0 0 20 20" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l4.15 4.15a.75.75 0 0 1-1.06 1.06l-4.15-4.15A5.5 5.5 0 1 1 8.5 3zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+          <input type="search" id="task-search" placeholder="Filtruj po ID Azure lub tytule zadania" autocomplete="off" spellcheck="false" />
+          <span id="search-info" class="filter-info" hidden></span>
+          <button type="button" class="filter-clear" id="task-search-clear" title="Wyczyść filtr (Esc)" aria-label="Wyczyść filtr" hidden>
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M4.47 4.47a.75.75 0 0 1 1.06 0L10 8.94l4.47-4.47a.75.75 0 1 1 1.06 1.06L11.06 10l4.47 4.47a.75.75 0 1 1-1.06 1.06L10 11.06l-4.47 4.47a.75.75 0 0 1-1.06-1.06L8.94 10 4.47 5.53a.75.75 0 0 1 0-1.06z"/></svg>
+          </button>
+        </div>
+        <ul id="timeline" class="timeline"></ul>
+        <p id="empty-info" class="muted">Brak wpisów. Kliknij „Rozpocznij pracę” lub dodaj zadanie.</p>
+      </section>
+    </div>
+
+    <!-- PRAWA KOLUMNA: dzień pracy + podsumowanie -->
+    <div class="col side">
+      <!-- Dzień pracy -->
+      <section class="panel workday">
+        <div class="workday-head">
+          <div>
+            <h2>Dzień pracy</h2>
+            <div class="workday-status" id="wd-status">Nie rozpoczęto</div>
+          </div>
+          <div class="workday-timer-box">
+            <span class="workday-total" id="wd-total">z <span id="st-total-limit">8:00</span> · do końca <span id="st-left">8:00</span></span>
+            <div class="workday-timer" id="wd-timer">00:00:00</div>
+          </div>
+          <div class="workday-buttons">
+            <button type="button" class="btn primary big" id="wd-start">▶ Rozpocznij pracę</button>
+            <button type="button" class="btn success big" id="wd-resume" hidden>▶ Wznów pracę</button>
+            <button type="button" class="btn danger big" id="wd-stop" hidden>■ Zakończ pracę</button>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <span class="stat-label">Zadania (praca)</span>
+            <b id="st-work">0:00</b>
+            <span class="stat-sub">obligo <span id="st-work-limit">6:00</span></span>
+            <div class="progress"><div id="st-work-bar"></div></div>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Przerwa + organizacyjne</span>
+            <b id="st-break">0:00</b>
+            <span class="stat-sub">limit <span id="st-break-limit">2:00</span> · org. <span id="st-org">0:00</span></span>
+            <div class="progress"><div id="st-break-bar"></div></div>
+          </div>
+          <div class="stat overtime">
+            <span class="stat-label">Nadgodziny</span>
+            <b id="st-overtime">0:00</b>
+            <span class="stat-sub" id="st-overtime-sub">brak</span>
+          </div>
+          <div class="stat owed">
+            <span class="stat-label">Czas do odpracowania</span>
+            <b id="st-owed">0:00</b>
+            <span class="stat-sub" id="st-owed-sub">brak</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Podsumowanie -->
+      <aside class="panel">
+      <h2>Podsumowanie dnia</h2>
+
+      <div class="day-nav">
+        <button type="button" class="btn" id="day-prev" title="Poprzedni dzień">◀</button>
+        <input type="date" id="summary-date" />
+        <button type="button" class="btn" id="day-next" title="Następny dzień">▶</button>
+        <button type="button" class="btn" id="day-today">Dziś</button>
+        <button type="button" class="btn icon-btn" id="summary-options-toggle" title="Opcje podsumowania" aria-label="Opcje podsumowania" aria-expanded="false">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M8.6 1.5a1 1 0 0 0-1 .85l-.25 1.7a6.6 6.6 0 0 0-1.6.93l-1.6-.64a1 1 0 0 0-1.23.43l-1.4 2.43a1 1 0 0 0 .23 1.28l1.36 1.06a6.7 6.7 0 0 0 0 1.85l-1.36 1.06a1 1 0 0 0-.23 1.28l1.4 2.43a1 1 0 0 0 1.23.43l1.6-.64c.49.38 1.03.7 1.6.93l.25 1.7a1 1 0 0 0 1 .85h2.8a1 1 0 0 0 1-.85l.25-1.7c.57-.23 1.11-.55 1.6-.93l1.6.64a1 1 0 0 0 1.23-.43l1.4-2.43a1 1 0 0 0-.23-1.28l-1.36-1.06a6.7 6.7 0 0 0 0-1.85l1.36-1.06a1 1 0 0 0 .23-1.28l-1.4-2.43a1 1 0 0 0-1.23-.43l-1.6.64a6.6 6.6 0 0 0-1.6-.93l-.25-1.7a1 1 0 0 0-1-.85H8.6zM10 7a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
+        </button>
+        <button type="button" class="btn icon-btn" id="refresh-summary" title="Odśwież podsumowanie" aria-label="Odśwież podsumowanie">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M15.5 4.5A7.5 7.5 0 0 0 2.6 8.3a.75.75 0 1 0 1.46.34A6 6 0 0 1 14.4 5.6l-1.9 0a.75.75 0 0 0 0 1.5h3.75a.75.75 0 0 0 .75-.75V2.6a.75.75 0 0 0-1.5 0v1.9zM4.5 15.5a7.5 7.5 0 0 0 12.9-3.8.75.75 0 1 0-1.46-.34A6 6 0 0 1 5.6 14.4h1.9a.75.75 0 0 0 0-1.5H3.75a.75.75 0 0 0-.75.75v3.75a.75.75 0 0 0 1.5 0v-1.9z"/></svg>
+        </button>
+      </div>
+
+      <div class="summary-options" id="summary-options" hidden>
+        <label>
+          <span>Czas w nawiasie</span>
+          <select id="summary-mode">
+            <option value="day">czas z dnia / estymata</option>
+            <option value="total">czas łączny / estymata</option>
+            <option value="both">dzień (łącznie) / estymata</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="summary-show-id" checked /> ID zadania / „Brak ID”</label>
+        <label><input type="checkbox" id="summary-show-ranges" /> godziny wpisów</label>
+      </div>
+
+      <div id="summary-view" class="summary-view"></div>
+
+      <details class="summary-raw">
+        <summary>Wersja tekstowa</summary>
+        <pre id="summary-text" class="summary"></pre>
+      </details>
+
+      </aside>
+    </div>
+  </main>
+
+  <!-- Dialog ustawień -->
+  <dialog id="settings-dialog">
+    <div class="edit-form settings-form">
+      <h3>Ustawienia</h3>
+
+      <section class="settings-section">
+        <h4>Limity dnia</h4>
+        <div class="settings-grid">
+          <label>
+            <span>Dzień pracy [h]</span>
+            <input type="number" id="s-work" min="1" step="0.25" />
+          </label>
+          <label>
+            <span>Maks. przerwa [h]</span>
+            <input type="number" id="s-break" min="0" step="0.25" />
+          </label>
+        </div>
+        <p class="muted small">Obligo pracy = dzień pracy − przerwa.</p>
+      </section>
+
+      <section class="settings-section">
+        <h4>Azure DevOps</h4>
+        <label>
+          <span>Adres projektu (do linków z ID zadania)</span>
+          <input type="url" id="s-org" placeholder="https://dev.azure.com/organizacja/projekt" />
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h4>Eksport i import</h4>
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <b>Kopia zapasowa (JSON)</b>
+            <span class="muted small">Wszystkie dni i ustawienia. Import zastępuje bieżące dane.</span>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn" id="export-json">Eksport</button>
+            <label class="btn file-btn">Import<input type="file" id="import-json" accept="application/json" hidden /></label>
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <b>Arkusz (CSV)</b>
+            <span class="muted small">Średnik, UTF-8 – otwiera się w Excelu.</span>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn" id="export-csv-entries" title="Każdy wpis (zadanie / przerwa) jako osobny wiersz">Wpisy</button>
+            <button type="button" class="btn" id="export-csv-tasks" title="Zadania zsumowane per dzień">Zadania per dzień</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section danger-zone">
+        <h4>Czyszczenie</h4>
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <b>Dzisiejszy dzień</b>
+            <span class="muted small">Usuwa wszystkie wpisy i zdarzenia z dzisiaj. Nie da się cofnąć.</span>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn danger" id="clear-day">Wyczyść</button>
+          </div>
+        </div>
+      </section>
+
+      <p class="muted small">Dane są zapisywane lokalnie w przeglądarce (localStorage). Skrót Ctrl+Shift+S zatrzymuje bieżące zadanie.</p>
+
+      <div class="actions">
+        <button type="button" class="btn primary" id="settings-close">Zamknij</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialog edycji wpisu -->
+  <dialog id="edit-dialog">
+    <form method="dialog" class="edit-form" id="edit-form">
+      <h3 id="e-heading">Edytuj wpis</h3>
+      <div id="e-task-fields">
+        <label><span>ID (Azure)</span><input type="text" id="e-wi" /></label>
+        <label><span>Tytuł</span><input type="text" id="e-title" /></label>
+        <div class="settings-grid">
+          <label>
+            <span>Typ</span>
+            <select id="e-type">
+              <option value="praca">praca</option>
+              <option value="org">organizacyjne</option>
+            </select>
+          </label>
+          <label><span>Estymata (czas)</span><input type="text" id="e-est" placeholder="np. 8:30" inputmode="decimal" /></label>
+        </div>
+        <p class="muted small">Zmiana ID, tytułu, typu i estymaty dotyczy wszystkich wpisów tego zadania.</p>
+      </div>
+      <div class="settings-grid">
+        <label><span>Początek</span><input type="time" id="e-start" step="60" required /></label>
+        <label><span>Koniec</span><input type="time" id="e-end" step="60" /></label>
+      </div>
+      <p class="muted small" id="e-end-hint"></p>
+      <label><span>Komentarz</span><input type="text" id="e-comment" /></label>
+      <div class="actions">
+        <button type="button" class="btn" id="e-cancel">Anuluj</button>
+        <button type="submit" class="btn primary">Zapisz</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
