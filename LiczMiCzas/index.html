@@ -285,6 +285,712 @@
     </form>
   </dialog>
 
-  <script src="app.js"></script>
+  <script>
+/* LiczMiCzas – timer dnia pracy i zadań z Azure Boards (bez zależności, localStorage). */
+(() => {
+  "use strict";
+
+  const STORAGE_KEY = "liczmiczas.v2";
+  const DEFAULTS = { orgUrl: "", workHours: 8, breakHours: 2 };
+  const H = 3600;
+
+  // Model: state.days[YYYY-MM-DD] = { date, status: "working"|"paused", startedAt, tasks, segments, events }
+  //  Task    = { id, wi, title, type: "praca"|"org", estimateH }
+  //  Segment = { id, kind: "task"|"break", taskId|null, start, end|null, comment }  – w trakcie pracy dokładnie jeden ma end === null
+  //  Event   = { id, type: "start"|"stop"|"resume", at }
+
+  // ---------- Dane ----------
+  const normalize = (p) => ({
+    settings: { ...DEFAULTS, ...(p?.settings || {}) },
+    days: p?.days && typeof p.days === "object" ? p.days : {},
+  });
+  let state;
+  try { state = normalize(JSON.parse(localStorage.getItem(STORAGE_KEY))); } catch { state = normalize(null); }
+
+  const save = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  const S = () => state.settings;
+  const workLimit = () => S().workHours * H;
+  const breakLimit = () => S().breakHours * H;
+  const obligo = () => Math.max(0, S().workHours - S().breakHours) * H;
+
+  // ---------- Pomocnicze ----------
+  const pad = (n) => String(n).padStart(2, "0");
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const ymd = (key) => key.split("-").map(Number);
+  const dateKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = () => dateKey();
+  const fmtDatePl = (key) => key.split("-").reverse().join(".");
+  const shiftDate = (key, n) => { const [y, m, d] = ymd(key); return dateKey(new Date(y, m - 1, d + n)); };
+  const endOfDay = (key) => { const [y, m, d] = ymd(key); return new Date(y, m - 1, d + 1).getTime() - 1000; };
+  const timeOnDay = (key, hhmm) => { const [y, m, d] = ymd(key), [hh, mm] = hhmm.split(":").map(Number); return new Date(y, m - 1, d, hh, mm).getTime(); };
+  const fmtClock = (ts) => { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const mins = (sec) => Math.round(Math.max(0, sec) / 60);
+  const fmtHM = (sec) => `${Math.floor(mins(sec) / 60)}:${pad(mins(sec) % 60)}`;                       // 1:32
+  const fmtHours = (sec) => `${Math.round((sec / H) * 100) / 100} h`;                                   // 1.53 h
+  const fmtHoursDec = (sec) => String(Math.round((sec / H) * 100) / 100).replace(".", ",");            // 1,53 (CSV)
+  const fmtHMin = (sec) => { const m = mins(sec), h = Math.floor(m / 60), r = m % 60; return h && r ? `${h} h ${r} min` : h ? `${h} h` : `${r} min`; };
+  const fmtHMS = (sec) => { sec = Math.max(0, Math.floor(sec)); return `${pad(Math.floor(sec / H))}:${pad(Math.floor((sec % H) / 60))}:${pad(sec % 60)}`; };
+  const plural = (n, one, few, many) => `${n} ${n === 1 ? one : n < 5 ? few : many}`;
+
+  /** "8:30" | "8.5" | "8,5" | "8" -> godziny albo null */
+  function parseEstimate(str) {
+    const v = String(str ?? "").trim();
+    if (!v) return null;
+    const hm = v.match(/^(\d{1,3}):([0-5]?\d)$/);
+    if (hm) return Number(hm[1]) + Number(hm[2]) / 60;
+    if (v.includes(":")) return null;
+    const n = parseFloat(v.replace(",", "."));
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+  const estimateToInput = (h) => (h ? fmtHM(h * H) : "");
+
+  // ---------- Dostęp do danych ----------
+  const getDay = (key) => state.days[key] || null;
+  const todayDay = () => getDay(today());
+  function ensureDay(key) {
+    const day = (state.days[key] ??= { date: key, status: "paused", startedAt: null, tasks: [], segments: [], events: [] });
+    day.events ??= [];
+    return day;
+  }
+  const findTask = (day, id) => day.tasks.find((t) => t.id === id) || null;
+  const openSegment = (day) => day.segments.find((s) => s.end === null) || null;
+  const segDuration = (s, now) => Math.max(0, ((s.end ?? now) - s.start) / 1000);
+  const isWorking = (day) => !!day && day.status === "working";
+  const isWorkSeg = (day, s) => s.kind === "task" && findTask(day, s.taskId)?.type !== "org";
+  const segsOf = (day, taskId) => day.segments.filter((s) => s.taskId === taskId);
+  const taskSecondsInDay = (day, taskId, now) => segsOf(day, taskId).reduce((a, s) => a + segDuration(s, now), 0);
+  /** Między dniami zadania łączą się wyłącznie po ID Azure. */
+  const taskSecondsAllDays = (day, task, now) =>
+    task.wi
+      ? Object.values(state.days).reduce((sum, d) => sum + d.tasks.filter((t) => t.wi === task.wi).reduce((a, t) => a + taskSecondsInDay(d, t.id, now), 0), 0)
+      : taskSecondsInDay(day, task.id, now);
+  const uniqComments = (segs) => [...new Set(segs.map((s) => (s.comment || "").trim()).filter(Boolean))];
+  const taskTitle = (t) => (t.title || "").trim() || (t.wi ? `Zadanie #${t.wi}` : "(bez tytułu)");
+  const typeLabel = (t) => (t ? (t.type === "org" ? "organizacyjne" : "praca") : "przerwa");
+  const workItemUrl = (wi) => { const base = (S().orgUrl || "").trim().replace(/\/+$/, ""); return base && wi ? `${base}/_workitems/edit/${encodeURIComponent(wi)}` : null; };
+  const taskInfo = (daySec, totalSec, estSec) =>
+    `zadanie dziś: ${fmtHM(daySec)}` + (totalSec > daySec + 1 ? ` · łącznie: ${fmtHM(totalSec)}` : "") + (estSec ? ` · estymata: ${fmtHM(estSec)}` : "");
+  function knownTasks() {
+    const map = new Map();
+    for (const day of Object.values(state.days)) for (const t of day.tasks) map.set(t.wi ? `wi:${t.wi}` : `t:${(t.title || "").trim().toLowerCase()}`, t);
+    return [...map.values()];
+  }
+
+  /** Moment, w którym naliczony czas (opcjonalnie tylko praca) osiągnął limit; null, gdy jeszcze nie. */
+  function limitReachedAt(day, limit, now, onlyWork) {
+    let acc = 0;
+    for (const s of [...day.segments].sort((a, b) => a.start - b.start)) {
+      if (onlyWork && !isWorkSeg(day, s)) continue;
+      const dur = segDuration(s, now);
+      if (acc + dur >= limit) return s.start + (limit - acc) * 1000;
+      acc += dur;
+    }
+    return null;
+  }
+
+  /**
+   * Sumy dnia. Obligo = dzień − przerwa. Dzień zaliczony, gdy obecność ≥ dzień ORAZ praca ≥ obligo (doneAt).
+   * Nadgodziny = praca po doneAt. Do odpracowania: przed pełną obecnością przerwa ponad limit,
+   * po niej (lub dla zamkniętego dnia, final) brakująca praca do obliga.
+   */
+  function dayTotals(day, now, final = false) {
+    const t = { work: 0, org: 0, idle: 0, brk: 0, total: 0, overtime: 0, owed: 0, breakOver: 0, doneAt: null, shortWork: 0 };
+    if (!day) return t;
+    for (const s of day.segments) {
+      const dur = segDuration(s, now);
+      if (s.kind === "break") t.idle += dur;
+      else if (findTask(day, s.taskId)?.type === "org") t.org += dur;
+      else t.work += dur;
+    }
+    t.brk = t.idle + t.org;
+    t.total = t.work + t.brk;
+    t.breakOver = Math.max(0, t.brk - breakLimit());
+    const presenceAt = t.total >= workLimit() ? limitReachedAt(day, workLimit(), now, false) : null;
+    const workAt = t.work >= obligo() ? limitReachedAt(day, obligo(), now, true) : null;
+    if (presenceAt !== null && workAt !== null) {
+      t.doneAt = Math.max(presenceAt, workAt);
+      t.overtime = day.segments.filter((s) => isWorkSeg(day, s)).reduce((a, s) => a + Math.max(0, (s.end ?? now) - Math.max(s.start, t.doneAt)) / 1000, 0);
+    } else t.owed = presenceAt !== null || final ? Math.max(0, obligo() - t.work) : t.breakOver;
+    if (final) t.shortWork = Math.max(0, obligo() - t.work);
+    return t;
+  }
+
+  // ---------- Operacje ----------
+  const commit = () => { save(); render(); };
+  const closeOpen = (day, now) => { const o = openSegment(day); if (o) o.end = Math.max(o.start, now); };
+  const pushSegment = (day, seg) => day.segments.push({ id: uid(), kind: "break", taskId: null, start: Date.now(), end: null, comment: "", ...seg });
+  const addEvent = (day, type, at) => ensureDay(day.date).events.push({ id: uid(), type, at });
+  function beginWorking(day, now) {
+    if (!day.startedAt) { day.startedAt = now; addEvent(day, "start", now); }
+    else if (day.status !== "working") addEvent(day, "resume", now);
+    day.status = "working";
+  }
+  function startWork() {
+    const day = ensureDay(today());
+    if (isWorking(day)) return;
+    const now = Date.now();
+    beginWorking(day, now);
+    pushSegment(day, { start: now });
+    commit();
+  }
+  function stopWork() {
+    const day = todayDay();
+    if (!isWorking(day)) return;
+    const now = Date.now();
+    closeOpen(day, now);
+    day.status = "paused";
+    addEvent(day, "stop", now);
+    commit();
+  }
+  function startTask(taskId) {
+    const day = ensureDay(today()), now = Date.now();
+    if (isWorking(day)) closeOpen(day, now); else beginWorking(day, now);
+    pushSegment(day, { kind: "task", taskId, start: now });
+    commit();
+  }
+  /** Zatrzymuje zadanie – czas leci dalej jako przerwa. */
+  function stopTask() {
+    const day = todayDay();
+    if (!isWorking(day) || openSegment(day)?.kind !== "task") return;
+    const now = Date.now();
+    closeOpen(day, now);
+    pushSegment(day, { start: now });
+    commit();
+  }
+  /** Dni inne niż dzisiejszy z otwartym wpisem – zamknij na koniec tamtego dnia. */
+  function closeStaleDays() {
+    for (const day of Object.values(state.days)) {
+      if (day.date === today()) continue;
+      const open = openSegment(day);
+      if (open) open.end = Math.max(open.start, endOfDay(day.date));
+      if (day.status === "working") { day.status = "paused"; addEvent(day, "stop", endOfDay(day.date)); }
+    }
+  }
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const on = (id, ev, fn) => $(id).addEventListener(ev, fn);
+  const setText = (id, text) => { $(id).textContent = text; };
+
+  let selectedDate = today();
+  let editing = null;      // { dayKey, segId }
+  let searchQuery = "";
+  let eventsOpen = false;  // rozwinięcie „Zdarzenia dnia” przeżywa odświeżanie co sekundę
+  let lastSummaryHtml = "";
+
+  const taskMatches = (task, q) => !q || (task.wi || "").toLowerCase().includes(q) || (task.title || "").toLowerCase().includes(q);
+  const normQuery = () => searchQuery.trim().toLowerCase().replace(/^#/, "");
+
+  function renderClock() {
+    const d = new Date();
+    setText("clock-date", fmtDatePl(dateKey(d)));
+    setText("clock-time", `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
+  }
+
+  function setBar(id, value, limit) {
+    const pct = limit > 0 ? Math.min(100, (value / limit) * 100) : 0;
+    $(id).style.width = `${pct}%`;
+    $(id).className = value > limit ? "over" : pct >= 90 ? "warn" : "";
+  }
+
+  function renderWorkday() {
+    const day = todayDay(), now = Date.now(), t = dayTotals(day, now);
+    const working = isWorking(day), started = !!day?.startedAt;
+
+    setText("wd-timer", fmtHMS(t.total));
+    $("wd-status").className = "workday-status " + (working ? "working" : started ? "paused" : "");
+    setText("wd-status", working ? "W toku" : started ? "Zatrzymano" : "Nie rozpoczęto");
+    $("wd-start").hidden = started;
+    $("wd-resume").hidden = !started || working;
+    $("wd-stop").hidden = !working;
+
+    setText("st-work", fmtHM(t.work));
+    setText("st-work-limit", fmtHM(obligo()));
+    setBar("st-work-bar", t.work, obligo());
+    setText("st-break", fmtHM(t.brk));
+    $("st-break").classList.toggle("over", t.brk > breakLimit());
+    setText("st-break-limit", fmtHM(breakLimit()));
+    setText("st-org", fmtHM(t.org));
+    setBar("st-break-bar", t.brk, breakLimit());
+
+    // nad licznikiem: "z 8:00 · do końca 3:30" | "Odpracowujesz · pozostało 45 min" | "od 16:45 nadgodziny (1 h 20 min)"
+    const presenceDone = t.total >= workLimit();
+    const total = $("wd-total");
+    total.classList.remove("over", "owed");
+    if (day && t.doneAt !== null) {
+      total.innerHTML = `od <span>${fmtClock(t.doneAt)}</span> nadgodziny <span>(${fmtHMin(t.overtime)})</span>`;
+      total.classList.add("over");
+    } else if (day && presenceDone) {
+      total.innerHTML = `Odpracowujesz · pozostało <span>${fmtHMin(t.owed)}</span>`;
+      total.classList.add("owed");
+    } else {
+      total.innerHTML = `z <span>${fmtHM(workLimit())}</span> · do końca <span>${fmtHM(workLimit() - t.total)}</span>`;
+    }
+
+    setText("st-overtime", fmtHM(t.overtime));
+    document.querySelector(".stat.overtime").classList.toggle("active", t.overtime > 0);
+    setText("st-overtime-sub", t.doneAt !== null ? `od ${fmtClock(t.doneAt)}` : "brak");
+    setText("st-owed", fmtHM(t.owed));
+    document.querySelector(".stat.owed").classList.toggle("active", t.owed > 0);
+    setText("st-owed-sub", t.owed > 0 ? (presenceDone ? `do obliga ${fmtHM(obligo())}` : `przerwa ponad ${fmtHM(breakLimit())}`) : "brak");
+
+    const open = day ? openSegment(day) : null;
+    const openTask = open?.kind === "task" ? findTask(day, open.taskId) : null;
+    document.title = openTask
+      ? `▶ ${fmtHMS(segDuration(open, now))} ${taskTitle(openTask)} – LiczMiCzas`
+      : working ? `☕ ${fmtHMS(t.total)} – LiczMiCzas` : "LiczMiCzas – Timer zadań Azure Boards";
+  }
+
+  function renderSuggestions() {
+    const tasks = knownTasks();
+    $("wi-suggestions").innerHTML = tasks.filter((t) => t.wi).map((t) => `<option value="${esc(t.wi)}">${esc(taskTitle(t))}</option>`).join("");
+    $("title-suggestions").innerHTML = tasks.filter((t) => t.title).map((t) => `<option value="${esc(t.title)}">${t.wi ? "#" + esc(t.wi) : ""}</option>`).join("");
+  }
+
+  const EVENT_LABEL = { start: "▶ Rozpoczęto pracę", stop: "■ Zakończono pracę", resume: "▶ Wznowiono pracę" };
+
+  function renderTimeline() {
+    const day = todayDay(), now = Date.now(), q = normQuery();
+    setText("list-date", fmtDatePl(today()));
+    const all = day ? day.segments : [];
+    // przy wyszukiwaniu tylko wpisy zadań pasujące do frazy (bez przerw i zdarzeń)
+    const segments = q ? all.filter((s) => s.kind === "task" && taskMatches(findTask(day, s.taskId) || {}, q)) : all;
+    const events = q ? [] : day?.events || [];
+    $("empty-info").hidden = !!q || all.length > 0 || events.length > 0;
+    $("search-info").hidden = !q;
+    if (q) {
+      const tasks = new Set(segments.map((s) => s.taskId)).size;
+      setText("search-info", segments.length ? `${plural(segments.length, "wpis", "wpisy", "wpisów")} · ${plural(tasks, "zadanie", "zadania", "zadań")}` : "brak wyników");
+    }
+    const lastSegOfTask = new Map();
+    for (const s of segments) if (s.kind === "task") lastSegOfTask.set(s.taskId, s.id);
+
+    // wpisy i zdarzenia w jednej osi, najnowsze na górze
+    $("timeline").innerHTML = [
+      ...segments.map((s) => ({ at: s.start, order: 1, html: entryHtml(day, s, now, lastSegOfTask.get(s.taskId) === s.id) })),
+      ...events.map((ev) => ({ at: ev.at, order: ev.type === "stop" ? 2 : 0, html: `<li class="event ${ev.type}"><span>${EVENT_LABEL[ev.type] || ev.type}</span><b>${fmtClock(ev.at)}</b></li>` })),
+    ].sort((a, b) => b.at - a.at || b.order - a.order).map((i) => i.html).join("");
+  }
+
+  function entryHtml(day, s, now, isLastOfTask) {
+    const running = s.end === null;
+    const task = s.kind === "task" ? findTask(day, s.taskId) : null;
+    const type = task ? task.type : "break";
+    let head, sub, overEst = false;
+    if (task) {
+      const url = workItemUrl(task.wi), title = taskTitle(task);
+      const wiHtml = !task.wi
+        ? `<span class="badge noid" title="Zadanie bez ID w Azure Boards">Brak ID Azure</span>`
+        : url ? `<a class="entry-wi" href="${esc(url)}" target="_blank" rel="noopener">#${esc(task.wi)}</a>` : `<span class="entry-wi">#${esc(task.wi)}</span>`;
+      head = `${wiHtml}<span class="entry-title" title="${esc(title)}">${esc(title)}</span>
+              <span class="badge ${type}">${typeLabel(task)}</span>`;
+      const daySec = taskSecondsInDay(day, task.id, now), allSec = taskSecondsAllDays(day, task, now);
+      overEst = !!task.estimateH && allSec > task.estimateH * H;
+      sub = taskInfo(daySec, allSec, task.estimateH * H);
+    } else {
+      head = `<span class="entry-title">Przerwa</span><span class="badge break">przerwa</span>`;
+      sub = running ? "czas bez zadania – liczony jako przerwa" : "";
+    }
+    const actions = [`<button class="btn small" data-act="edit" title="Edytuj">✎</button>`];
+    if (!running) actions.push(`<button class="btn small danger" data-act="delete" title="Usuń wpis">🗑</button>`);
+    if (task && running) actions.push(`<button class="btn small danger" data-act="stop-task">■ Zatrzymaj</button>`);
+    else if (task && isLastOfTask) actions.push(`<button class="btn small success" data-act="resume-task" title="Dodaje nowy wpis tego zadania i liczy dalej">▶ Wznów</button>`);
+
+    return `
+      <li class="entry ${type} ${running ? "running" : ""} ${overEst ? "over-est" : ""}" data-id="${s.id}" ${overEst ? 'title="Przekroczona estymata"' : ""}>
+        <div class="entry-time">
+          <b data-range>${fmtClock(s.start)} – ${running ? "…" : fmtClock(s.end)}</b>
+          <span data-dur>${fmtHMS(segDuration(s, now))}</span>
+        </div>
+        <div class="entry-main">
+          <div class="entry-head">${head}</div>
+          ${sub ? `<div class="entry-sub" data-sub>${sub}</div>` : ""}
+          <input class="entry-comment" data-comment placeholder="Komentarz…" value="${esc(s.comment)}" />
+        </div>
+        <div class="entry-actions">${actions.join("")}</div>
+      </li>`;
+  }
+
+  /** Liczniki otwartego wpisu bez przebudowy listy (nie psuje wpisywanego komentarza). */
+  function updateRunningEntry() {
+    const day = todayDay(), open = day ? openSegment(day) : null;
+    const li = open && $("timeline").querySelector(`li[data-id="${open.id}"]`);
+    if (!li) return;
+    const now = Date.now();
+    li.querySelector("[data-dur]").textContent = fmtHMS(segDuration(open, now));
+    const task = open.kind === "task" ? findTask(day, open.taskId) : null;
+    const sub = li.querySelector("[data-sub]");
+    if (task && sub) {
+      const daySec = taskSecondsInDay(day, task.id, now), allSec = taskSecondsAllDays(day, task, now);
+      li.classList.toggle("over-est", !!task.estimateH && allSec > task.estimateH * H);
+      sub.textContent = taskInfo(daySec, allSec, task.estimateH * H);
+    }
+  }
+
+  // ---------- Podsumowanie ----------
+  const EV_LABEL = { start: "rozpoczęto", stop: "zakończono", resume: "wznowiono" };
+  const rangeStr = (s) => `${fmtClock(s.start)}–${s.end === null ? "…" : fmtClock(s.end)}`;
+
+  /** Model podsumowania – wspólny dla widoku HTML i wersji tekstowej. */
+  function summaryModel(key) {
+    const day = getDay(key), now = Date.now();
+    const mode = $("summary-mode").value;
+    const m = { key, date: fmtDatePl(key), empty: true, showId: $("summary-show-id").checked, showRanges: $("summary-show-ranges").checked, mode };
+    if (!day || day.segments.length === 0) return m;
+
+    const t = dayTotals(day, now, key < today());
+    const running = day.segments.some((s) => s.end === null);
+    Object.assign(m, {
+      empty: false, totals: t, running,
+      limits: { work: workLimit(), obligo: obligo(), brk: breakLimit() },
+      start: fmtClock(day.startedAt ?? day.segments[0].start),
+      end: running ? "…" : fmtClock(Math.max(...day.segments.map((s) => s.end))),
+      doneAt: t.doneAt !== null ? fmtClock(t.doneAt) : null,
+      events: [...(day.events || [])].sort((a, b) => a.at - b.at).map((ev) => ({ type: ev.type, label: EV_LABEL[ev.type] || ev.type, at: fmtClock(ev.at) })),
+    });
+
+    const toRow = (task, i) => {
+      const daySec = taskSecondsInDay(day, task.id, now), totalSec = taskSecondsAllDays(day, task, now);
+      const segs = segsOf(day, task.id), estSec = task.estimateH ? task.estimateH * H : 0;
+      return {
+        no: i + 1, id: task.wi || "", idLabel: task.wi ? `#${task.wi}` : "Brak ID", url: workItemUrl(task.wi),
+        title: (task.title || "").trim(), displayTitle: taskTitle(task), type: task.type,
+        daySec, totalSec, estSec, estStr: estSec ? fmtHours(estSec) : "",
+        timeStr: mode === "total" ? fmtHours(totalSec) : mode === "both" ? `${fmtHours(daySec)} (łącznie ${fmtHours(totalSec)})` : fmtHours(daySec),
+        overEst: estSec ? totalSec > estSec : false, // zawsze czas łączny względem estymaty
+        running: segs.some((s) => s.end === null),
+        ranges: segs.map(rangeStr), comments: uniqComments(segs),
+      };
+    };
+    const withTime = day.tasks.filter((task) => taskSecondsInDay(day, task.id, now) > 0);
+    m.work = withTime.filter((task) => task.type !== "org").map(toRow);
+    m.org = withTime.filter((task) => task.type === "org").map(toRow);
+    const breaks = day.segments.filter((s) => s.kind === "break" && segDuration(s, now) >= 60);
+    m.breaks = { sec: t.idle, ranges: breaks.map(rangeStr), comments: uniqComments(breaks) };
+    return m;
+  }
+
+  /** Wersja tekstowa (godziny dziesiętne, do Azure Boards). */
+  function summaryText(m) {
+    const L = [`Dzień: ${m.date}`];
+    if (m.empty) return L.concat("(brak zarejestrowanego czasu)").join("\n");
+    const t = m.totals;
+    L.push(`Praca: ${m.start} – ${m.end} · łącznie ${fmtHours(t.total)} / ${fmtHours(m.limits.work)}` + (t.overtime > 0 ? ` · nadgodziny ${fmtHours(t.overtime)}` : ""));
+    L.push(`Zadania: ${fmtHours(t.work)} / ${fmtHours(m.limits.obligo)} · przerwa: ${fmtHours(t.brk)} / ${fmtHours(m.limits.brk)}` + (t.org > 0 ? ` (w tym organizacyjne ${fmtHours(t.org)})` : ""));
+    if (t.overtime > 0) L.push(`Nadgodziny: ${fmtHours(t.overtime)} (praca od ${m.doneAt})`);
+    if (t.owed > 0) L.push(`Do odpracowania: ${fmtHours(t.owed)}` + (t.breakOver > 0 ? ` (przerwa ponad limit ${fmtHours(t.breakOver)})` : ""));
+    if (m.events.length) L.push(`Zdarzenia: ${m.events.map((ev) => `${ev.label} ${ev.at}`).join(", ")}`);
+
+    const ranges = (r) => (m.showRanges && r.ranges.length ? ` (${r.ranges.join(", ")})` : "");
+    const comments = (r) => (r.comments.length ? ` – ${r.comments.join("; ")}` : "");
+    const row = (r) => {
+      const name = ((m.showId ? `${r.idLabel} ` : "") + (r.title || (m.showId ? "" : r.displayTitle))).trim();
+      return `${r.no} - ${name} [${r.timeStr}${r.estStr ? ` / ${r.estStr}` : ""}]${ranges(r)}${comments(r)}`;
+    };
+    L.push("", "Lista zadań:", ...(m.work.length ? m.work.map(row) : ["(brak)"]));
+    if (m.org.length) L.push("", "Organizacyjne:", ...m.org.map(row));
+    if (m.breaks.sec > 0) L.push("", `Przerwy: ${fmtHours(m.breaks.sec)}${ranges(m.breaks)}${comments(m.breaks)}`);
+    return L.join("\n");
+  }
+
+  /** Widok HTML podsumowania. */
+  function summaryHtml(m) {
+    const head = (extra = "") => `<div class="sum-head"><span class="sum-date">${esc(m.date)}</span>${extra}</div>`;
+    if (m.empty) return head() + `<p class="muted">Brak zarejestrowanego czasu w tym dniu.</p>`;
+    const t = m.totals;
+    const chip = (label, value, cls = "") => `<li class="sum-stat ${cls}"><span>${label}</span><b>${value}</b></li>`;
+    const chips = [
+      chip("Łącznie", `${fmtHM(t.total)} <small>/ ${fmtHM(m.limits.work)}</small>`, t.total > m.limits.work ? "over" : ""),
+      chip("Zadania", `${fmtHM(t.work)} <small>/ ${fmtHM(m.limits.obligo)}</small>`, t.shortWork > 0 ? "over" : ""),
+      chip("Przerwa", `${fmtHM(t.brk)} <small>/ ${fmtHM(m.limits.brk)}</small>`, t.brk > m.limits.brk ? "over" : ""),
+      t.overtime > 0 ? chip("Nadgodziny", `${fmtHM(t.overtime)} <small>od ${m.doneAt}</small>`, "over") : "",
+      t.owed > 0 ? chip("Do odpracowania", fmtHM(t.owed), "warn") : "",
+    ];
+    const meta = (r) => {
+      const parts = [];
+      if (m.showRanges && r.ranges.length) parts.push(`<span class="sum-ranges">${esc(r.ranges.join(", "))}</span>`);
+      if (r.comments.length) parts.push(`<span class="sum-comment">${esc(r.comments.join("; "))}</span>`);
+      return parts.join("");
+    };
+    const rowHtml = (r) => {
+      const idHtml = !m.showId ? ""
+        : !r.id ? `<span class="sum-id noid">Brak ID</span>`
+        : r.url ? `<a class="sum-id" href="${esc(r.url)}" target="_blank" rel="noopener">#${esc(r.id)}</a>` : `<span class="sum-id">#${esc(r.id)}</span>`;
+      const title = r.title || (m.showId && r.id ? "(bez tytułu)" : r.displayTitle);
+      const rowMeta = meta(r);
+      return `
+        <li class="sum-row ${r.type} ${r.running ? "running" : ""} ${r.overEst ? "over-est" : ""}" ${r.overEst ? 'title="Przekroczona estymata"' : ""}>
+          <span class="sum-no">${r.no}</span>
+          <div class="sum-main">
+            <div class="sum-title-line">${idHtml}<span class="sum-title">${esc(title)}</span></div>
+            <div class="sum-info">${taskInfo(r.daySec, r.totalSec, r.estSec)}</div>
+            ${rowMeta ? `<div class="sum-meta">${rowMeta}</div>` : ""}
+          </div>
+          <div class="sum-time"><b>${fmtHM(m.mode === "total" ? r.totalSec : r.daySec)}</b>${m.mode === "both" ? `<small>łącznie ${fmtHM(r.totalSec)}</small>` : ""}${r.estSec ? `<small>/ ${fmtHM(r.estSec)}</small>` : ""}</div>
+        </li>`;
+    };
+    const section = (title, rows, emptyText) => `
+      <h4 class="sum-section">${title} <span class="muted">(${rows.length})</span></h4>
+      ${rows.length ? `<ol class="sum-list">${rows.map(rowHtml).join("")}</ol>` : `<p class="muted small">${emptyText}</p>`}`;
+
+    let eventsHtml = "";
+    if (m.events.length) {
+      const stops = m.events.filter((ev) => ev.type === "stop").length, last = m.events.at(-1);
+      const brief = `start <b>${m.events[0].at}</b>` + (stops ? ` · przerw: <b>${stops}</b>` : "") + (last.type !== "start" ? ` · ${last.label} <b>${last.at}</b>` : "");
+      eventsHtml = `
+        <details class="sum-events-box" ${eventsOpen ? "open" : ""}>
+          <summary><span class="sum-events-title">Zdarzenia dnia (${m.events.length})</span><span class="sum-events-brief">${brief}</span></summary>
+          <div class="sum-events">${m.events.map((ev) => `<span class="sum-event ${ev.type}">${ev.label} <b>${ev.at}</b></span>`).join("")}</div>
+        </details>`;
+    }
+    return `
+      ${head(`<span class="sum-hours ${m.running ? "running" : ""}">${m.start} – ${m.end}</span>`)}
+      <ul class="sum-stats">${chips.join("")}</ul>
+      ${eventsHtml}
+      ${section("Lista zadań", m.work, "Brak zadań typu praca.")}
+      ${m.org.length ? section("Organizacyjne", m.org, "") : ""}
+      ${m.breaks.sec > 0 ? `<div class="sum-breaks"><span>Przerwy</span><b>${fmtHM(m.breaks.sec)}</b>${meta(m.breaks)}</div>` : ""}`;
+  }
+
+  function renderSummary() {
+    $("summary-date").value = selectedDate;
+    const m = summaryModel(selectedDate), html = summaryHtml(m);
+    if (html !== lastSummaryHtml) { $("summary-view").innerHTML = html; lastSummaryHtml = html; } // nie gubi rozwinięcia ani zaznaczenia
+    setText("summary-text", summaryText(m));
+  }
+  function renderSettings() {
+    $("s-work").value = S().workHours;
+    $("s-break").value = S().breakHours;
+    $("s-org").value = S().orgUrl || "";
+  }
+  function render() {
+    renderClock(); renderWorkday(); renderTimeline(); renderSuggestions(); renderSummary();
+  }
+  function tick() {
+    renderClock();
+    if (isWorking(todayDay())) { renderWorkday(); updateRunningEntry(); renderSummary(); }
+  }
+
+  // ---------- Zdarzenia: dzień pracy i nowe zadanie ----------
+  on("wd-start", "click", startWork);
+  on("wd-resume", "click", startWork);
+  on("wd-stop", "click", stopWork);
+
+  on("task-form", "submit", (e) => {
+    e.preventDefault();
+    const title = $("f-title").value.trim(), wi = $("f-wi").value.trim();
+    if (!title && !wi) { $("f-title").setCustomValidity("Podaj ID Azure lub tytuł zadania."); $("f-title").reportValidity(); return; }
+    const day = ensureDay(today());
+    const task = { id: uid(), wi, title, type: $("f-type").value === "org" ? "org" : "praca", estimateH: parseEstimate($("f-est").value) };
+    day.tasks.push(task);
+    startTask(task.id);
+    $("task-form").reset();
+    $("f-wi").focus();
+  });
+  // autouzupełnianie z wcześniejszych zadań
+  const fillForm = (t) => { $("f-wi").value = t.wi || ""; $("f-title").value = t.title || ""; $("f-type").value = t.type; $("f-est").value = estimateToInput(t.estimateH); };
+  on("f-title", "input", () => $("f-title").setCustomValidity(""));
+  on("f-wi", "input", () => $("f-title").setCustomValidity(""));
+  on("f-wi", "change", () => { const known = knownTasks().find((t) => t.wi === $("f-wi").value.trim()); if (known && !$("f-title").value.trim()) fillForm(known); });
+  on("f-title", "change", () => {
+    const title = $("f-title").value.trim().toLowerCase();
+    const known = title && knownTasks().find((t) => (t.title || "").trim().toLowerCase() === title);
+    if (known && !$("f-wi").value.trim()) fillForm(known);
+  });
+
+  // ---------- Zdarzenia: oś czasu ----------
+  const segFromEvent = (target, sel) => {
+    const node = target.closest(sel);
+    const day = todayDay();
+    const seg = node && day?.segments.find((s) => s.id === node.closest("li[data-id]").dataset.id);
+    return [node, day, seg];
+  };
+  on("timeline", "click", (e) => {
+    const [btn, day, seg] = segFromEvent(e.target, "button[data-act]");
+    if (!seg) return;
+    const act = btn.dataset.act;
+    if (act === "stop-task") stopTask();
+    else if (act === "resume-task") startTask(seg.taskId);
+    else if (act === "edit") openEdit(today(), seg.id);
+    else if (act === "delete") {
+      const task = seg.kind === "task" ? findTask(day, seg.taskId) : null;
+      if (!confirm(`Usunąć wpis ${task ? `zadania "${taskTitle(task)}"` : "przerwy"} (${fmtClock(seg.start)} – ${seg.end ? fmtClock(seg.end) : "…"})?`)) return;
+      day.segments = day.segments.filter((s) => s.id !== seg.id);
+      if (task && !segsOf(day, task.id).length) day.tasks = day.tasks.filter((t) => t.id !== task.id);
+      commit();
+    }
+  });
+  on("timeline", "input", (e) => {
+    const [input, , seg] = segFromEvent(e.target, "input[data-comment]");
+    if (!seg) return;
+    seg.comment = input.value;
+    save();
+    renderSummary();
+  });
+
+  // ---------- Wyszukiwarka ----------
+  const setSearch = (value) => { $("task-search").value = value; searchQuery = value; $("task-search-clear").hidden = !value; renderTimeline(); };
+  on("task-search", "input", () => setSearch($("task-search").value));
+  on("task-search", "keydown", (e) => { if (e.key === "Escape") setSearch(""); });
+  on("task-search-clear", "click", () => { setSearch(""); $("task-search").focus(); });
+
+  // ---------- Edycja wpisu ----------
+  function openEdit(dayKey, segId) {
+    const day = getDay(dayKey), seg = day?.segments.find((s) => s.id === segId);
+    if (!seg) return;
+    editing = { dayKey, segId };
+    const task = seg.kind === "task" ? findTask(day, seg.taskId) : null;
+    setText("e-heading", task ? "Edytuj wpis zadania" : "Edytuj przerwę");
+    $("e-task-fields").hidden = !task;
+    if (task) { $("e-wi").value = task.wi || ""; $("e-title").value = task.title || ""; $("e-type").value = task.type; $("e-est").value = estimateToInput(task.estimateH); }
+    $("e-start").value = fmtClock(seg.start);
+    $("e-end").value = seg.end === null ? "" : fmtClock(seg.end);
+    setText("e-end-hint", seg.end === null ? "Wpis trwa – zostaw koniec pusty, aby dalej liczyć." : "");
+    $("e-comment").value = seg.comment || "";
+    $("edit-dialog").showModal();
+  }
+  on("e-cancel", "click", () => $("edit-dialog").close());
+  on("edit-form", "submit", (e) => {
+    const day = editing && getDay(editing.dayKey), seg = day?.segments.find((s) => s.id === editing.segId);
+    if (!seg) return;
+    const start = timeOnDay(day.date, $("e-start").value);
+    const end = $("e-end").value ? timeOnDay(day.date, $("e-end").value) : null;
+    if (end !== null && end < start) { e.preventDefault(); alert("Koniec nie może być wcześniejszy niż początek."); return; }
+    const task = seg.kind === "task" ? findTask(day, seg.taskId) : null;
+    if (task) {
+      const wi = $("e-wi").value.trim(), title = $("e-title").value.trim();
+      if (!wi && !title) { e.preventDefault(); alert("Podaj ID Azure lub tytuł zadania."); return; }
+      Object.assign(task, { wi, title, type: $("e-type").value === "org" ? "org" : "praca", estimateH: parseEstimate($("e-est").value) });
+    }
+    const wasOpen = seg.end === null;
+    Object.assign(seg, { start, end, comment: $("e-comment").value.trim() });
+    // otwarty wpis zamknięto ręcznie → dzień dalej trwa jako przerwa
+    if (wasOpen && end !== null && isWorking(day) && day.date === today()) pushSegment(day, { start: Math.max(end, Date.now() - 1) });
+    if (day.startedAt && start < day.startedAt) day.startedAt = start;
+    editing = null;
+    commit();
+  });
+
+  // ---------- Podsumowanie: nawigacja i opcje ----------
+  const showDay = (key) => { selectedDate = key; renderSummary(); };
+  on("summary-date", "change", () => showDay($("summary-date").value || selectedDate));
+  on("day-prev", "click", () => showDay(shiftDate(selectedDate, -1)));
+  on("day-next", "click", () => showDay(shiftDate(selectedDate, 1)));
+  on("day-today", "click", () => showDay(today()));
+  $("summary-view").addEventListener("toggle", (e) => { if (e.target.classList?.contains("sum-events-box")) eventsOpen = e.target.open; }, true);
+  on("summary-options-toggle", "click", () => {
+    const open = $("summary-options").hidden;
+    $("summary-options").hidden = !open;
+    $("summary-options-toggle").classList.toggle("active", open);
+    $("summary-options-toggle").setAttribute("aria-expanded", String(open));
+  });
+  on("refresh-summary", "click", () => {
+    renderSummary();
+    $("refresh-summary").classList.add("spin");
+    setTimeout(() => $("refresh-summary").classList.remove("spin"), 500);
+  });
+  for (const id of ["summary-mode", "summary-show-id", "summary-show-ranges"]) on(id, "change", renderSummary);
+
+  // ---------- Ustawienia ----------
+  for (const [id, key, ok] of [["s-work", "workHours", (v) => v > 0], ["s-break", "breakHours", (v) => v >= 0]]) {
+    on(id, "change", () => { const v = parseFloat($(id).value); if (Number.isFinite(v) && ok(v)) S()[key] = v; renderSettings(); commit(); });
+  }
+  on("s-org", "change", () => { S().orgUrl = $("s-org").value.trim(); commit(); });
+  on("settings-open", "click", () => { renderSettings(); $("settings-dialog").showModal(); });
+  on("settings-close", "click", () => $("settings-dialog").close());
+
+  // ---------- Eksport / import ----------
+  function downloadFile(name, content, type) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([content], { type }));
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  on("export-json", "click", () => { save(); downloadFile(`liczmiczas-${today()}.json`, JSON.stringify(state, null, 2), "application/json"); });
+
+  // CSV: separator ";" i BOM UTF-8 – otwiera się poprawnie w polskim Excelu
+  const csvCell = (v) => (/[";\n\r]/.test(String(v ?? "")) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ""));
+  const csvFile = (name, rows) => downloadFile(name, "﻿" + rows.map((r) => r.map(csvCell).join(";")).join("\r\n") + "\r\n", "text/csv;charset=utf-8");
+  const sortedDays = () => Object.values(state.days).sort((a, b) => a.date.localeCompare(b.date));
+  const estCsv = (task) => (task.estimateH ? fmtHoursDec(task.estimateH * H) : "");
+
+  /** Każdy wpis (zadanie / przerwa) jako osobny wiersz. */
+  on("export-csv-entries", "click", () => {
+    const now = Date.now();
+    const rows = [["Data", "Typ", "ID Azure", "Tytuł", "Start", "Koniec", "Czas [h:mm]", "Czas [h]", "Estymata [h]", "Komentarz"]];
+    for (const day of sortedDays()) {
+      for (const seg of [...day.segments].sort((a, b) => a.start - b.start)) {
+        const task = seg.kind === "task" ? findTask(day, seg.taskId) : null, sec = segDuration(seg, now);
+        rows.push([fmtDatePl(day.date), typeLabel(task), task?.wi || "", task ? task.title || "" : "Przerwa", fmtClock(seg.start),
+          seg.end === null ? "" : fmtClock(seg.end), fmtHM(sec), fmtHoursDec(sec), task ? estCsv(task) : "", seg.comment || ""]);
+      }
+    }
+    csvFile(`liczmiczas-wpisy-${today()}.csv`, rows);
+  });
+
+  /** Zadania zsumowane per dzień + wiersze przerw i sum dnia. */
+  on("export-csv-tasks", "click", () => {
+    const now = Date.now();
+    const rows = [["Data", "Typ", "ID Azure", "Tytuł", "Czas [h:mm]", "Czas [h]", "Estymata [h]", "Komentarze"]];
+    for (const day of sortedDays()) {
+      const t = dayTotals(day, now, day.date < today()), date = fmtDatePl(day.date);
+      const sumRow = (type, label, sec) => rows.push([date, type, "", label, fmtHM(sec), fmtHoursDec(sec), "", ""]);
+      for (const task of day.tasks) {
+        const sec = taskSecondsInDay(day, task.id, now);
+        if (sec > 0) rows.push([date, typeLabel(task), task.wi || "", task.title || "", fmtHM(sec), fmtHoursDec(sec), estCsv(task), uniqComments(segsOf(day, task.id)).join("; ")]);
+      }
+      if (t.idle > 0) sumRow("przerwa", "Przerwy", t.idle);
+      sumRow("suma", "Łącznie", t.total);
+      if (t.overtime > 0) sumRow("suma", "Nadgodziny", t.overtime);
+      if (t.owed > 0) sumRow("suma", "Do odpracowania", t.owed);
+    }
+    csvFile(`liczmiczas-zadania-${today()}.csv`, rows);
+  });
+
+  on("import-json", "change", async () => {
+    const input = $("import-json"), file = input.files?.[0];
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (!parsed.days || typeof parsed.days !== "object") throw new Error("Brak danych dni w pliku.");
+      if (!confirm("Zaimportować dane? Bieżące dane zostaną zastąpione.")) return;
+      state = normalize(parsed);
+      closeStaleDays();
+      renderSettings();
+      commit();
+    } catch (err) {
+      alert("Nie udało się zaimportować pliku: " + err.message);
+    } finally {
+      input.value = "";
+    }
+  });
+
+  on("clear-day", "click", () => {
+    if (!todayDay() || !confirm(`Usunąć wszystkie wpisy z dnia ${fmtDatePl(today())}?`)) return;
+    delete state.days[today()];
+    commit();
+    $("settings-dialog").close();
+  });
+
+  // Ctrl+Shift+S – zatrzymaj bieżące zadanie
+  document.addEventListener("keydown", (e) => { if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); stopTask(); } });
+
+  // ---------- Motyw ----------
+  on("theme-toggle", "click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("liczmiczas.theme", next); } catch { /* tryb prywatny */ }
+  });
+
+  // ---------- Start ----------
+  closeStaleDays();
+  save();
+  renderSettings();
+  render();
+  setInterval(tick, 1000);
+})();
+  </script>
 </body>
 </html>

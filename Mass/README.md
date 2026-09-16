@@ -7,6 +7,7 @@
 | `Mass.Api/` | REST API .NET 8 (administracja numerami) + domena i repozytorium EF Core. |
 | `mass-ui/` | Front Angular 22 (lista, zasilenie przedziałem, sprawdzenie numeru) + testy Playwright. |
 | `TESTS.md` | Specyfikacja testów manualnych i automatycznych. |
+| `TESTDATA_ZASILENIE.md` | Gotowe dane testowe (numery z poprawnymi cyframi kontrolnymi) do formularza „Zasilenie”. |
 
 ## Szybki start (bez PostgreSQL)
 
