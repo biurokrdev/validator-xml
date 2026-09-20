@@ -1,0 +1,44 @@
+{
+  "application_number": "RK/2026/09/004512",
+  "zalaczniki_sprawy": [
+    { "nazwa_zalacznika": "reklamacja_klienta.pdf", "data_dolaczenia": "2026-09-10T09:14:00", "dodajacy": "Anna Kowalska", "archiwizuj": true },
+    { "nazwa_zalacznika": "potwierdzenie_przelewu.pdf", "data_dolaczenia": "2026-09-11T13:02:00", "dodajacy": "Jan Nowak", "archiwizuj": false },
+    { "nazwa_zalacznika": "skan_umowy.pdf", "data_dolaczenia": "2026-09-12T08:45:00", "dodajacy": "Jan Nowak", "archiwizuj": true }
+  ],
+  "wiadomosci": [
+    {
+      "kierunek": "WYSLANA",
+      "rodzaj_wiadomosci": "Prośba o uzupełnienie dokumentów",
+      "data_czas_wiadomosci": "2026-09-11T07:30:00Z",
+      "nadawca_wiadomosci": "Jan Nowak (Zespół Reklamacji)",
+      "tresc_wiadomosci": "Dzień dobry,\nprosimy o przesłanie potwierdzenia przelewu z dnia 02.09.2026.\n\nPozdrawiamy",
+      "zalaczniki": [
+        { "nazwa_pliku": "wzor_oswiadczenia.pdf" },
+        { "nazwa_pliku": "instrukcja.pdf" }
+      ]
+    },
+    {
+      "kierunek": "ODEBRANA",
+      "rodzaj_wiadomosci": "Odpowiedź klienta",
+      "data_czas_wiadomosci": "2026-09-12T16:05:00+02:00",
+      "nadawca_wiadomosci": "Klient: Maria Wiśniewska",
+      "tresc_wiadomosci": "W załączeniu przesyłam potwierdzenie.",
+      "zalaczniki": [
+        { "nazwa_pliku": "potwierdzenie_przelewu.pdf" }
+      ]
+    },
+    {
+      "kierunek": "WYSLANA",
+      "rodzaj_wiadomosci": "Informacja o statusie",
+      "data_czas_wiadomosci": "2026-09-15T10:00:00+02:00",
+      "nadawca_wiadomosci": "Jan Nowak (Zespół Reklamacji)",
+      "tresc_wiadomosci": "Dziękujemy, dokumenty są kompletne.",
+      "zalaczniki": []
+    }
+  ],
+  "zamkniecie": null,
+  "przekazanie": {
+    "zespol": "Zespół Kart Płatniczych",
+    "wyjasnienie_przeslania": "Sprawa dotyczy transakcji kartowej - wymaga analizy chargeback."
+  }
+}
