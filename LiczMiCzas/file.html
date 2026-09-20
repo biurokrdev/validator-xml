@@ -1,0 +1,2802 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Aplikacja działa wyłącznie lokalnie: przeglądarka blokuje każde połączenie sieciowe (fetch/XHR/WebSocket), zewnętrzne skrypty, style, obrazy, fonty i ramki. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'" />
+  <meta name="referrer" content="no-referrer" />
+  <title>LiczMiCzas – dane w pliku</title>
+  <style>
+/* LiczMiCzas – styl na wzór Azure DevOps (Fluent UI), motyw ciemny domyślny + jasny */
+
+/* ---------- Motyw ciemny (Azure DevOps „Dark”) ---------- */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #201f1e;                 /* neutral-0 */
+  --surface: #292827;            /* neutral-4 – panele, karty */
+  --surface-2: #323130;          /* neutral-6 – kafelki, przerwy */
+  --surface-3: #3b3a39;          /* neutral-8 */
+  --input-bg: #1b1a19;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.25);
+  --text: rgba(255, 255, 255, 0.9);
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --text-disabled: rgba(255, 255, 255, 0.38);
+  --primary: #2899f5;            /* akcent / linki */
+  --primary-btn: #0078d4;
+  --primary-btn-hover: #106ebe;
+  --primary-btn-pressed: #005a9e;
+  --primary-lighter: rgba(40, 153, 245, 0.12);
+  --danger: #f1707b;
+  --danger-btn: #cd4a45;
+  --danger-btn-hover: #b83b36;
+  --danger-light: rgba(241, 112, 123, 0.16);
+  --success: #92c353;
+  --success-btn: #339947;
+  --success-btn-hover: #2b823c;
+  --warn: #f7cc4b;
+  --warn-light: rgba(247, 204, 75, 0.14);
+  --neutral-btn: rgba(255, 255, 255, 0.08);
+  --neutral-btn-hover: rgba(255, 255, 255, 0.12);
+  --neutral-btn-active: rgba(255, 255, 255, 0.16);
+  --track: rgba(255, 255, 255, 0.12);
+  --badge-bg: rgba(255, 255, 255, 0.1);
+  --badge-task-bg: rgba(242, 203, 29, 0.18);
+  --badge-task-fg: #f2cb1d;
+  --badge-org-bg: rgba(119, 59, 147, 0.35);
+  --badge-org-fg: #cfa6e6;
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --shadow-4: 0 1.6px 3.6px rgba(0, 0, 0, 0.5), 0 0.3px 0.9px rgba(0, 0, 0, 0.4);
+  --shadow-16: 0 6.4px 14.4px rgba(0, 0, 0, 0.6), 0 1.2px 3.6px rgba(0, 0, 0, 0.5);
+  /* kolory typów work itemów z Azure Boards */
+  --wit-task: #f2cb1d;
+  --wit-org: #a970d1;
+  --wit-break: #8a8886;
+  --chart-work: #b08f0a;
+  --chart-org: #a970d1;
+  --chart-break: #8a8886;
+  --radius: 4px;
+  font-family: "Segoe UI", "Segoe UI Web (West European)", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif;
+}
+
+/* ---------- Motyw jasny (Azure DevOps „Light”) ---------- */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f8f8f8;
+  --surface: #ffffff;
+  --surface-2: #fbfbfb;
+  --surface-3: #f3f2f1;
+  --input-bg: #ffffff;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.2);
+  --text: #201f1e;
+  --text-secondary: #605e5c;
+  --text-disabled: #a19f9d;
+  --primary: #0078d4;
+  --primary-btn: #0078d4;
+  --primary-btn-hover: #106ebe;
+  --primary-btn-pressed: #005a9e;
+  --primary-lighter: #eff6fc;
+  --danger: #cd4a45;
+  --danger-btn: #cd4a45;
+  --danger-btn-hover: #b83b36;
+  --danger-light: #fde7e9;
+  --success: #339947;
+  --success-btn: #339947;
+  --success-btn-hover: #2b823c;
+  --warn: #b7791f;
+  --warn-light: #fff4ce;
+  --neutral-btn: rgba(0, 0, 0, 0.06);
+  --neutral-btn-hover: rgba(0, 0, 0, 0.1);
+  --neutral-btn-active: rgba(0, 0, 0, 0.14);
+  --track: rgba(0, 0, 0, 0.08);
+  --badge-bg: rgba(0, 0, 0, 0.08);
+  --badge-task-bg: #fdf5cc;
+  --badge-task-fg: #6b5a00;
+  --badge-org-bg: #efe3f7;
+  --badge-org-fg: #4c1d6f;
+  --backdrop: rgba(0, 0, 0, 0.4);
+  --shadow-4: 0 1.6px 3.6px rgba(0, 0, 0, 0.13), 0 0.3px 0.9px rgba(0, 0, 0, 0.11);
+  --shadow-16: 0 6.4px 14.4px rgba(0, 0, 0, 0.13), 0 1.2px 3.6px rgba(0, 0, 0, 0.11);
+  --wit-org: #773b93;
+  --wit-break: #a6a6a6;
+  --chart-work: #b8860b;
+  --chart-org: #773b93;
+  --chart-break: #8a8886;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+h1, h2, h3 { margin: 0; font-weight: 600; }
+h2 { font-size: 16px; line-height: 22px; margin-bottom: 12px; }
+h3 { font-size: 18px; line-height: 24px; }
+
+/* ---------- Pasek górny (jak nagłówek Azure DevOps) ---------- */
+.topbar {
+  height: 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.logo {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: var(--primary-btn);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.crumb { color: var(--text); padding: 4px 6px; border-radius: 2px; white-space: nowrap; }
+.crumb.org { font-weight: 600; }
+.crumb:not(.current):hover { background: var(--neutral-btn); cursor: default; }
+.crumb.current { font-weight: 600; }
+.sep { color: var(--text-secondary); }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.store-chip { display: inline-flex; align-items: center; gap: 8px; max-width: 360px; height: 28px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 14px; background: none; color: var(--text-secondary); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.store-chip:hover { border-color: var(--primary); color: var(--text); }
+.store-chip #store-text { overflow: hidden; text-overflow: ellipsis; }
+.store-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--text-disabled); }
+.store-chip.ok .store-dot { background: var(--success); }
+.store-chip.busy .store-dot { background: var(--primary); }
+.store-chip.dirty .store-dot { background: var(--warn); }
+.store-chip.error { border-color: var(--danger); color: var(--danger); }
+.store-chip.error .store-dot { background: var(--danger); }
+.store-state { margin: 0; padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface-2); font-size: 13px; overflow-wrap: anywhere; }
+.store-state.error { border-color: var(--danger); background: var(--danger-light); }
+.clock { display: flex; align-items: baseline; gap: 10px; font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: 12px; }
+#clock-time { font-size: 16px; font-weight: 600; color: var(--text); }
+.btn.icon-btn { width: 32px; min-width: 32px; padding: 0; justify-content: center; color: var(--text-secondary); }
+.btn.icon-btn:hover { color: var(--text); }
+.btn.icon-btn svg { width: 18px; height: 18px; flex: none; display: block; fill: currentColor; }
+:root[data-theme="dark"] .icon-moon { display: none; }
+:root[data-theme="light"] .icon-sun { display: none; }
+
+/* ---------- Układ ---------- */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 400px;
+  gap: 16px;
+  padding: 16px 24px 32px;
+  max-width: 1500px;
+  margin: 0 auto;
+  align-items: start;
+}
+.col { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 960px) {
+  .layout { grid-template-columns: 1fr; padding: 12px; }
+}
+
+.panel {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-4);
+  padding: 16px 20px;
+}
+
+/* ---------- Formularze (Fluent text field) ---------- */
+label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--text); }
+label > span { font-weight: 600; font-size: 14px; }
+input[type="text"], input[type="search"], input[type="number"], input[type="url"], input[type="date"], input[type="time"], select {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--input-bg);
+  font-family: inherit;
+}
+select option { background: var(--surface); color: var(--text); }
+input:hover, select:hover { border-color: var(--text); }
+input:focus, select:focus { outline: none; border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+input[type="checkbox"] { accent-color: var(--primary-btn); width: 18px; height: 18px; margin: 0; }
+::placeholder { color: var(--text-disabled); }
+/* bez strzałki datalist w polach z podpowiedziami (podpowiedzi nadal działają po wpisaniu tekstu) */
+input[list]::-webkit-calendar-picker-indicator { display: none !important; opacity: 0; }
+
+/* ---------- Przyciski (Fluent) ---------- */
+.btn {
+  height: 32px;
+  padding: 0 16px;
+  border: none;
+  background: var(--neutral-btn);
+  color: var(--text);
+  border-radius: 2px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 32px;
+  white-space: nowrap;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn:hover { background: var(--neutral-btn-hover); }
+.btn:active { background: var(--neutral-btn-active); }
+.btn:focus-visible { outline: 2px solid var(--text); outline-offset: 1px; }
+.btn:disabled { color: var(--text-disabled); background: var(--neutral-btn); cursor: not-allowed; }
+.btn.primary { background: var(--primary-btn); color: #fff; }
+.btn.primary:hover { background: var(--primary-btn-hover); }
+.btn.primary:active { background: var(--primary-btn-pressed); }
+.btn.danger { background: var(--danger-btn); color: #fff; }
+.btn.danger:hover { background: var(--danger-btn-hover); }
+.btn.success { background: var(--success-btn); color: #fff; }
+.btn.success:hover { background: var(--success-btn-hover); }
+.btn.small { height: 26px; line-height: 26px; padding: 0 10px; font-size: 13px; }
+.btn.small.danger { background: transparent; color: var(--danger); }
+.btn.small.danger:hover { background: var(--danger-light); }
+.btn.big { height: 36px; line-height: 36px; padding: 0 20px; }
+.file-btn { display: inline-flex; align-items: center; }
+
+.muted { color: var(--text-secondary); }
+.small { font-size: 12px; line-height: 16px; }
+.actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+/* ---------- Dzień pracy ---------- */
+.workday-head {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  grid-template-areas: "title timer" "buttons buttons";
+  gap: 10px 16px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.workday-head > div:first-child { grid-area: title; }
+.workday-timer-box { grid-area: timer; display: flex; flex-direction: column; align-items: flex-end; gap: 0; }
+.workday-total { font-size: 12px; line-height: 16px; color: var(--text-secondary); font-variant-numeric: tabular-nums; text-align: right; }
+.workday-total span { color: var(--text); font-weight: 600; }
+.workday-total.over { color: var(--danger); }
+.workday-total.over span { color: var(--danger); }
+.workday-total.owed { color: var(--warn); }
+.workday-total.owed span { color: var(--warn); }
+.workday-buttons { grid-area: buttons; }
+.workday-buttons .btn.big { flex: 1; justify-content: center; }
+.workday-status { font-size: 12px; color: var(--text-secondary); display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.workday-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--text-disabled); }
+.workday-status.working { color: var(--success); font-weight: 600; }
+.workday-status.working::before { background: var(--success); }
+.workday-status.paused { color: var(--warn); font-weight: 600; }
+.workday-status.paused::before { background: var(--warn); }
+.workday-timer {
+  font-size: 36px;
+  font-weight: 300;
+  line-height: 44px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.workday-buttons { display: flex; gap: 8px; }
+.task-controls { display: flex; gap: 8px; margin-top: 14px; }
+.task-controls .btn.big { flex: 1; justify-content: center; }
+.btn.pause { background: #f2cb1d; color: #201f1e; } /* żółty kart „praca” (--wit-task); ciemny tekst dla kontrastu */
+.btn.pause:hover { background: #dbb714; }
+.task-controls .btn:disabled, .task-controls .btn:disabled:hover { color: var(--text-disabled); background: var(--neutral-btn); }
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.stat { min-width: 0; }
+.stat .stat-sub { white-space: normal; }
+.stat {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-2);
+}
+.stat-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.stat b { font-size: 24px; line-height: 32px; font-weight: 300; font-variant-numeric: tabular-nums; color: var(--text); }
+.stat b.over { color: var(--danger); font-weight: 600; }
+.stat-sub { font-size: 12px; color: var(--text-secondary); }
+.stat.wide { grid-column: 1 / -1; }
+.stat.overtime b, .stat.owed b { color: var(--text-secondary); }
+.stat.overtime.active { border-color: var(--danger); background: var(--danger-light); }
+.stat.overtime.active b { color: var(--danger); font-weight: 600; }
+.stat.owed.active { border-color: var(--warn); background: var(--warn-light); }
+.stat.owed.active b { color: var(--warn); font-weight: 600; }
+.progress { height: 6px; background: var(--track); border-radius: 2px; overflow: hidden; margin-top: 8px; }
+.progress > div { height: 100%; background: var(--primary); transition: width 0.3s; width: 0; }
+.progress > div.over { background: var(--danger); }
+.progress > div.warn { background: var(--warn); }
+
+/* ---------- Formularz nowego zadania ---------- */
+.task-form {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.task-form label { min-width: 96px; }
+.task-form label.grow { flex: 1; min-width: 180px; }
+.task-form label:not(.grow) input, .task-form label:not(.grow) select { width: 110px; }
+.task-form label:not(.grow) .field-btn input { width: 74px; flex: none; }
+
+/* ---------- Oś czasu (karty jak na Azure Boards) ---------- */
+.list-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+
+/* pasek filtra (jak filter bar w Azure DevOps) */
+.overlap-warn { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; padding: 8px 12px; border: 1px solid var(--warn); border-radius: var(--radius); background: var(--warn-light); font-size: 13px; }
+.overlap-warn .btn { flex: none; }
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 8px 0 10px;
+  margin: 0 0 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  transition: border-color 0.1s, box-shadow 0.1s;
+}
+.filter-bar:hover { border-color: var(--border-strong); }
+.filter-bar:focus-within { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.filter-icon { color: var(--text-secondary); flex: none; }
+.filter-bar input[type="search"] {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+.filter-bar input[type="search"]:hover, .filter-bar input[type="search"]:focus { border: none; box-shadow: none; outline: none; }
+.filter-bar input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.filter-info { font-size: 12px; color: var(--text-secondary); white-space: nowrap; flex: none; }
+.filter-clear {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 2px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.filter-clear:hover { background: var(--neutral-btn-hover); color: var(--text); }
+.filter-clear svg { fill: currentColor; }
+
+.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.entry {
+  position: relative;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-4);
+  border-left: 4px solid var(--wit-task);
+  padding: 10px 14px 10px 12px;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) auto;
+  gap: 4px 14px;
+  align-items: center;
+  background: var(--surface-2);
+  transition: box-shadow 0.15s, background 0.15s;
+}
+.entry:hover { box-shadow: var(--shadow-16); background: var(--surface-3); }
+.entry.org { border-left-color: var(--wit-org); }
+.entry.break { border-left-color: var(--wit-break); }
+.entry.running { background: var(--primary-lighter); box-shadow: inset 0 0 0 1px var(--primary), var(--shadow-4); }
+.entry.running:hover { background: var(--primary-lighter); }
+/* przekroczona estymata – lekko czerwone tło (także dla wpisu w toku) */
+.entry.over-est, .entry.over-est:hover { background: var(--danger-light); }
+.entry.over-est .entry-sub { color: var(--danger); }
+
+.entry-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+}
+.entry-time b { font-size: 14px; color: var(--text); font-weight: 600; }
+
+.entry-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.entry-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.entry-wi {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+a.entry-wi:hover { color: var(--primary); text-decoration: underline; }
+.entry-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.badge {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 2px;
+  background: var(--badge-bg);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-transform: none;
+}
+.badge.praca { background: var(--badge-task-bg); color: var(--badge-task-fg); }
+.badge.org { background: var(--badge-org-bg); color: var(--badge-org-fg); }
+.badge.break { background: var(--badge-bg); color: var(--text-secondary); }
+.badge.noid { background: var(--danger-light); color: var(--danger); }
+.entry-sub { font-size: 12px; color: var(--text-secondary); }
+.entry-comment {
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: transparent;
+  padding: 2px 4px;
+  margin-left: -4px;
+  font-size: 13px;
+  color: var(--text);
+  width: calc(100% + 4px);
+  font-family: inherit;
+  height: 26px;
+}
+.entry-comment:hover { border-color: var(--border-strong); background: var(--input-bg); }
+.entry-comment:focus { outline: none; border-color: var(--primary); background: var(--input-bg); box-shadow: inset 0 0 0 1px var(--primary); }
+.entry-comment::placeholder { color: var(--text-disabled); }
+
+/* stałe kolumny [akcja zadania][edycja][usuń] – ikony stoją równo we wszystkich kartach */
+.entry-actions { display: grid; grid-template-columns: 108px 28px 28px; gap: 4px; align-items: center; }
+.entry-btn { height: 28px; line-height: 28px; min-width: 0; padding: 0; justify-content: center; gap: 6px; font-size: 13px; background: transparent; color: var(--text-secondary); }
+.entry-btn svg { flex: none; display: block; }
+.entry-btn.edit { grid-column: 2; grid-row: 1; }
+.entry-btn.delete { grid-column: 3; grid-row: 1; }
+.entry-btn.main { grid-column: 1; grid-row: 1; padding: 0 10px; font-weight: 600; }
+/* wpis w toku nie ma kosza – edycja wskakuje na jego miejsce (przy prawej krawędzi) */
+.entry.running .entry-btn.edit { grid-column: 3; }
+.entry-btn.edit:hover { background: var(--neutral-btn-hover); color: var(--text); }
+.entry-btn.delete:hover { background: var(--danger-light); color: var(--danger); }
+.entry-btn.stop { background: var(--danger-btn); color: #fff; }
+.entry-btn.stop:hover { background: var(--danger-btn-hover); }
+.entry-btn.resume { background: var(--success-btn); color: #fff; }
+.entry-btn.resume:hover { background: var(--success-btn-hover); }
+
+@media (max-width: 700px) {
+  .entry { grid-template-columns: 1fr; }
+  .entry-time { flex-direction: row; gap: 8px; align-items: baseline; }
+  .entry-actions { display: flex; justify-content: flex-start; }
+  .entry-btn:not(.main) { width: 28px; }
+}
+
+/* zdarzenia dnia: rozpoczęcie / zakończenie / wznowienie */
+.event {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.event::before, .event::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.event b { color: var(--text); font-variant-numeric: tabular-nums; }
+.event.start { color: var(--success); }
+.event.stop { color: var(--danger); }
+.event.resume { color: var(--primary); }
+
+/* ---------- Podsumowanie ---------- */
+.day-nav { display: flex; gap: 6px; margin-bottom: 12px; }
+.month-label { flex: 1; align-self: center; text-align: center; font-weight: 600; text-transform: capitalize; }
+.month-toggle { width: 100%; justify-content: center; margin-top: 10px; }
+.month-table { display: flex; flex-direction: column; margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-variant-numeric: tabular-nums; }
+.month-row { display: grid; grid-template-columns: 62px repeat(3, minmax(0, 1fr)) 26px; gap: 8px; align-items: center; padding: 4px 10px 4px 7px; border-bottom: 1px solid var(--border); border-left: 3px solid transparent; text-align: right; }
+.month-row:last-child { border-bottom: none; }
+.month-row > :first-child { text-align: left; white-space: nowrap; }
+.month-row.head { font-size: 11px; font-weight: 600; color: var(--text-secondary); background: var(--surface-2); }
+.month-row[data-day] { cursor: pointer; }
+.month-row[data-day]:hover { background: var(--neutral-btn); }
+.month-day { padding: 0; border: none; background: none; color: inherit; font: inherit; font-variant-numeric: inherit; text-align: left; cursor: pointer; }
+.month-off { width: 26px; height: 20px; padding: 0; border: 1px solid var(--border-strong); border-radius: 10px; background: none; color: var(--text-disabled); font: inherit; font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; cursor: pointer; }
+.month-off:hover { border-color: var(--primary); color: var(--primary); }
+.month-off.on, .month-off.on:hover { background: var(--primary-btn); border-color: var(--primary-btn); color: #fff; }
+.month-row .dayoff { color: var(--primary); font-weight: 600; }
+.month-row.holiday .dayoff { color: var(--danger); } /* święto wygląda jak weekend: tło + czerwony dzień */
+.month-row .missing { color: var(--warn); }
+#wd-off { flex: 0 0 auto; }
+.workday-status.off { color: var(--primary); font-weight: 600; }
+.workday-status.off::before { background: var(--primary); }
+.month-row .dow { color: var(--text-secondary); margin-left: 4px; }
+.month-row.weekend { background: var(--surface-2); }
+.month-row.weekend .dow { color: var(--danger); font-weight: 600; }
+.month-row.today { border-left-color: var(--primary); }
+.month-row.selected { box-shadow: inset 0 0 0 1px var(--primary); }
+.month-row .wide { grid-column: 2 / 5; }
+.month-row .free { color: var(--text-disabled); }
+.month-row .owed { color: var(--warn); font-weight: 600; }
+.month-row .over { color: var(--danger); font-weight: 600; }
+.month-row small { color: var(--text-secondary); font-size: 11px; }
+.day-nav input { flex: 1; }
+.day-nav .btn { padding: 0 10px; }
+.btn.icon-btn.active { background: var(--primary-lighter); color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.summary-options {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.summary-options label:not(:first-child) { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 7px; font-weight: 400; }
+.summary {
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  padding: 12px;
+  font-family: Consolas, "Cascadia Mono", "Courier New", monospace;
+  font-size: 12.5px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 160px;
+  margin: 0 0 12px;
+  color: var(--text);
+}
+
+.settings-form { gap: 14px; }
+.settings-form label { margin: 0; }
+.settings-form p { margin: 0; }
+.settings-section { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+.settings-section h4 { margin: 0; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; color: var(--text-secondary); }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-row-text { display: flex; flex-direction: column; min-width: 0; }
+.settings-row-text b { font-size: 13px; font-weight: 600; }
+.settings-row .actions { flex: none; margin: 0; }
+.settings-row .btn { padding: 0 12px; }
+.danger-zone h4 { color: var(--danger); }
+.settings-form > .actions:last-child { justify-content: flex-end; border-top: 1px solid var(--border); padding-top: 12px; margin-top: 0; }
+.types-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); max-height: 190px; overflow-y: auto; }
+.types-list li { display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 10px; border-bottom: 1px solid var(--border); }
+.types-list li:last-child { border-bottom: none; }
+.types-list li.editing { background: var(--primary-lighter); }
+.types-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.types-list .entry-btn { width: 28px; flex: none; }
+.types-form { display: flex; gap: 8px; }
+.types-form input { flex: 1; min-width: 0; }
+.types-form .btn { padding: 0 12px; }
+.time-box { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.time-box > label { font-size: 13px; font-weight: 600; }
+.time-field input.invalid { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
+.time-field input { flex: 1; min-width: 0; text-align: center; font-size: 16px; font-variant-numeric: tabular-nums; }
+.field-btn { display: flex; gap: 4px; min-width: 0; }
+.field-btn input { flex: 1; min-width: 0; }
+.field-btn .field-pick { flex: none; }
+.pop {
+  position: fixed; z-index: 50; padding: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius);
+  background: var(--surface-3); color: var(--text); box-shadow: var(--shadow-16); font-size: 13px;
+}
+.pop h5 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.pop h5:not(:first-child) { margin-top: 10px; }
+.clock-grid { display: grid; gap: 2px; }
+.clock-grid.hours { grid-template-columns: repeat(12, 28px); }
+.clock-grid.minutes { grid-template-columns: repeat(10, 28px); }
+.clock-grid button {
+  height: 26px; padding: 0; border: none; border-radius: 2px; background: var(--neutral-btn); color: var(--text);
+  font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; cursor: pointer;
+}
+.clock-grid button:hover { background: var(--neutral-btn-active); }
+.clock-grid button.five { font-weight: 600; background: var(--neutral-btn-hover); }
+.clock-grid button.on, .clock-grid button.on:hover { background: var(--primary-btn); color: #fff; font-weight: 600; }
+.est-pop { width: 320px; }
+.off-pop { display: flex; flex-direction: column; gap: 4px; min-width: 180px; }
+.off-pop .btn { justify-content: flex-start; }
+.off-pop .off-clear { margin-top: 6px; color: var(--danger); }
+.est-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.est-row label { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 12px; font-weight: 600; margin: 0; }
+.est-row input { width: 100%; text-align: center; font-variant-numeric: tabular-nums; }
+.est-result { margin: 10px 0 0; font-size: 13px; color: var(--text-secondary); min-height: 20px; }
+.est-result b { color: var(--text); font-size: 15px; font-variant-numeric: tabular-nums; }
+.est-presets { display: flex; flex-wrap: wrap; gap: 4px; }
+.est-presets .btn { height: 26px; line-height: 26px; padding: 0 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.est-pop .actions { justify-content: flex-end; margin-top: 12px; }
+.settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* ---------- Dialog (Fluent) ---------- */
+dialog {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-16);
+  padding: 24px;
+  width: min(520px, 92vw);
+  color: var(--text);
+  background: var(--surface);
+}
+dialog::backdrop { background: var(--backdrop); }
+.edit-form { display: flex; flex-direction: column; gap: 12px; }
+.edit-form .actions { justify-content: flex-end; margin-top: 8px; }
+.edit-form p { margin: 0; }
+
+/* ---------- Podsumowanie – widok sformatowany ---------- */
+.summary-view { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.sum-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sum-date { font-size: 20px; font-weight: 600; }
+.sum-hours { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.sum-hours.running { color: var(--success); font-weight: 600; }
+
+.sum-stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+.sum-stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding: 5px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.sum-stat:last-child { border-bottom: none; }
+.sum-stat > span { color: var(--text-secondary); }
+.sum-stat b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sum-stat b small { font-size: 11px; font-weight: 400; color: var(--text-secondary); }
+.sum-stat.over b { color: var(--danger); }
+.sum-stat.warn b { color: var(--warn); }
+.sum-stat.ok b { color: var(--success); }
+
+.sum-events-box { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.sum-events-box summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.sum-events-box summary::-webkit-details-marker { display: none; }
+.sum-events-box summary::before { content: "›"; display: inline-block; transition: transform 0.15s; flex: none; }
+.sum-events-box[open] summary::before { transform: rotate(90deg); }
+.sum-events-title { font-weight: 600; color: var(--text); flex: none; }
+.sum-events-brief { overflow: hidden; text-overflow: ellipsis; }
+.sum-events-brief b { color: var(--text); font-variant-numeric: tabular-nums; }
+.sum-events-box .sum-events { padding: 2px 10px 10px; }
+.sum-events { display: flex; flex-wrap: wrap; gap: 6px; }
+.sum-event {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--badge-bg);
+  color: var(--text-secondary);
+}
+.sum-event b { color: var(--text); font-variant-numeric: tabular-nums; }
+.sum-event.start { color: var(--success); }
+.sum-event.stop { color: var(--danger); }
+.sum-event.resume { color: var(--primary); }
+
+.sum-section { font-size: 13px; font-weight: 600; margin: 6px 0 0; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+.sum-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sum-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: start;
+  padding: 8px 10px 8px 8px;
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  border-left: 4px solid var(--wit-task);
+}
+.sum-row.org { border-left-color: var(--wit-org); }
+.sum-row.break { border-left-color: var(--wit-break); }
+.sum-row.running { background: var(--primary-lighter); box-shadow: inset 0 0 0 1px var(--primary); }
+.sum-row.over-est { background: var(--danger-light); }
+.sum-row.over-est .sum-time b { color: var(--danger); }
+.sum-no { font-size: 12px; font-weight: 600; color: var(--text-secondary); line-height: 20px; text-align: right; }
+.sum-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sum-title-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.sum-id { font-size: 12px; color: var(--text-secondary); text-decoration: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+a.sum-id:hover { color: var(--primary); text-decoration: underline; }
+.sum-id.noid { color: var(--danger); background: var(--danger-light); padding: 0 6px; border-radius: 2px; font-size: 11px; font-weight: 600; }
+.sum-title { font-weight: 600; line-height: 20px; overflow-wrap: anywhere; }
+.sum-meta { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--text-secondary); }
+.sum-ranges { font-variant-numeric: tabular-nums; }
+.sum-comment { color: var(--text); }
+.sum-comment::before { content: "💬 "; opacity: 0.7; }
+.sum-info { font-size: 12px; color: var(--text-secondary); }
+.sum-row.over-est .sum-info { color: var(--danger); }
+.sum-time { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; line-height: 20px; }
+.sum-time b { font-size: 15px; font-weight: 600; }
+.sum-time small { font-size: 11px; color: var(--text-secondary); white-space: nowrap; }
+
+.sum-breaks {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border-left: 4px solid var(--wit-break);
+  background: var(--surface-2);
+  border-radius: var(--radius);
+  font-size: 13px;
+}
+.sum-breaks > span:first-child { font-weight: 600; }
+.sum-breaks b { font-variant-numeric: tabular-nums; }
+.sum-breaks .sum-ranges, .sum-breaks .sum-comment { font-size: 12px; color: var(--text-secondary); }
+
+/* ---------- Aktywność (wykres kolumnowy) ---------- */
+.activity-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.chart-legend { list-style: none; display: flex; gap: 14px; margin: 4px 0 8px; padding: 0; font-size: 12px; color: var(--text-secondary); }
+.chart-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.chart-key { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.chart-key.work, .seg-work { background: var(--chart-work); fill: var(--chart-work); }
+.chart-key.org, .seg-org { background: var(--chart-org); fill: var(--chart-org); }
+.chart-key.brk, .seg-brk { background: var(--chart-break); fill: var(--chart-break); }
+.act-sub { margin: 0; }
+dialog.wide { width: min(1180px, 96vw); }
+.chart-legend { flex-wrap: wrap; }
+.chart-key.dot { border-radius: 50%; }
+.chart-key.ev-start, .ev-start { background: var(--success); fill: var(--success); stroke: var(--success); }
+.chart-key.ev-stop, .ev-stop { background: var(--danger); fill: var(--danger); stroke: var(--danger); }
+.chart-key.ev-resume, .ev-resume { background: var(--primary); fill: var(--primary); stroke: var(--primary); }
+.day-track { fill: var(--surface-2); }
+.day-seg { cursor: default; }
+.day-seg:hover { stroke: var(--text); stroke-width: 1.5; }
+.day-ev line { stroke-width: 2; }
+.day-ev circle { stroke: var(--surface); stroke-width: 2; }
+.day-ev .chart-hit { fill: transparent; stroke: none; }
+.chart-tip .tip-line { display: block; color: var(--text-secondary); }
+.chart-tip .tip-comment { display: block; color: var(--text); font-style: italic; max-width: 260px; white-space: normal; }
+.chart-wrap { position: relative; }
+.chart-wrap svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart-grid { stroke: var(--border); stroke-width: 1; }
+.chart-axis { fill: var(--text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; }
+.chart-col { outline: none; cursor: default; }
+.chart-col .chart-hit { fill: transparent; }
+.chart-col:hover .chart-hit, .chart-col:focus-visible .chart-hit { fill: var(--neutral-btn); }
+.chart-col:focus-visible .chart-hit { stroke: var(--primary); stroke-width: 1; }
+.chart-tip {
+  position: absolute; z-index: 2; pointer-events: none; min-width: 132px;
+  padding: 8px 10px; border-radius: var(--radius); background: var(--surface-3); color: var(--text);
+  box-shadow: var(--shadow-16); border: 1px solid var(--border); font-size: 12px; line-height: 18px;
+}
+.chart-tip b { display: block; margin-bottom: 2px; font-variant-numeric: tabular-nums; }
+.chart-tip div { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+.chart-tip div span:last-child { margin-left: auto; color: var(--text); font-variant-numeric: tabular-nums; }
+.act-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.act-table th, .act-table td { padding: 3px 6px; text-align: right; border-bottom: 1px solid var(--border); }
+.act-table th:first-child, .act-table td:first-child { text-align: left; }
+.act-table th { color: var(--text-secondary); font-weight: 600; }
+
+.summary-raw { margin-top: 12px; }
+.summary-raw summary { cursor: pointer; font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+.summary-raw .summary { min-height: 0; margin-bottom: 0; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn.icon-btn.spin svg { animation: spin 0.5s linear; }
+  </style>
+  <script>
+    // Motyw startowy; właściwy jest zapisany w pliku danych (settings.theme) i ustawia się po jego otwarciu.
+    document.documentElement.dataset.theme = "dark";
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg viewBox="0 0 16 16" width="18" height="18"><path fill="#fff" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM8 3a5 5 0 1 1 0 10A5 5 0 0 1 8 3zm-.75 2v3.31l2.47 1.48.77-1.28-1.74-1.04V5h-1.5z"/></svg>
+      </span>
+      <nav class="breadcrumb" aria-label="Nawigacja">
+        <span class="crumb org">LiczMiCzas</span>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <button type="button" class="store-chip" id="store-chip" title="Plik danych – kliknij, aby zapisać teraz, wczytać ponownie albo zmienić plik">
+        <span class="store-dot" id="store-dot"></span><span id="store-text">brak pliku danych</span>
+      </button>
+      <div class="clock">
+        <span id="clock-date"></span>
+        <span id="clock-time"></span>
+      </div>
+      <button type="button" class="btn icon-btn" id="settings-open" title="Ustawienia" aria-label="Ustawienia">
+        <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M8.6 1.5a1 1 0 0 0-1 .85l-.25 1.7a6.6 6.6 0 0 0-1.6.93l-1.6-.64a1 1 0 0 0-1.23.43l-1.4 2.43a1 1 0 0 0 .23 1.28l1.36 1.06a6.7 6.7 0 0 0 0 1.85l-1.36 1.06a1 1 0 0 0-.23 1.28l1.4 2.43a1 1 0 0 0 1.23.43l1.6-.64c.49.38 1.03.7 1.6.93l.25 1.7a1 1 0 0 0 1 .85h2.8a1 1 0 0 0 1-.85l.25-1.7c.57-.23 1.11-.55 1.6-.93l1.6.64a1 1 0 0 0 1.23-.43l1.4-2.43a1 1 0 0 0-.23-1.28l-1.36-1.06a6.7 6.7 0 0 0 0-1.85l1.36-1.06a1 1 0 0 0 .23-1.28l-1.4-2.43a1 1 0 0 0-1.23-.43l-1.6.64a6.6 6.6 0 0 0-1.6-.93l-.25-1.7a1 1 0 0 0-1-.85H8.6zM10 7a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
+      </button>
+      <button type="button" class="btn icon-btn" id="theme-toggle" title="Przełącz motyw jasny / ciemny" aria-label="Przełącz motyw">
+        <svg class="icon-sun" viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M10 6a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm0-4.5a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1.5zm0 15a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5a.75.75 0 0 1 .75-.75zM1.5 10a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5A.75.75 0 0 1 1.5 10zm15 0a.75.75 0 0 1 .75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75zM3.99 3.99a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 0 1-1.06 1.06L3.99 5.05a.75.75 0 0 1 0-1.06zm9.9 9.9a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 1 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06zm2.12-9.9a.75.75 0 0 1 0 1.06l-1.06 1.06a.75.75 0 0 1-1.06-1.06l1.06-1.06a.75.75 0 0 1 1.06 0zm-9.9 9.9a.75.75 0 0 1 0 1.06l-1.06 1.06a.75.75 0 0 1-1.06-1.06l1.06-1.06a.75.75 0 0 1 1.06 0z"/></svg>
+        <svg class="icon-moon" viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M11.5 2.5a7.5 7.5 0 1 0 6 12 6 6 0 0 1-6-12z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- LEWA KOLUMNA -->
+    <div class="col">
+      <!-- Nowe zadanie -->
+      <section class="panel">
+        <h2>Nowe zadanie</h2>
+        <form id="task-form" class="task-form" autocomplete="off">
+          <label>
+            <span>ID (Azure)</span>
+            <input type="text" id="f-wi" placeholder="np. 12345" list="wi-suggestions" />
+            <datalist id="wi-suggestions"></datalist>
+          </label>
+          <label class="grow">
+            <span>Tytuł zadania</span>
+            <input type="text" id="f-title" placeholder="Opis zadania" list="title-suggestions" />
+            <datalist id="title-suggestions"></datalist>
+          </label>
+          <label>
+            <span>Typ</span>
+            <select id="f-type"></select>
+          </label>
+          <label>
+            <span>Estymata (czas)</span>
+            <span class="field-btn">
+              <input type="text" id="f-est" placeholder="np. 8:30" inputmode="decimal" />
+              <button type="button" class="btn icon-btn field-pick" data-est="f-est" title="Wylicz estymatę z godzin od – do" aria-label="Wylicz estymatę z godzin od – do"></button>
+            </span>
+          </label>
+          <button type="submit" class="btn primary" title="Dodaje zadanie i od razu startuje licznik">▶ Rozpocznij</button>
+        </form>
+      </section>
+
+      <!-- Oś czasu -->
+      <section class="panel">
+        <div class="list-head">
+          <h2>Dzisiaj <span class="muted" id="list-date"></span></h2>
+        </div>
+        <div class="overlap-warn" id="overlap-warn" hidden>
+          <span id="overlap-text"></span>
+          <button type="button" class="btn small" id="overlap-fix">Napraw</button>
+        </div>
+        <div class="filter-bar">
+          <svg class="filter-icon" viewBox="0 0 20 20" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l4.15 4.15a.75.75 0 0 1-1.06 1.06l-4.15-4.15A5.5 5.5 0 1 1 8.5 3zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+          <input type="search" id="task-search" placeholder="Filtruj po ID Azure lub tytule zadania" autocomplete="off" spellcheck="false" />
+          <span id="search-info" class="filter-info" hidden></span>
+          <button type="button" class="filter-clear" id="task-search-clear" title="Wyczyść filtr (Esc)" aria-label="Wyczyść filtr" hidden>
+            <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M4.47 4.47a.75.75 0 0 1 1.06 0L10 8.94l4.47-4.47a.75.75 0 1 1 1.06 1.06L11.06 10l4.47 4.47a.75.75 0 1 1-1.06 1.06L10 11.06l-4.47 4.47a.75.75 0 0 1-1.06-1.06L8.94 10 4.47 5.53a.75.75 0 0 1 0-1.06z"/></svg>
+          </button>
+        </div>
+        <ul id="timeline" class="timeline"></ul>
+        <p id="empty-info" class="muted">Brak wpisów. Kliknij „Rozpocznij pracę” lub dodaj zadanie.</p>
+      </section>
+    </div>
+
+    <!-- PRAWA KOLUMNA: dzień pracy + podsumowanie -->
+    <div class="col side">
+      <!-- Dzień pracy -->
+      <section class="panel workday">
+        <div class="workday-head">
+          <div>
+            <h2>Dzień pracy</h2>
+            <div class="workday-status" id="wd-status">Nie rozpoczęto</div>
+          </div>
+          <div class="workday-timer-box">
+            <span class="workday-total" id="wd-total">z <span id="st-total-limit">8:00</span> · do końca <span id="st-left">8:00</span></span>
+            <div class="workday-timer" id="wd-timer">00:00:00</div>
+          </div>
+          <div class="workday-buttons">
+            <button type="button" class="btn primary big" id="wd-start">▶ Rozpocznij pracę</button>
+            <button type="button" class="btn success big" id="wd-resume" hidden>▶ Wznów pracę</button>
+            <button type="button" class="btn danger big" id="wd-stop" hidden>■ Zakończ pracę</button>
+            <button type="button" class="btn big" id="wd-off" title="Oznacza dzisiejszy dzień jako wolny (urlop, święto, L4). Inne dni oznaczysz na liście w „Podsumowaniu miesiąca”.">Dzień wolny</button>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <span class="stat-label">Zadania (praca)</span>
+            <b id="st-work">0:00</b>
+            <span class="stat-sub">obligo <span id="st-work-limit">6:00</span></span>
+            <div class="progress"><div id="st-work-bar"></div></div>
+          </div>
+          <div class="stat">
+            <span class="stat-label">Przerwa + organizacyjne</span>
+            <b id="st-break">0:00</b>
+            <span class="stat-sub">limit <span id="st-break-limit">2:00</span> · org. <span id="st-org">0:00</span></span>
+            <div class="progress"><div id="st-break-bar"></div></div>
+          </div>
+          <div class="stat overtime">
+            <span class="stat-label">Nadgodziny</span>
+            <b id="st-overtime">0:00</b>
+            <span class="stat-sub" id="st-overtime-sub">brak</span>
+          </div>
+          <div class="stat owed">
+            <span class="stat-label">Czas do odpracowania</span>
+            <b id="st-owed">0:00</b>
+            <span class="stat-sub" id="st-owed-sub">brak</span>
+          </div>
+        </div>
+
+
+        <!-- jeden przycisk naraz: w trakcie zadania „Przerwa”, w trakcie przerwy „Wznów ostatnie zadanie” -->
+        <div class="task-controls" id="task-controls" hidden>
+          <button type="button" class="btn pause big" id="task-pause" title="Zatrzymuje bieżące zadanie – czas leci dalej jako przerwa">⏸ Przerwa</button>
+          <button type="button" class="btn success big" id="task-resume" hidden>▶ Wznów ostatnie zadanie</button>
+        </div>
+      </section>
+
+      <!-- Aktywność – cała doba -->
+      <section class="panel activity">
+        <div class="activity-head">
+          <h2>Aktywność <span class="muted" id="act-date"></span></h2>
+          <button type="button" class="btn small" id="day-chart-open" title="Szczegółowy wykres dnia: co działo się w każdej minucie, z przerwaniami i zdarzeniami">Wykres</button>
+        </div>
+        <p class="muted small act-sub">minuty w godzinie · cała doba</p>
+        <ul class="chart-legend" aria-hidden="true">
+          <li><span class="chart-key work"></span>praca</li>
+          <li><span class="chart-key org"></span>organizacyjne</li>
+          <li><span class="chart-key brk"></span>przerwa</li>
+        </ul>
+        <div class="chart-wrap" id="act-chart"></div>
+        <p class="muted small" id="act-note" hidden></p>
+        <details class="summary-raw">
+          <summary>Tabela</summary>
+          <table class="act-table" id="act-table"></table>
+        </details>
+      </section>
+
+      <!-- Podsumowanie -->
+      <aside class="panel">
+      <div class="activity-head">
+        <h2>Podsumowanie dnia</h2>
+        <button type="button" class="btn small" id="export-open" title="Pobierz dane jako arkusz CSV albo kopię JSON">Eksport</button>
+      </div>
+
+      <div class="day-nav">
+        <button type="button" class="btn" id="day-prev" title="Poprzedni dzień">◀</button>
+        <input type="date" id="summary-date" />
+        <button type="button" class="btn" id="day-next" title="Następny dzień">▶</button>
+        <button type="button" class="btn" id="day-today">Dziś</button>
+        <button type="button" class="btn icon-btn" id="summary-options-toggle" title="Opcje podsumowania" aria-label="Opcje podsumowania" aria-expanded="false">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M8.6 1.5a1 1 0 0 0-1 .85l-.25 1.7a6.6 6.6 0 0 0-1.6.93l-1.6-.64a1 1 0 0 0-1.23.43l-1.4 2.43a1 1 0 0 0 .23 1.28l1.36 1.06a6.7 6.7 0 0 0 0 1.85l-1.36 1.06a1 1 0 0 0-.23 1.28l1.4 2.43a1 1 0 0 0 1.23.43l1.6-.64c.49.38 1.03.7 1.6.93l.25 1.7a1 1 0 0 0 1 .85h2.8a1 1 0 0 0 1-.85l.25-1.7c.57-.23 1.11-.55 1.6-.93l1.6.64a1 1 0 0 0 1.23-.43l1.4-2.43a1 1 0 0 0-.23-1.28l-1.36-1.06a6.7 6.7 0 0 0 0-1.85l1.36-1.06a1 1 0 0 0 .23-1.28l-1.4-2.43a1 1 0 0 0-1.23-.43l-1.6.64a6.6 6.6 0 0 0-1.6-.93l-.25-1.7a1 1 0 0 0-1-.85H8.6zM10 7a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
+        </button>
+        <button type="button" class="btn icon-btn" id="refresh-summary" title="Odśwież podsumowanie" aria-label="Odśwież podsumowanie">
+          <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor"><path d="M15.5 4.5A7.5 7.5 0 0 0 2.6 8.3a.75.75 0 1 0 1.46.34A6 6 0 0 1 14.4 5.6l-1.9 0a.75.75 0 0 0 0 1.5h3.75a.75.75 0 0 0 .75-.75V2.6a.75.75 0 0 0-1.5 0v1.9zM4.5 15.5a7.5 7.5 0 0 0 12.9-3.8.75.75 0 1 0-1.46-.34A6 6 0 0 1 5.6 14.4h1.9a.75.75 0 0 0 0-1.5H3.75a.75.75 0 0 0-.75.75v3.75a.75.75 0 0 0 1.5 0v-1.9z"/></svg>
+        </button>
+      </div>
+
+      <div class="summary-options" id="summary-options" hidden>
+        <label>
+          <span>Czas w nawiasie</span>
+          <select id="summary-mode">
+            <option value="day">czas z dnia / estymata</option>
+            <option value="total">czas łączny / estymata</option>
+            <option value="both">dzień (łącznie) / estymata</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="summary-show-id" checked /> ID zadania / „Brak ID”</label>
+        <label><input type="checkbox" id="summary-show-ranges" /> godziny wpisów</label>
+      </div>
+
+      <div id="summary-view" class="summary-view"></div>
+
+      <details class="summary-raw">
+        <summary>Wersja tekstowa</summary>
+        <pre id="summary-text" class="summary"></pre>
+      </details>
+
+      </aside>
+
+      <!-- Podsumowanie miesiąca -->
+      <aside class="panel">
+        <h2>Podsumowanie miesiąca</h2>
+        <div class="day-nav">
+          <button type="button" class="btn" id="month-prev" title="Poprzedni miesiąc">◀</button>
+          <span class="month-label" id="month-label"></span>
+          <button type="button" class="btn" id="month-next" title="Następny miesiąc">▶</button>
+          <button type="button" class="btn" id="month-current">Bieżący</button>
+        </div>
+        <div id="month-view"></div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- Okno pliku danych: dane żyją w pliku JSON na dysku, nie w przeglądarce -->
+  <dialog id="store-dialog">
+    <div class="edit-form settings-form">
+      <h3>Plik danych</h3>
+      <p class="muted small" id="store-intro"></p>
+      <p class="store-state" id="store-state" hidden></p>
+
+      <section class="settings-section" id="store-fs">
+        <div class="settings-row">
+          <div class="settings-row-text"><b>Otwórz plik danych</b><span class="muted small">Wskaż istniejący plik <code>.json</code> – aplikacja będzie zapisywać w nim każdą zmianę.</span></div>
+          <div class="actions"><button type="button" class="btn primary" id="store-open">Otwórz…</button></div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-text"><b>Nowy plik danych</b><span class="muted small">Wybierz miejsce i nazwę (np. folder OneDrive – masz od razu kopię).</span></div>
+          <div class="actions"><button type="button" class="btn" id="store-new">Utwórz…</button></div>
+        </div>
+        <div class="settings-row" id="store-migrate-row" hidden>
+          <div class="settings-row-text"><b>Nowy plik z danymi z index.html</b><span class="muted small" id="store-migrate-info"></span></div>
+          <div class="actions"><button type="button" class="btn" id="store-migrate">Przenieś…</button></div>
+        </div>
+      </section>
+
+      <section class="settings-section" id="store-current" hidden>
+        <div class="settings-row">
+          <div class="settings-row-text"><b>Zapisz teraz</b><span class="muted small">Wymusza zapis do pliku (także gdy zapis został wstrzymany albo przeglądarka cofnęła uprawnienie).</span></div>
+          <div class="actions"><button type="button" class="btn" id="store-save-now">Zapisz</button></div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-text"><b>Wczytaj ponownie z pliku</b><span class="muted small">Porzuca stan tej karty i czyta plik z dysku (np. po zmianie w innej karcie).</span></div>
+          <div class="actions"><button type="button" class="btn" id="store-reload">Wczytaj</button></div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="settings-row">
+          <div class="settings-row-text"><b>Tryb ręczny</b><span class="muted small">Dla przeglądarek bez zapisu do pliku (Firefox, Safari): wczytujesz plik, a zmiany pobierasz przyciskiem „Pobierz plik”.</span></div>
+          <div class="actions">
+            <label class="btn file-btn">Wczytaj…<input type="file" id="store-manual-load" accept="application/json,.json" hidden /></label>
+            <button type="button" class="btn" id="store-manual-empty">Puste dane</button>
+          </div>
+        </div>
+        <div class="settings-row" id="store-manual-save-row" hidden>
+          <div class="settings-row-text"><b>Pobierz plik</b><span class="muted small">Zapisuje aktualny stan jako plik <code>.json</code> – nadpisz nim poprzedni.</span></div>
+          <div class="actions"><button type="button" class="btn primary" id="store-manual-save">Pobierz plik</button></div>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button type="button" class="btn" id="store-close">Zamknij</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialog ustawień -->
+  <dialog id="settings-dialog">
+    <div class="edit-form settings-form">
+      <h3>Ustawienia</h3>
+
+      <section class="settings-section">
+        <h4>Limity dnia</h4>
+        <div class="settings-grid">
+          <label>
+            <span>Dzień pracy (czas)</span>
+            <input type="text" id="s-work" placeholder="np. 8:00" inputmode="decimal" />
+          </label>
+          <label>
+            <span>Maks. przerwa (czas)</span>
+            <input type="text" id="s-break" placeholder="np. 2:00" inputmode="decimal" />
+          </label>
+        </div>
+        <p class="muted small">Obligo pracy = dzień pracy − przerwa.</p>
+      </section>
+
+      <section class="settings-section">
+        <h4>Typy zadań</h4>
+        <ul class="types-list" id="types-list"></ul>
+        <div class="types-form">
+          <input type="text" id="type-name" placeholder="np. wsparcie produkcji" maxlength="40" aria-label="Nazwa typu" />
+          <select id="type-base" aria-label="Kategoria bazowa">
+            <option value="praca">praca</option>
+            <option value="org">organizacyjne</option>
+            <option value="break">przerwa</option>
+          </select>
+          <button type="button" class="btn primary" id="type-save">Dodaj</button>
+          <button type="button" class="btn" id="type-cancel" hidden>Anuluj</button>
+        </div>
+        <p class="muted small">Każdy typ liczy się jak jedna z trzech kategorii bazowych: <b>praca</b> (schodzi z obliga), <b>organizacyjne</b> albo <b>przerwa</b> (obie schodzą z puli przerwy). Zmiana kategorii typu dotyczy wszystkich jego zadań, także z poprzednich dni.</p>
+      </section>
+
+      <section class="settings-section">
+        <h4>Azure DevOps</h4>
+        <label>
+          <span>Adres projektu (do linków z ID zadania)</span>
+          <input type="url" id="s-org" placeholder="https://dev.azure.com/organizacja/projekt" />
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h4>Eksport i import</h4>
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <b>Kopia zapasowa (JSON)</b>
+            <span class="muted small">Wszystkie dni i ustawienia. Import zastępuje bieżące dane.</span>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn" id="export-json">Eksport</button>
+            <label class="btn file-btn">Import<input type="file" id="import-json" accept="application/json" hidden /></label>
+          </div>
+        </div>
+        <p class="muted small">Arkusze CSV: przycisk „Eksport” w panelu „Podsumowanie dnia”.</p>
+      </section>
+
+      <section class="settings-section danger-zone">
+        <h4>Czyszczenie</h4>
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <b>Dzisiejszy dzień</b>
+            <span class="muted small">Usuwa wszystkie wpisy i zdarzenia z dzisiaj. Nie da się cofnąć.</span>
+          </div>
+          <div class="actions">
+            <button type="button" class="btn danger" id="clear-day">Wyczyść</button>
+          </div>
+        </div>
+      </section>
+
+      <p class="muted small">Dane są zapisywane w pliku danych na dysku (pasek u góry pokazuje jego stan) – nic nie trafia do pamięci przeglądarki ani do sieci. Skrót Ctrl+Shift+S zatrzymuje bieżące zadanie.</p>
+
+      <div class="actions">
+        <button type="button" class="btn primary" id="settings-close">Zamknij</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Okno eksportu: tylko ustawienia eksportu i przyciski „Pobierz” -->
+  <dialog id="export-dialog">
+    <div class="edit-form settings-form">
+      <h3>Eksport</h3>
+      <label>
+        <span>Zakres arkuszy CSV</span>
+        <select id="csv-range">
+          <option value="all">wszystkie dni</option>
+          <option value="month">miesiąc</option>
+          <option value="day">konkretny dzień</option>
+        </select>
+      </label>
+      <label id="csv-day-row" hidden>
+        <span>Dzień</span>
+        <input type="date" id="csv-day" />
+      </label>
+      <p class="muted small">Miesiąc to miesiąc dnia wybranego w „Podsumowaniu dnia”; konkretny dzień wskazujesz sam (domyślnie ten z podsumowania). CSV: średnik, UTF-8 – otwiera się w Excelu; czasy co do sekundy (h:mm:ss), więc sumują się bez rozjazdów.</p>
+
+      <section class="settings-section">
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <b>Wpisy (CSV)</b>
+            <span class="muted small">Każdy wpis – zadanie lub przerwa – jako osobny wiersz, z godzinami co do sekundy.</span>
+          </div>
+          <div class="actions"><button type="button" class="btn primary" id="export-csv-entries">Pobierz</button></div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <b>Zadania per dzień (CSV)</b>
+            <span class="muted small">Zadania zsumowane w dniu: czas dnia, czas łączny, estymata, liczba wpisów.</span>
+          </div>
+          <div class="actions"><button type="button" class="btn primary" id="export-csv-tasks">Pobierz</button></div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <b>Dni (CSV)</b>
+            <span class="muted small">Jeden wiersz na dzień: godziny pracy, sumy, nadgodziny, liczba wpisów i zatrzymań.</span>
+          </div>
+          <div class="actions"><button type="button" class="btn primary" id="export-csv-days">Pobierz</button></div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-text">
+            <b>Kopia zapasowa (JSON)</b>
+            <span class="muted small">Zawsze wszystkie dni i ustawienia – do wczytania przez „Import” w ustawieniach.</span>
+          </div>
+          <div class="actions"><button type="button" class="btn primary" id="export-json-all">Pobierz</button></div>
+        </div>
+      </section>
+
+      <div class="actions">
+        <button type="button" class="btn" id="export-close">Zamknij</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Okno: szczegółowy wykres dnia -->
+  <dialog id="day-chart-dialog" class="wide">
+    <div class="edit-form">
+      <div class="activity-head">
+        <h3>Wykres dnia <span class="muted" id="day-chart-date"></span></h3>
+        <span class="muted small" id="day-chart-stats"></span>
+      </div>
+      <ul class="chart-legend" aria-hidden="true">
+        <li><span class="chart-key work"></span>praca</li>
+        <li><span class="chart-key org"></span>organizacyjne</li>
+        <li><span class="chart-key brk"></span>przerwa</li>
+        <li><span class="chart-key dot ev-start"></span>rozpoczęcie pracy</li>
+        <li><span class="chart-key dot ev-stop"></span>zatrzymanie</li>
+        <li><span class="chart-key dot ev-resume"></span>wznowienie</li>
+      </ul>
+      <div class="chart-wrap" id="day-chart"></div>
+      <p class="muted small">Każda kolumna to jedna godzina doby, a wysokość w kolumnie to minuta tej godziny (0:00 na dole, 60:00 u góry). Każdy fragment to osobny wpis – najedź, żeby zobaczyć, co to było.</p>
+      <div class="actions">
+        <button type="button" class="btn primary" id="day-chart-close">Zamknij</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Dialog edycji wpisu -->
+  <dialog id="edit-dialog">
+    <form method="dialog" class="edit-form" id="edit-form">
+      <h3 id="e-heading">Edytuj wpis</h3>
+      <div id="e-task-fields">
+        <label><span>ID (Azure)</span><input type="text" id="e-wi" /></label>
+        <label><span>Tytuł</span><input type="text" id="e-title" /></label>
+        <div class="settings-grid">
+          <label>
+            <span>Typ</span>
+            <select id="e-type"></select>
+          </label>
+          <label><span>Estymata (czas)</span><span class="field-btn"><input type="text" id="e-est" placeholder="np. 8:30" inputmode="decimal" /><button type="button" class="btn icon-btn field-pick" data-est="e-est" title="Wylicz estymatę z godzin od – do" aria-label="Wylicz estymatę z godzin od – do"></button></span></label>
+        </div>
+        <p class="muted small">Zmiana ID, tytułu, typu i estymaty dotyczy wszystkich wpisów tego zadania.</p>
+      </div>
+      <div class="settings-grid">
+        <div class="time-box">
+          <label for="e-start">Początek</label>
+          <div class="field-btn time-field" data-for="e-start">
+            <input type="text" id="e-start" inputmode="numeric" placeholder="gg:mm" maxlength="5" autocomplete="off" spellcheck="false" required />
+            <button type="button" class="btn icon-btn field-pick" data-clock="e-start" title="Wybierz godzinę i minuty" aria-label="Wybierz godzinę: Początek"></button>
+          </div>
+        </div>
+        <div class="time-box">
+          <label for="e-end">Koniec</label>
+          <div class="field-btn time-field" data-for="e-end">
+            <input type="text" id="e-end" inputmode="numeric" placeholder="gg:mm" maxlength="5" autocomplete="off" spellcheck="false" />
+            <button type="button" class="btn icon-btn field-pick" data-clock="e-end" title="Wybierz godzinę i minuty" aria-label="Wybierz godzinę: Koniec"></button>
+          </div>
+        </div>
+      </div>
+      <p class="muted small">Wpisz godzinę z klawiatury – <b>930</b>, <b>9:30</b> lub <b>9.30</b> – albo kliknij zegar i wybierz godzinę i minutę z siatki (bez przewijania). Strzałki ↑ ↓ zmieniają o minutę, z Shift o 5.</p>
+      <p class="muted small" id="e-end-hint"></p>
+      <label><span>Komentarz</span><input type="text" id="e-comment" /></label>
+      <div class="actions">
+        <button type="button" class="btn" id="e-cancel">Anuluj</button>
+        <button type="submit" class="btn primary">Zapisz</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+/* LiczMiCzas – timer dnia pracy i zadań z Azure Boards (bez zależności). Wariant „dane w pliku”:
+   stan aplikacji żyje w pliku JSON na dysku (File System Access API), nic nie jest zapisywane w localStorage / IndexedDB ani wysyłane. */
+(() => {
+  "use strict";
+
+  const LEGACY_KEY = "liczmiczas.v2"; // tylko do jednorazowego ODCZYTU danych z index.html (migracja) – nigdy do zapisu
+  const DEFAULTS = { orgUrl: "", workHours: 8, breakHours: 2 };
+  // Kategorie bazowe – od nich zależy, jak czas wpisu jest liczony; typy z ustawień są tylko ich nazwanymi wariantami.
+  const BASES = { praca: "praca", org: "organizacyjne", break: "przerwa" };
+  const DEFAULT_TYPES = [
+    { id: "praca", name: "praca", base: "praca" },
+    { id: "org", name: "organizacyjne", base: "org" },
+    { id: "wsparcie", name: "wsparcie produkcji", base: "praca" },
+    { id: "daily", name: "daily", base: "org" },
+    { id: "lunch", name: "lunch", base: "break" },
+  ];
+  const H = 3600;
+
+  // Model: state.days[YYYY-MM-DD] = { date, status: "working"|"paused", startedAt, tasks, segments, events }
+  //  Type    = { id, name, base: "praca"|"org"|"break" }  – state.settings.types
+  //  Task    = { id, wi, title, typeId, type (kategoria bazowa z chwili zapisu – zapas, gdy typ usunięto), estimateH }
+  //  Segment = { id, kind: "task"|"break", taskId|null, start, end|null, comment }  – w trakcie pracy dokładnie jeden ma end === null
+  //  Event   = { id, type: "start"|"stop"|"resume", at }
+
+  // ---------- Dane ----------
+  const normalize = (p) => {
+    const settings = { ...DEFAULTS, ...(p?.settings || {}) };
+    const types = Array.isArray(settings.types) ? settings.types.filter((t) => t && t.id && String(t.name || "").trim() && BASES[t.base]) : [];
+    settings.types = types.length ? types : DEFAULT_TYPES.map((t) => ({ ...t }));
+    return { settings, days: p?.days && typeof p.days === "object" ? p.days : {} };
+  };
+  let state;
+  state = normalize(null); // puste do chwili otwarcia pliku danych
+
+  // ---------- Magazyn: plik JSON na dysku ----------
+  // Tryb "fs": przeglądarka zapisuje wprost do wskazanego pliku po każdej zmianie (Chrome / Edge).
+  // Tryb "manual": plik wczytany przez <input type=file>, zapis = pobranie nowego pliku (każda przeglądarka).
+  const FS_API = typeof window.showOpenFilePicker === "function" && typeof window.showSaveFilePicker === "function";
+  const FILE_TYPES = [{ description: "Dane LiczMiCzas (JSON)", accept: { "application/json": [".json"] } }];
+  const store = { mode: null, handle: null, name: "", diskStamp: 0, dirty: false, saving: false, again: false, paused: false, error: "", savedAt: 0, timer: null };
+  const serialize = () => JSON.stringify(state, null, 2);
+
+  /** Każda zmiana danych: oznacz jako niezapisaną i (w trybie fs) zaplanuj zapis; krótka zwłoka skleja serię zmian, np. pisanie komentarza. */
+  function save() {
+    if (!store.mode) return; // przed otwarciem pliku nie ma czego ani gdzie zapisywać
+    store.dirty = true;
+    if (store.mode === "fs" && !store.paused) { clearTimeout(store.timer); store.timer = setTimeout(flushSave, 300); }
+    renderStore();
+  }
+
+  /** Zapis do pliku. force = po decyzji użytkownika (pomija pytanie o nadpisanie pliku zmienionego na dysku). */
+  async function flushSave(force = false) {
+    clearTimeout(store.timer);
+    if (store.mode !== "fs" || !store.handle) return;
+    if (store.saving) { store.again = true; return; }
+    store.saving = true; store.again = false;
+    renderStore();
+    try {
+      if ((await store.handle.queryPermission({ mode: "readwrite" })) !== "granted") throw new Error("Przeglądarka cofnęła zgodę na zapis – kliknij „Zapisz” w oknie pliku danych");
+      // plik zmieniony poza tą kartą (druga karta, synchronizacja)? nie nadpisuj po cichu
+      const onDisk = (await store.handle.getFile()).lastModified;
+      if (!force && store.diskStamp && onDisk !== store.diskStamp) {
+        store.paused = true;
+        throw new Error("Plik zmienił się na dysku poza tą kartą – zapis wstrzymany. Otwórz okno pliku danych i wybierz „Zapisz” (nadpisz) albo „Wczytaj”");
+      }
+      const writable = await store.handle.createWritable(); // zapis do pliku tymczasowego, podmiana przy close() – plik nie zostaje ucięty w połowie
+      await writable.write(serialize());
+      await writable.close();
+      store.diskStamp = (await store.handle.getFile()).lastModified;
+      store.dirty = store.again; store.paused = false; store.error = ""; store.savedAt = Date.now();
+    } catch (err) {
+      store.error = err.message || String(err);
+    }
+    store.saving = false;
+    renderStore();
+    if (store.again && !store.error) flushSave();
+  }
+
+  function parseDataFile(text) {
+    if (!text.trim()) return null; // pusty plik = puste dane
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object" || (parsed.days && typeof parsed.days !== "object")) throw new Error("To nie jest plik danych LiczMiCzas.");
+    return parsed;
+  }
+  /** Wspólne zakończenie otwarcia / utworzenia / wczytania pliku. */
+  function adoptData(parsed, mode, handle, name, stamp) {
+    state = normalize(parsed);
+    Object.assign(store, { mode, handle, name, diskStamp: stamp, dirty: false, paused: false, error: "", savedAt: stamp ? Date.now() : 0 });
+    document.documentElement.dataset.theme = S().theme === "light" ? "light" : "dark";
+    const loaded = serialize();
+    closeStaleDays();
+    selectedDate = today();
+    selectedMonth = today().slice(0, 7);
+    renderSettings();
+    render();
+    if ($("store-dialog").open) $("store-dialog").close();
+    if (serialize() !== loaded) save(); // zapis tylko wtedy, gdy otwarcie coś zmieniło (np. zamknięte wczorajsze wpisy)
+    renderStore();
+  }
+  const pickerAborted = (err) => err?.name === "AbortError";
+  async function openDataFile() {
+    try {
+      const [handle] = await window.showOpenFilePicker({ types: FILE_TYPES, multiple: false });
+      if ((await handle.requestPermission({ mode: "readwrite" })) !== "granted") throw new Error("Bez zgody na zapis aplikacja nie może prowadzić danych w tym pliku.");
+      const file = await handle.getFile();
+      adoptData(parseDataFile(await file.text()), "fs", handle, handle.name, file.lastModified);
+    } catch (err) { if (!pickerAborted(err)) alert("Nie udało się otworzyć pliku: " + (err.message || err)); }
+  }
+  async function newDataFile(initial) {
+    try {
+      const handle = await window.showSaveFilePicker({ suggestedName: "liczmiczas-dane.json", types: FILE_TYPES });
+      adoptData(initial, "fs", handle, handle.name, 0);
+      await flushSave(true);
+    } catch (err) { if (!pickerAborted(err)) alert("Nie udało się utworzyć pliku: " + (err.message || err)); }
+  }
+  async function reloadDataFile() {
+    if (store.mode !== "fs") return;
+    if (store.dirty && !confirm("Niezapisane zmiany z tej karty przepadną. Wczytać plik z dysku?")) return;
+    try {
+      const file = await store.handle.getFile();
+      adoptData(parseDataFile(await file.text()), "fs", store.handle, store.name, file.lastModified);
+    } catch (err) { alert("Nie udało się wczytać pliku: " + (err.message || err)); }
+  }
+  /** Dane zostawione przez index.html w localStorage – wyłącznie odczyt, żeby dało się je przenieść do pliku. */
+  function legacyData() {
+    try { const p = JSON.parse(localStorage.getItem(LEGACY_KEY)); return p && p.days && Object.keys(p.days).length ? p : null; } catch { return null; }
+  }
+
+  function renderStore() {
+    const chip = $("store-chip");
+    const cls = store.error ? "error" : store.saving ? "busy" : store.dirty ? "dirty" : store.mode ? "ok" : "";
+    chip.className = "store-chip " + cls;
+    const name = store.name || (store.mode === "manual" ? "dane w karcie" : "");
+    setText("store-text", !store.mode ? "brak pliku danych"
+      : store.error ? `${name} · błąd zapisu`
+      : store.saving ? `${name} · zapisywanie…`
+      : store.mode === "manual" ? `${name} · ${store.dirty ? "niezapisane zmiany – pobierz plik" : "bez zmian"}`
+      : store.dirty ? `${name} · ${store.paused ? "zapis wstrzymany" : "niezapisane zmiany"}`
+      : `${name} · zapisano ${new Date(store.savedAt).toLocaleTimeString("pl-PL")}`);
+    if ($("store-dialog").open) renderStoreDialog();
+  }
+  function renderStoreDialog() {
+    const legacy = legacyData();
+    setText("store-intro", store.mode
+      ? "Aplikacja nie zapisuje niczego w przeglądarce: cały stan jest w tym pliku na Twoim dysku. Możesz go kopiować, synchronizować i otwierać na innym komputerze."
+      : "Ta wersja nie zapisuje niczego w przeglądarce – dane żyją w pliku .json na Twoim dysku. Wskaż plik, żeby zacząć; po każdej zmianie aplikacja zapisze go sama.");
+    $("store-fs").hidden = !FS_API;
+    $("store-current").hidden = store.mode !== "fs";
+    $("store-manual-save-row").hidden = store.mode !== "manual";
+    $("store-close").hidden = !store.mode; // bez pliku nie ma gdzie trzymać danych – okna nie da się pominąć
+    $("store-migrate-row").hidden = !FS_API || !legacy;
+    if (legacy) setText("store-migrate-info", `W tej przeglądarce są dane z index.html (${plural(Object.keys(legacy.days).length, "dzień", "dni", "dni")}). Zostaną skopiowane do nowego pliku; localStorage pozostaje nietknięty.`);
+    const stateEl = $("store-state");
+    stateEl.hidden = !store.mode && FS_API;
+    stateEl.className = "store-state" + (store.error ? " error" : "");
+    stateEl.textContent = !store.mode ? "Ta przeglądarka nie potrafi zapisywać wprost do pliku (File System Access API) – dostępny jest tryb ręczny."
+      : store.error ? `${store.name}: ${store.error}`
+      : store.mode === "manual" ? `Tryb ręczny${store.name ? ` (${store.name})` : ""}: ${store.dirty ? "są niezapisane zmiany – pobierz plik." : "brak zmian od wczytania / pobrania."}`
+      : `${store.name}: ${store.dirty ? "zmiany czekają na zapis." : `zapisano ${new Date(store.savedAt).toLocaleTimeString("pl-PL")}.`}`;
+  }
+  const openStoreDialog = () => { if (!$("store-dialog").open) $("store-dialog").showModal(); renderStoreDialog(); };
+  const S = () => state.settings;
+  const workLimit = () => S().workHours * H;
+  const breakLimit = () => S().breakHours * H;
+  const obligo = () => Math.max(0, S().workHours - S().breakHours) * H;
+
+  // ---------- Pomocnicze ----------
+  const pad = (n) => String(n).padStart(2, "0");
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const ymd = (key) => key.split("-").map(Number);
+  const dateKey = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const today = () => dateKey();
+  const fmtDatePl = (key) => key.split("-").reverse().join(".");
+  const shiftDate = (key, n) => { const [y, m, d] = ymd(key); return dateKey(new Date(y, m - 1, d + n)); };
+  const endOfDay = (key) => { const [y, m, d] = ymd(key); return new Date(y, m - 1, d + 1).getTime() - 1000; };
+  const timeOnDay = (key, hhmm) => { const [y, m, d] = ymd(key), [hh, mm] = hhmm.split(":").map(Number); return new Date(y, m - 1, d, hh, mm).getTime(); };
+  const fmtClock = (ts) => { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  const mins = (sec) => Math.round(Math.max(0, sec) / 60);
+  const fmtHM = (sec) => `${Math.floor(mins(sec) / 60)}:${pad(mins(sec) % 60)}`;                       // 1:32
+  const fmtHMin = (sec) => { const m = mins(sec), h = Math.floor(m / 60), r = m % 60; return h && r ? `${h} h ${r} min` : h ? `${h} h` : `${r} min`; };
+  /** Czas zaokrąglony w górę do pełnego kwadransa: 10:05 -> "10h 15m", 10:49 -> "11h". */
+  const fmtQuarterUp = (sec) => { const m = Math.ceil(Math.max(1, mins(sec)) / 15) * 15, h = Math.floor(m / 60), r = m % 60; return h && r ? `${h}h ${r}m` : h ? `${h}h` : `${r}m`; };
+  const fmtHMS =(sec) => { sec = Math.max(0, Math.floor(sec)); return `${pad(Math.floor(sec / H))}:${pad(Math.floor((sec % H) / 60))}:${pad(sec % 60)}`; };
+  const plural = (n, one, few, many) => `${n} ${n === 1 ? one : n < 5 ? few : many}`;
+
+  /** "8:30" | "8.5" | "8,5" | "8" | "0:00" -> godziny (>= 0) albo null */
+  function parseHours(str) {
+    const v = String(str ?? "").trim();
+    if (!v) return null;
+    const hm = v.match(/^(\d{1,3}):([0-5]?\d)$/);
+    if (hm) return Number(hm[1]) + Number(hm[2]) / 60;
+    if (v.includes(":")) return null;
+    const n = parseFloat(v.replace(",", "."));
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  }
+  /** Estymata: jak parseHours, ale zero = brak estymaty. */
+  const parseEstimate = (str) => parseHours(str) || null;
+  const estimateToInput = (h) => (h ? fmtHM(h * H) : "");
+
+  // ---------- Dostęp do danych ----------
+  const getDay = (key) => state.days[key] || null;
+  const todayDay = () => getDay(today());
+  function ensureDay(key) {
+    const day = (state.days[key] ??= { date: key, status: "paused", startedAt: null, tasks: [], segments: [], events: [] });
+    day.events ??= [];
+    return day;
+  }
+  const findTask = (day, id) => day.tasks.find((t) => t.id === id) || null;
+  const openSegment = (day) => day.segments.find((s) => s.end === null) || null;
+  const segDuration = (s, now) => Math.max(0, ((s.end ?? now) - s.start) / 1000);
+  const isWorking = (day) => !!day && day.status === "working";
+  const types = () => S().types;
+  /** Typ zadania z ustawień; starsze zadania mają tylko type ("praca"|"org"), które jest zarazem id typu wbudowanego. */
+  const typeOf = (task) => types().find((t) => t.id === (task.typeId ?? task.type)) || null;
+  const baseOf = (task) => typeOf(task)?.base ?? (BASES[task.type] ? task.type : "praca");
+  const typeIdFor = (task) => (typeOf(task) ?? types().find((t) => t.base === baseOf(task)) ?? types()[0]).id;
+  /** Kategoria bazowa wpisu: przerwa automatyczna albo kategoria typu zadania. */
+  const segBase = (day, s) => (s.kind === "break" ? "break" : baseOf(findTask(day, s.taskId) || {}));
+  const isWorkSeg = (day, s) => segBase(day, s) === "praca";
+  const segsOf = (day, taskId) => day.segments.filter((s) => s.taskId === taskId);
+  const taskSecondsInDay = (day, taskId, now) => segsOf(day, taskId).reduce((a, s) => a + segDuration(s, now), 0);
+  /** Między dniami zadania łączą się wyłącznie po ID Azure. */
+  const taskSecondsAllDays = (day, task, now) =>
+    task.wi
+      ? Object.values(state.days).reduce((sum, d) => sum + d.tasks.filter((t) => t.wi === task.wi).reduce((a, t) => a + taskSecondsInDay(d, t.id, now), 0), 0)
+      : taskSecondsInDay(day, task.id, now);
+  const uniqComments = (segs) => [...new Set(segs.map((s) => (s.comment || "").trim()).filter(Boolean))];
+  const taskTitle = (t) => (t.title || "").trim() || (t.wi ? `Zadanie #${t.wi}` : "(bez tytułu)");
+  const typeLabel = (t) => (t ? typeOf(t)?.name ?? BASES[baseOf(t)] : "przerwa");
+  const workItemUrl = (wi) => { const base = (S().orgUrl || "").trim().replace(/\/+$/, ""); return base && wi ? `${base}/_workitems/edit/${encodeURIComponent(wi)}` : null; };
+  const taskInfo = (daySec, totalSec, estSec) =>
+    `zadanie dziś: ${fmtHM(daySec)}` + (totalSec > daySec + 1 ? ` · łącznie: ${fmtHM(totalSec)}` : "") + (estSec ? ` · estymata: ${fmtHM(estSec)}` : "");
+  function knownTasks() {
+    const map = new Map();
+    for (const day of Object.values(state.days)) for (const t of day.tasks) map.set(t.wi ? `wi:${t.wi}` : `t:${(t.title || "").trim().toLowerCase()}`, t);
+    return [...map.values()];
+  }
+
+  /** Moment, w którym naliczony czas (opcjonalnie tylko praca) osiągnął limit; null, gdy jeszcze nie. */
+  function limitReachedAt(day, limit, now, onlyWork) {
+    let acc = 0;
+    for (const s of [...day.segments].sort((a, b) => a.start - b.start)) {
+      if (onlyWork && !isWorkSeg(day, s)) continue;
+      const dur = segDuration(s, now);
+      if (acc + dur >= limit) return s.start + (limit - acc) * 1000;
+      acc += dur;
+    }
+    return null;
+  }
+
+  /**
+   * Sumy dnia. Obligo = dzień − przerwa. Dzień zaliczony, gdy obecność ≥ dzień ORAZ praca ≥ obligo (doneAt).
+   * Nadgodziny = praca po doneAt. Do odpracowania: przed pełną obecnością przerwa ponad limit,
+   * po niej (lub dla zamkniętego dnia, final) brakująca praca do obliga.
+   */
+  function dayTotals(day, now, final = false) {
+    const t = { work: 0, org: 0, idle: 0, brk: 0, total: 0, overtime: 0, owed: 0, breakOver: 0, doneAt: null, shortWork: 0 };
+    if (!day) return t;
+    for (const s of day.segments) {
+      const dur = segDuration(s, now);
+      const base = segBase(day, s);
+      if (base === "break") t.idle += dur;
+      else if (base === "org") t.org += dur;
+      else t.work += dur;
+    }
+    t.brk = t.idle + t.org;
+    t.total = t.work + t.brk;
+    if (day.off) { // dzień wolny: nie ma obliga ani nic do odpracowania, a każda praca to nadgodziny
+      t.overtime = t.work;
+      if (day.segments.length) t.doneAt = day.startedAt ?? Math.min(...day.segments.map((s) => s.start));
+      return t;
+    }
+    t.breakOver = Math.max(0, t.brk - breakLimit());
+    const presenceAt = t.total >= workLimit() ? limitReachedAt(day, workLimit(), now, false) : null;
+    const workAt = t.work >= obligo() ? limitReachedAt(day, obligo(), now, true) : null;
+    if (presenceAt !== null && workAt !== null) {
+      t.doneAt = Math.max(presenceAt, workAt);
+      t.overtime = day.segments.filter((s) => isWorkSeg(day, s)).reduce((a, s) => a + Math.max(0, (s.end ?? now) - Math.max(s.start, t.doneAt)) / 1000, 0);
+    } else t.owed = presenceAt !== null || final ? Math.max(0, obligo() - t.work) : t.breakOver;
+    if (final) t.shortWork = Math.max(0, obligo() - t.work);
+    return t;
+  }
+
+  // Dzień wolny: day.off = rodzaj ("urlop" | "swieto" | "szkolenie" | "l4"; starsze dane mają true = bez rodzaju)
+  const OFF_KINDS = { urlop: "urlop", swieto: "święto", szkolenie: "szkolenie", l4: "L4" };
+  const OFF_SHORT = { urlop: "U", swieto: "Ś", szkolenie: "Sz", l4: "L4" };
+  const offLabel = (day) => (day?.off ? OFF_KINDS[day.off] ?? "wolne" : "");
+  /** Ustawia rodzaj dnia wolnego (null = cofnięcie); dzień bez wpisów i bez oznaczenia jest usuwany, żeby nie zostawały puste obiekty. */
+  function setDayOff(key, kind) {
+    const day = ensureDay(key);
+    if (kind) day.off = kind; else delete day.off;
+    if (!kind && !day.segments.length && !day.events.length && !day.tasks.length) delete state.days[key];
+    commit();
+  }
+
+  // ---------- Operacje ----------
+  const commit = () => { save(); render(); };
+  const closeOpen = (day, now) => { const o = openSegment(day); if (o) o.end = Math.max(o.start, now); };
+  const pushSegment = (day, seg) => day.segments.push({ id: uid(), kind: "break", taskId: null, start: Date.now(), end: null, comment: "", ...seg });
+  const addEvent = (day, type, at) => ensureDay(day.date).events.push({ id: uid(), type, at });
+  function beginWorking(day, now) {
+    if (!day.startedAt) { day.startedAt = now; addEvent(day, "start", now); }
+    else if (day.status !== "working") addEvent(day, "resume", now);
+    day.status = "working";
+  }
+  function startWork() {
+    const day = ensureDay(today());
+    if (isWorking(day)) return;
+    const now = Date.now();
+    beginWorking(day, now);
+    pushSegment(day, { start: now });
+    commit();
+  }
+  function stopWork() {
+    const day = todayDay();
+    if (!isWorking(day)) return;
+    const now = Date.now();
+    closeOpen(day, now);
+    day.status = "paused";
+    addEvent(day, "stop", now);
+    commit();
+  }
+  function startTask(taskId) {
+    const day = ensureDay(today()), now = Date.now();
+    if (isWorking(day)) closeOpen(day, now); else beginWorking(day, now);
+    pushSegment(day, { kind: "task", taskId, start: now });
+    commit();
+  }
+  /** Zatrzymuje zadanie – czas leci dalej jako przerwa. */
+  function stopTask() {
+    const day = todayDay();
+    if (!isWorking(day) || openSegment(day)?.kind !== "task") return;
+    const now = Date.now();
+    closeOpen(day, now);
+    pushSegment(day, { start: now });
+    commit();
+  }
+  /** Ostatnie zadanie dnia (wpis niebędący przerwą) – do wznowienia po pauzie. */
+  function lastTask(day) {
+    const seg = day?.segments.filter((s) => s.kind === "task" && findTask(day, s.taskId) && segBase(day, s) !== "break").reduce((a, s) => (!a || s.start >= a.start ? s : a), null);
+    return seg ? findTask(day, seg.taskId) : null;
+  }
+  /** Wznawia ostatnie zadanie – zamyka przerwę i dodaje nowy wpis tego zadania. */
+  function resumeLastTask() {
+    const day = todayDay(), task = lastTask(day), open = day ? openSegment(day) : null;
+    if (!task || (open && segBase(day, open) !== "break")) return;
+    startTask(task.id);
+  }
+  /** Pary wpisów nakładających się w czasie (wcześniejszy, późniejszy, sekundy policzone podwójnie) – skutek ręcznej edycji godzin. */
+  function findOverlaps(day, now = Date.now()) {
+    const segs = [...(day?.segments || [])].sort((a, b) => a.start - b.start), pairs = [];
+    for (let i = 0; i < segs.length; i++) for (let j = i + 1; j < segs.length && segs[j].start < (segs[i].end ?? now); j++) {
+      const sec = (Math.min(segs[i].end ?? now, segs[j].end ?? now) - segs[j].start) / 1000;
+      if (sec >= 1) pairs.push({ a: segs[i], b: segs[j], sec });
+    }
+    return pairs;
+  }
+  const segName = (day, s) => { const t = s.kind === "task" ? findTask(day, s.taskId) : null; return `${t ? taskTitle(t) : "Przerwa"} (${fmtClock(s.start)}–${s.end === null ? "…" : fmtClock(s.end)})`; };
+  /** Dni inne niż dzisiejszy z otwartym wpisem – zamknij na koniec tamtego dnia. */
+  function closeStaleDays() {
+    for (const day of Object.values(state.days)) {
+      if (day.date === today()) continue;
+      const open = openSegment(day);
+      if (open) open.end = Math.max(open.start, endOfDay(day.date));
+      if (day.status === "working") { day.status = "paused"; addEvent(day, "stop", endOfDay(day.date)); }
+    }
+  }
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const on = (id, ev, fn) => $(id).addEventListener(ev, fn);
+  const setText = (id, text) => { $(id).textContent = text; };
+
+  let selectedDate = today();
+  let editing = null;      // { dayKey, segId }
+  let searchQuery = "";
+  let eventsOpen = false;  // rozwinięcie „Zdarzenia dnia” przeżywa odświeżanie co sekundę
+  let lastSummaryHtml = "";
+
+  const taskMatches = (task, q) => !q || (task.wi || "").toLowerCase().includes(q) || (task.title || "").toLowerCase().includes(q);
+  const normQuery = () => searchQuery.trim().toLowerCase().replace(/^#/, "");
+
+  function renderClock() {
+    const d = new Date();
+    setText("clock-date", fmtDatePl(dateKey(d)));
+    setText("clock-time", `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`);
+  }
+
+  function setBar(id, value, limit) {
+    const pct = limit > 0 ? Math.min(100, (value / limit) * 100) : 0;
+    $(id).style.width = `${pct}%`;
+    $(id).className = value > limit ? "over" : pct >= 90 ? "warn" : "";
+  }
+
+  function renderWorkday() {
+    const day = todayDay(), now = Date.now(), t = dayTotals(day, now);
+    const working = isWorking(day), started = !!day?.startedAt;
+
+    setText("wd-timer", fmtHMS(t.total));
+    const off = !!day?.off;
+    $("wd-status").className = "workday-status " + (working ? "working" : started ? "paused" : off ? "off" : "");
+    setText("wd-status", (working ? "W toku" : started ? "Zatrzymano" : off ? `Dzień wolny · ${offLabel(day)}` : "Nie rozpoczęto") + (off && started ? ` · dzień wolny (${offLabel(day)})` : ""));
+    $("wd-off").hidden = started; // po rozpoczęciu pracy dzień wolny zmienia się już tylko na liście miesiąca
+    setText("wd-off", off ? `Wolne: ${offLabel(day)} ▾` : "Dzień wolny ▾");
+    $("wd-start").hidden = started;
+    $("wd-resume").hidden = !started || working;
+    $("wd-stop").hidden = !working;
+
+    setText("st-work", fmtHM(t.work));
+    setText("st-work-limit", fmtHM(obligo()));
+    setBar("st-work-bar", t.work, obligo());
+    setText("st-break", fmtHM(t.brk));
+    $("st-break").classList.toggle("over", t.brk > breakLimit());
+    setText("st-break-limit", fmtHM(breakLimit()));
+    setText("st-org", fmtHM(t.org));
+    setBar("st-break-bar", t.brk, breakLimit());
+
+    // nad licznikiem: "z 8:00 · do końca 3:30" | "Odpracowujesz · pozostało 45 min" | "od 16:45 nadgodziny (1 h 20 min)"
+    const presenceDone = t.total >= workLimit();
+    const total = $("wd-total");
+    total.classList.remove("over", "owed");
+    if (off && t.doneAt === null) {
+      total.innerHTML = `${esc(offLabel(day))} · praca liczy się jako nadgodziny`;
+    } else if (day && t.doneAt !== null) {
+      total.innerHTML = `od <span>${fmtClock(t.doneAt)}</span> nadgodziny <span>(${fmtHMin(t.overtime)})</span>`;
+      total.classList.add("over");
+    } else if (day && presenceDone) {
+      total.innerHTML = `Odpracowujesz · pozostało <span>${fmtHMin(t.owed)}</span>`;
+      total.classList.add("owed");
+    } else {
+      total.innerHTML = `z <span>${fmtHM(workLimit())}</span> · do końca <span>${fmtHM(workLimit() - t.total)}</span>`;
+    }
+
+    setText("st-overtime", fmtHM(t.overtime));
+    document.querySelector(".stat.overtime").classList.toggle("active", t.overtime > 0);
+    setText("st-overtime-sub", t.doneAt !== null ? `od ${fmtClock(t.doneAt)}` : "brak");
+    setText("st-owed", fmtHM(t.owed));
+    document.querySelector(".stat.owed").classList.toggle("active", t.owed > 0);
+    setText("st-owed-sub", t.owed > 0 ? (presenceDone ? `do obliga ${fmtHM(obligo())}` : `przerwa ponad ${fmtHM(breakLimit())}`) : "brak");
+
+    const open = day ? openSegment(day) : null;
+    const openTask = open?.kind === "task" ? findTask(day, open.taskId) : null;
+    const onBreak = !open || segBase(day, open) === "break"; // przerwa automatyczna albo zadanie typu „przerwa” (np. lunch)
+    const resumable = onBreak ? lastTask(day) : null;
+    $("task-controls").hidden = !working; // dzień nierozpoczęty albo zatrzymany – jest tylko „Rozpocznij / Wznów pracę”
+    // jeden przycisk naraz: w trakcie zadania „Przerwa”, w trakcie przerwy „Wznów ostatnie zadanie”
+    $("task-pause").hidden = onBreak;
+    $("task-resume").hidden = !onBreak;
+    $("task-resume").disabled = !resumable;
+    $("task-resume").title = resumable ? `Wznawia: ${taskTitle(resumable)} – kończy przerwę i dodaje nową kartę tego zadania` : "Nie ma jeszcze zadania, do którego można wrócić – dodaj je w „Nowe zadanie”";
+    document.title = openTask
+      ? `▶ ${fmtHMS(segDuration(open, now))} ${taskTitle(openTask)} – LiczMiCzas`
+      : working ? `☕ ${fmtHMS(t.total)} – LiczMiCzas` : "LiczMiCzas – Timer zadań Azure Boards";
+  }
+
+  function renderSuggestions() {
+    const tasks = knownTasks();
+    $("wi-suggestions").innerHTML = tasks.filter((t) => t.wi).map((t) => `<option value="${esc(t.wi)}">${esc(taskTitle(t))}</option>`).join("");
+    $("title-suggestions").innerHTML = tasks.filter((t) => t.title).map((t) => `<option value="${esc(t.title)}">${t.wi ? "#" + esc(t.wi) : ""}</option>`).join("");
+  }
+
+  const EVENT_LABEL = { start: "▶ Rozpoczęto pracę", stop: "■ Zakończono pracę", resume: "▶ Wznowiono pracę" };
+
+  function renderTimeline() {
+    const day = todayDay(), now = Date.now(), q = normQuery();
+    setText("list-date", fmtDatePl(today()));
+    const overlaps = findOverlaps(day, now);
+    $("overlap-warn").hidden = !overlaps.length;
+    if (overlaps.length) setText("overlap-text", `⚠ ${plural(overlaps.length, "para wpisów nakłada", "pary wpisów nakładają", "par wpisów nakłada")} się w czasie – ${fmtHMS(overlaps.reduce((a, o) => a + o.sec, 0))} jest policzone podwójnie.`);
+    const all = day ? day.segments : [];
+    // przy wyszukiwaniu tylko wpisy zadań pasujące do frazy (bez przerw i zdarzeń)
+    const segments = q ? all.filter((s) => s.kind === "task" && taskMatches(findTask(day, s.taskId) || {}, q)) : all;
+    const events = q ? [] : day?.events || [];
+    $("empty-info").hidden = !!q || all.length > 0 || events.length > 0;
+    $("search-info").hidden = !q;
+    if (q) {
+      const tasks = new Set(segments.map((s) => s.taskId)).size;
+      setText("search-info", segments.length ? `${plural(segments.length, "wpis", "wpisy", "wpisów")} · ${plural(tasks, "zadanie", "zadania", "zadań")}` : "brak wyników");
+    }
+    const lastSegOfTask = new Map();
+    for (const s of segments) if (s.kind === "task") lastSegOfTask.set(s.taskId, s.id);
+
+    // wpisy i zdarzenia w jednej osi, najnowsze na górze
+    $("timeline").innerHTML = [
+      ...segments.map((s) => ({ at: s.start, order: 1, html: entryHtml(day, s, now, lastSegOfTask.get(s.taskId) === s.id) })),
+      ...events.map((ev) => ({ at: ev.at, order: ev.type === "stop" ? 2 : 0, html: `<li class="event ${ev.type}"><span>${EVENT_LABEL[ev.type] || ev.type}</span><b>${fmtClock(ev.at)}</b></li>` })),
+    ].sort((a, b) => b.at - a.at || b.order - a.order).map((i) => i.html).join("");
+  }
+
+  const svgIcon = (d) => `<svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="${d}"/></svg>`;
+  const ICON = {
+    edit: svgIcon("M12.9 4.6l2.5 2.5-8.3 8.3-3.4.9.9-3.4 8.3-8.3zM14 3.5l.9-.9a1.5 1.5 0 0 1 2.1 0l.4.4a1.5 1.5 0 0 1 0 2.1l-.9.9L14 3.5z"),
+    trash: svgIcon("M8.5 2a1.5 1.5 0 0 0-1.5 1.5V4H3.75a.75.75 0 0 0 0 1.5h.6l.72 10.13A2 2 0 0 0 7.07 17.5h5.86a2 2 0 0 0 2-1.87l.72-10.13h.6a.75.75 0 0 0 0-1.5H13v-.5A1.5 1.5 0 0 0 11.5 2h-3zm3 2h-3v-.5h3V4zM5.86 5.5h8.28l-.71 10.02a.5.5 0 0 1-.5.48H7.07a.5.5 0 0 1-.5-.48L5.86 5.5zM8.5 7.75a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V8.5a.75.75 0 0 1 .75-.75zm3 0a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V8.5a.75.75 0 0 1 .75-.75z"),
+    stop: svgIcon("M5.5 4h9A1.5 1.5 0 0 1 16 5.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 14.5v-9A1.5 1.5 0 0 1 5.5 4z"),
+    clock: svgIcon("M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm0 1.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zm-.75 2.25v4.56l3.1 1.86.77-1.28-2.37-1.42V5.75h-1.5z"),
+    play: svgIcon("M6.5 3.7a1 1 0 0 1 1.52-.85l9.1 5.8a1.6 1.6 0 0 1 0 2.7l-9.1 5.8a1 1 0 0 1-1.52-.85V3.7z"),
+  };
+
+  function entryHtml(day, s, now, isLastOfTask) {
+    const running = s.end === null;
+    const task = s.kind === "task" ? findTask(day, s.taskId) : null;
+    const type = task ? baseOf(task) : "break";
+    let head, sub, overEst = false;
+    if (task) {
+      const url = workItemUrl(task.wi), title = taskTitle(task);
+      const wiHtml = !task.wi
+        ? `<span class="badge noid" title="Zadanie bez ID w Azure Boards">Brak ID Azure</span>`
+        : url ? `<a class="entry-wi" href="${esc(url)}" target="_blank" rel="noopener">#${esc(task.wi)}</a>` : `<span class="entry-wi">#${esc(task.wi)}</span>`;
+      head = `${wiHtml}<span class="entry-title" title="${esc(title)}">${esc(title)}</span>
+              <span class="badge ${type}">${typeLabel(task)}</span>`;
+      const daySec = taskSecondsInDay(day, task.id, now), allSec = taskSecondsAllDays(day, task, now);
+      overEst = !!task.estimateH && allSec > task.estimateH * H;
+      sub = taskInfo(daySec, allSec, task.estimateH * H);
+    } else {
+      head = `<span class="entry-title">Przerwa</span><span class="badge break">przerwa</span>`;
+      sub = "";
+    }
+    // stałe kolumny: [akcja zadania] [edycja] [usuń] – ikony równo we wszystkich kartach
+    const actions = [`<button class="btn entry-btn edit" data-act="edit" title="Edytuj" aria-label="Edytuj">${ICON.edit}</button>`];
+    if (!running) actions.push(`<button class="btn entry-btn delete" data-act="delete" title="Usuń wpis" aria-label="Usuń wpis">${ICON.trash}</button>`);
+    if (task && running) actions.push(`<button class="btn entry-btn main stop" data-act="stop-task" title="Zatrzymuje zadanie – czas leci dalej jako przerwa">${ICON.stop}Zatrzymaj</button>`);
+    else if (task && isLastOfTask) actions.push(`<button class="btn entry-btn main resume" data-act="resume-task" title="Dodaje nowy wpis tego zadania i liczy dalej">${ICON.play}Wznów</button>`);
+
+    return `
+      <li class="entry ${type} ${running ? "running" : ""} ${overEst ? "over-est" : ""}" data-id="${s.id}" ${overEst ? 'title="Przekroczona estymata"' : ""}>
+        <div class="entry-time">
+          <b data-range>${fmtClock(s.start)} – ${running ? "…" : fmtClock(s.end)}</b>
+          <span data-dur>${fmtHMS(segDuration(s, now))}</span>
+        </div>
+        <div class="entry-main">
+          <div class="entry-head">${head}</div>
+          ${sub ? `<div class="entry-sub" data-sub>${sub}</div>` : ""}
+          <input class="entry-comment" data-comment placeholder="Komentarz…" value="${esc(s.comment)}" />
+        </div>
+        <div class="entry-actions">${actions.join("")}</div>
+      </li>`;
+  }
+
+  /** Liczniki otwartego wpisu bez przebudowy listy (nie psuje wpisywanego komentarza). */
+  function updateRunningEntry() {
+    const day = todayDay(), open = day ? openSegment(day) : null;
+    const li = open && $("timeline").querySelector(`li[data-id="${open.id}"]`);
+    if (!li) return;
+    const now = Date.now();
+    li.querySelector("[data-dur]").textContent = fmtHMS(segDuration(open, now));
+    const task = open.kind === "task" ? findTask(day, open.taskId) : null;
+    const sub = li.querySelector("[data-sub]");
+    if (task && sub) {
+      const daySec = taskSecondsInDay(day, task.id, now), allSec = taskSecondsAllDays(day, task, now);
+      li.classList.toggle("over-est", !!task.estimateH && allSec > task.estimateH * H);
+      sub.textContent = taskInfo(daySec, allSec, task.estimateH * H);
+    }
+  }
+
+  // ---------- Podsumowanie ----------
+  const EV_LABEL = { start: "rozpoczęto", stop: "zakończono", resume: "wznowiono" };
+  const rangeStr = (s) => `${fmtClock(s.start)}–${s.end === null ? "…" : fmtClock(s.end)}`;
+
+  /** Model podsumowania – wspólny dla widoku HTML i wersji tekstowej. */
+  function summaryModel(key) {
+    const day = getDay(key), now = Date.now();
+    const mode = $("summary-mode").value;
+    const m = { key, date: fmtDatePl(key), empty: true, off: offLabel(day), showId: $("summary-show-id").checked, showRanges: $("summary-show-ranges").checked, mode };
+    if (!day || day.segments.length === 0) return m;
+
+    const t = dayTotals(day, now, key < today());
+    const running = day.segments.some((s) => s.end === null);
+    Object.assign(m, {
+      empty: false, totals: t, running,
+      limits: { work: workLimit(), obligo: obligo(), brk: breakLimit() },
+      start: fmtClock(day.startedAt ?? day.segments[0].start),
+      end: running ? "…" : fmtClock(Math.max(...day.segments.map((s) => s.end))),
+      doneAt: t.doneAt !== null ? fmtClock(t.doneAt) : null,
+      events: [...(day.events || [])].sort((a, b) => a.at - b.at).map((ev) => ({ type: ev.type, label: EV_LABEL[ev.type] || ev.type, at: fmtClock(ev.at) })),
+    });
+
+    const toRow = (task, i) => {
+      const daySec = taskSecondsInDay(day, task.id, now), totalSec = taskSecondsAllDays(day, task, now);
+      const segs = segsOf(day, task.id), estSec = task.estimateH ? task.estimateH * H : 0;
+      return {
+        no: i + 1, id: task.wi || "", idLabel: task.wi ? `#${task.wi}` : "Brak ID", url: workItemUrl(task.wi),
+        title: (task.title || "").trim(), displayTitle: taskTitle(task), type: baseOf(task), typeName: typeLabel(task),
+        daySec, totalSec, estSec, estStr: estSec ? fmtHM(estSec) : "",
+        timeStr: mode === "total" ? fmtHM(totalSec) : mode === "both" ? `${fmtHM(daySec)} (łącznie ${fmtHM(totalSec)})` : fmtHM(daySec),
+        overEst: estSec ? totalSec > estSec : false, // zawsze czas łączny względem estymaty
+        running: segs.some((s) => s.end === null),
+        ranges: segs.map(rangeStr), comments: uniqComments(segs),
+      };
+    };
+    const withTime = day.tasks.filter((task) => taskSecondsInDay(day, task.id, now) > 0);
+    const ofBase = (base) => withTime.filter((task) => baseOf(task) === base).map(toRow);
+    m.work = ofBase("praca");
+    m.org = ofBase("org");
+    m.brk = ofBase("break"); // nazwane przerwy (zadania typu „przerwa”, np. lunch)
+    const breaks = day.segments.filter((s) => segBase(day, s) === "break" && segDuration(s, now) >= 60);
+    m.breaks = { sec: t.idle, ranges: breaks.map(rangeStr), comments: uniqComments(breaks) };
+    return m;
+  }
+
+  /** Wersja tekstowa (czas jako godziny:minuty, jak w całym interfejsie). */
+  function summaryText(m) {
+    const L = [`Dzień: ${m.date}`];
+    if (m.off) L.push(`Dzień wolny: ${m.off}`);
+    if (m.empty) return L.concat(m.off ? [] : "(brak zarejestrowanego czasu)").join("\n");
+    const t = m.totals;
+    L.push(`Praca: ${m.start} – ${m.end} · łącznie ${fmtHM(t.total)} / ${fmtHM(m.limits.work)}` + (t.overtime > 0 ? ` · nadgodziny ${fmtHM(t.overtime)}` : ""));
+    L.push(`Zadania: ${fmtHM(t.work)} / ${fmtHM(m.limits.obligo)} · przerwa: ${fmtHM(t.brk)} / ${fmtHM(m.limits.brk)}` + (t.org > 0 ? ` (w tym organizacyjne ${fmtHM(t.org)})` : ""));
+    if (t.overtime > 0) L.push(`Nadgodziny: ${fmtHM(t.overtime)} (praca od ${m.doneAt})`);
+    if (t.owed > 0) L.push(`Do odpracowania: ${fmtHM(t.owed)}` + (t.breakOver > 0 ? ` (przerwa ponad limit ${fmtHM(t.breakOver)})` : ""));
+    if (m.events.length) L.push(`Zdarzenia: ${m.events.map((ev) => `${ev.label} ${ev.at}`).join(", ")}`);
+
+    const ranges = (r) => (m.showRanges && r.ranges.length ? ` (${r.ranges.join(", ")})` : "");
+    const comments = (r) => (r.comments.length ? ` – ${r.comments.join("; ")}` : "");
+    const row = (r) => {
+      const name = ((m.showId ? `${r.idLabel} ` : "") + (r.title || (m.showId ? "" : r.displayTitle))).trim();
+      return `${r.no} - ${name} [${r.timeStr}${r.estStr ? ` / ${r.estStr}` : ""}]${ranges(r)}${comments(r)} → ${fmtQuarterUp(m.mode === "total" ? r.totalSec : r.daySec)}`;
+    };
+    L.push("", "Lista zadań:", ...(m.work.length ? m.work.map(row) : ["(brak)"]));
+    if (m.org.length) L.push("", "Organizacyjne:", ...m.org.map(row));
+    if (m.brk.length) L.push("", "Przerwy nazwane:", ...m.brk.map(row));
+    if (m.breaks.sec > 0) L.push("", `Przerwy: ${fmtHM(m.breaks.sec)}${ranges(m.breaks)}${comments(m.breaks)}`);
+    return L.join("\n");
+  }
+
+  /** Widok HTML podsumowania. */
+  function summaryHtml(m) {
+    const head = (extra = "") => `<div class="sum-head"><span class="sum-date">${esc(m.date)}</span>${extra}</div>`;
+    if (m.empty) return head() + `<p class="muted">${m.off ? `Dzień wolny (${esc(m.off)}) – bez zarejestrowanego czasu.` : "Brak zarejestrowanego czasu w tym dniu."}</p>`;
+    const t = m.totals;
+    const chip = (label, value, cls = "") => `<li class="sum-stat ${cls}"><span>${label}</span><b>${value}</b></li>`;
+    const chips = [
+      chip("Łącznie", `${fmtHM(t.total)} <small>/ ${fmtHM(m.limits.work)}</small>`, t.total > m.limits.work ? "over" : ""),
+      chip("Zadania", `${fmtHM(t.work)} <small>/ ${fmtHM(m.limits.obligo)}</small>`, t.shortWork > 0 ? "over" : ""),
+      chip("Przerwa", `${fmtHM(t.brk)} <small>/ ${fmtHM(m.limits.brk)}</small>`, t.brk > m.limits.brk ? "over" : ""),
+      t.overtime > 0 ? chip("Nadgodziny", `${fmtHM(t.overtime)} <small>od ${m.doneAt}</small>`, "over") : "",
+      t.owed > 0 ? chip("Do odpracowania", fmtHM(t.owed), "warn") : "",
+    ];
+    const meta = (r) => {
+      const parts = [];
+      if (m.showRanges && r.ranges.length) parts.push(`<span class="sum-ranges">${esc(r.ranges.join(", "))}</span>`);
+      if (r.comments.length) parts.push(`<span class="sum-comment">${esc(r.comments.join("; "))}</span>`);
+      return parts.join("");
+    };
+    const rowHtml = (r) => {
+      const idHtml = !m.showId ? ""
+        : !r.id ? `<span class="sum-id noid">Brak ID</span>`
+        : r.url ? `<a class="sum-id" href="${esc(r.url)}" target="_blank" rel="noopener">#${esc(r.id)}</a>` : `<span class="sum-id">#${esc(r.id)}</span>`;
+      const title = r.title || (m.showId && r.id ? "(bez tytułu)" : r.displayTitle);
+      const rowMeta = meta(r);
+      return `
+        <li class="sum-row ${r.type} ${r.running ? "running" : ""} ${r.overEst ? "over-est" : ""}" ${r.overEst ? 'title="Przekroczona estymata"' : ""}>
+          <span class="sum-no">${r.no}</span>
+          <div class="sum-main">
+            <div class="sum-title-line">${idHtml}<span class="sum-title">${esc(title)}</span></div>
+            <div class="sum-info">${taskInfo(r.daySec, r.totalSec, r.estSec)}</div>
+            ${rowMeta ? `<div class="sum-meta">${rowMeta}</div>` : ""}
+          </div>
+          <div class="sum-time"><b>${fmtHM(m.mode === "total" ? r.totalSec : r.daySec)}</b>${m.mode === "both" ? `<small>łącznie ${fmtHM(r.totalSec)}</small>` : ""}${r.estSec ? `<small>/ ${fmtHM(r.estSec)}</small>` : ""}</div>
+        </li>`;
+    };
+    const section = (title, rows, emptyText) => `
+      <h4 class="sum-section">${title} <span class="muted">(${rows.length})</span></h4>
+      ${rows.length ? `<ol class="sum-list">${rows.map(rowHtml).join("")}</ol>` : `<p class="muted small">${emptyText}</p>`}`;
+
+    let eventsHtml = "";
+    if (m.events.length) {
+      const stops = m.events.filter((ev) => ev.type === "stop").length, last = m.events.at(-1);
+      const brief = `start <b>${m.events[0].at}</b>` + (stops ? ` · przerw: <b>${stops}</b>` : "") + (last.type !== "start" ? ` · ${last.label} <b>${last.at}</b>` : "");
+      eventsHtml = `
+        <details class="sum-events-box" ${eventsOpen ? "open" : ""}>
+          <summary><span class="sum-events-title">Zdarzenia dnia (${m.events.length})</span><span class="sum-events-brief">${brief}</span></summary>
+          <div class="sum-events">${m.events.map((ev) => `<span class="sum-event ${ev.type}">${ev.label} <b>${ev.at}</b></span>`).join("")}</div>
+        </details>`;
+    }
+    return `
+      ${head(`<span class="sum-hours ${m.running ? "running" : ""}">${m.off ? `${esc(m.off)} · ` : ""}${m.start} – ${m.end}</span>`)}
+      <ul class="sum-stats">${chips.join("")}</ul>
+      ${eventsHtml}
+      ${section("Lista zadań", m.work, "Brak zadań typu praca.")}
+      ${m.org.length ? section("Organizacyjne", m.org, "") : ""}
+      ${m.brk.length ? section("Przerwy nazwane", m.brk, "") : ""}
+      ${m.breaks.sec > 0 ? `<div class="sum-breaks"><span>Przerwy</span><b>${fmtHM(m.breaks.sec)}</b>${meta(m.breaks)}</div>` : ""}`;
+  }
+
+  // ---------- Aktywność: wykres kolumnowy całej doby (dzień wybrany w podsumowaniu) ----------
+  const ACT_FROM = 0, ACT_TO = 24;
+  const ACT_SERIES = [["work", "praca"], ["org", "organizacyjne"], ["brk", "przerwa"]]; // kolejność stosu od linii bazowej
+  let lastActivityHtml = "", actModel = null;
+
+  /** Sekundy pracy / organizacyjnych / przerwy w każdej godzinie zakresu + czas poza zakresem. */
+  function activityModel(key) {
+    const day = getDay(key), now = Date.now(), [y, mo, d] = ymd(key), bins = [];
+    for (let hr = ACT_FROM; hr < ACT_TO; hr++) bins.push({ hr, from: new Date(y, mo - 1, d, hr).getTime(), to: new Date(y, mo - 1, d, hr + 1).getTime(), work: 0, org: 0, brk: 0 });
+    let outside = 0;
+    for (const s of day?.segments || []) {
+      const end = s.end ?? now, cat = { break: "brk", org: "org", praca: "work" }[segBase(day, s)];
+      let inside = 0;
+      for (const b of bins) { const sec = Math.max(0, Math.min(end, b.to) - Math.max(s.start, b.from)) / 1000; b[cat] += sec; inside += sec; }
+      outside += Math.max(0, segDuration(s, now) - inside);
+    }
+    return { bins, outside, any: bins.some((b) => b.work + b.org + b.brk > 0) };
+  }
+  const binLabel = (b) => `${b.hr}:00–${b.hr + 1}:00`;
+
+  function activitySvg(m) {
+    const W = 368, ML = 26, MR = 8, MT = 8, PH = 120, MB = 18, band = (W - ML - MR) / m.bins.length, CW = Math.min(18, Math.floor(band - 4)), base = MT + PH;
+    const yOf = (min) => base - (min / 60) * PH;
+    let out = `<svg viewBox="0 0 ${W} ${MT + PH + MB}" role="img" aria-label="Aktywność w godzinach ${ACT_FROM}:00–${ACT_TO}:00, minuty w godzinie">`;
+    for (const min of [0, 30, 60]) out += `<line class="chart-grid" x1="${ML}" x2="${W - MR}" y1="${yOf(min)}" y2="${yOf(min)}"/><text class="chart-axis" x="${ML - 6}" y="${yOf(min) + 3.5}" text-anchor="end">${min}</text>`;
+    const labelStep = m.bins.length > 12 ? 3 : 1; // przy całej dobie podpis co 3 godziny, żeby się nie zlewały
+    for (let i = 0; i <= m.bins.length; i += labelStep) out += `<text class="chart-axis" x="${ML + i * band}" y="${base + 13}" text-anchor="middle">${ACT_FROM + i}</text>`;
+    m.bins.forEach((b, i) => {
+      const x = Math.round(ML + i * band + (band - CW) / 2);
+      const sum = b.work + b.org + b.brk, scale = sum > H ? H / sum : 1; // nakładające się wpisy: godzina ma najwyżej 60 min
+      const parts = ACT_SERIES.map(([k]) => [k, Math.round(((b[k] * scale) / H) * PH)]).filter(([, px]) => px > 0);
+      let y = base, marks = "";
+      parts.forEach(([k, px], n) => {
+        const top = y - px, gap = n > 0 && px > 3 ? 2 : 0, yb = y - gap; // 2 px przerwy w kolorze tła między segmentami
+        if (n === parts.length - 1) {
+          const r = Math.min(4, yb - top, CW / 2); // zaokrąglony tylko koniec kolumny, podstawa prosta
+          marks += `<path class="seg-${k}" d="M${x},${yb}V${top + r}Q${x},${top} ${x + r},${top}H${x + CW - r}Q${x + CW},${top} ${x + CW},${top + r}V${yb}Z"/>`;
+        } else marks += `<rect class="seg-${k}" x="${x}" y="${top}" width="${CW}" height="${yb - top}"/>`;
+        y = top;
+      });
+      const label = `${binLabel(b)}: ` + ACT_SERIES.map(([k, name]) => `${name} ${fmtHM(b[k])}`).join(", ");
+      out += `<g class="chart-col" tabindex="0" data-i="${i}" role="img" aria-label="${esc(label)}"><rect class="chart-hit" x="${ML + i * band}" y="${MT}" width="${band}" height="${PH}"/>${marks}</g>`;
+    });
+    return out + "</svg>";
+  }
+
+  function renderActivity() {
+    const m = (actModel = activityModel(selectedDate));
+    setText("act-date", fmtDatePl(selectedDate));
+    const html = activitySvg(m);
+    if (html !== lastActivityHtml) { // przebudowa tylko przy zmianie o pełny piksel – nie gubi najechania ani fokusu co sekundę
+      const focused = document.activeElement?.closest?.("#act-chart .chart-col")?.dataset.i;
+      $("act-chart").querySelector("svg")?.remove();
+      $("act-chart").insertAdjacentHTML("afterbegin", html);
+      lastActivityHtml = html;
+      if (focused !== undefined) $("act-chart").querySelector(`.chart-col[data-i="${focused}"]`)?.focus();
+    }
+    const notes = [];
+    if (!m.any) notes.push("Brak aktywności w tym dniu.");
+    const over = m.bins.filter((b) => b.work + b.org + b.brk > H + 1);
+    if (over.length) notes.push(`⚠ Wpisy nakładają się w czasie (${over.map(binLabel).join(", ")}) – w tych godzinach naliczono ponad 60 min; kolumny przeskalowano do 60.`);
+    if (m.outside >= 60) notes.push(`Poza zakresem wykresu: ${fmtHM(m.outside)}.`);
+    $("act-note").hidden = !notes.length;
+    setText("act-note", notes.join(" "));
+    $("act-table").innerHTML = `<tr><th>Godzina</th>${ACT_SERIES.map(([, name]) => `<th>${name}</th>`).join("")}</tr>` +
+      m.bins.map((b) => `<tr><td>${binLabel(b)}</td>${ACT_SERIES.map(([k]) => `<td>${fmtHM(b[k])}</td>`).join("")}</tr>`).join("");
+    const tip = $("act-chart").querySelector(".chart-tip");
+    if (tip) showActivityTip(Number(tip.dataset.i));
+  }
+
+  function showActivityTip(i) {
+    const b = actModel?.bins[i], col = $("act-chart").querySelector(`.chart-col[data-i="${i}"]`);
+    if (!b || !col) return hideActivityTip();
+    let tip = $("act-chart").querySelector(".chart-tip");
+    if (!tip) { tip = document.createElement("div"); tip.className = "chart-tip"; $("act-chart").appendChild(tip); }
+    tip.dataset.i = i;
+    tip.innerHTML = `<b>${binLabel(b)}</b>` + ACT_SERIES.map(([k, name]) => `<div><span class="chart-key ${k}"></span><span>${name}</span><span>${fmtHM(b[k])}</span></div>`).join("");
+    const wrap = $("act-chart").getBoundingClientRect(), c = col.getBoundingClientRect();
+    // obok kolumny (z prawej, a gdy brak miejsca – z lewej), żeby nie zasłaniać nagłówka i legendy
+    const right = c.right - wrap.left + 6, fits = right + tip.offsetWidth <= wrap.width;
+    tip.style.left = `${Math.max(0, fits ? right : c.left - wrap.left - tip.offsetWidth - 6)}px`;
+    tip.style.top = `${Math.max(0, c.top - wrap.top)}px`;
+  }
+  const hideActivityTip = () => $("act-chart").querySelector(".chart-tip")?.remove();
+  const tipFromEvent = (e) => { const col = e.target.closest?.(".chart-col"); if (col) showActivityTip(Number(col.dataset.i)); };
+  on("act-chart", "mouseover", tipFromEvent);
+  on("act-chart", "focusin", tipFromEvent);
+  on("act-chart", "mouseleave", hideActivityTip);
+  on("act-chart", "focusout", hideActivityTip);
+
+  // ---------- Wykres dnia (okno): kolumna = godzina, pozycja w kolumnie = minuta; każdy wpis to osobny fragment ----------
+  let lastDayChartHtml = "", dayChart = null;
+  const dayChartOpen = () => $("day-chart-dialog").open;
+  const DAY_EV_LABEL = { start: "Rozpoczęto pracę", stop: "Zatrzymano pracę", resume: "Wznowiono pracę" };
+
+  function dayChartModel(key) {
+    const day = getDay(key), now = Date.now(), [y, mo, d] = ymd(key);
+    const hourAt = (hr) => new Date(y, mo - 1, d, hr).getTime();
+    const segs = [...(day?.segments || [])].sort((a, b) => a.start - b.start), parts = [];
+    for (const s of segs) {
+      const end = s.end ?? now;
+      for (let hr = 0; hr < 24; hr++) {
+        const from = Math.max(s.start, hourAt(hr)), to = Math.min(end, hourAt(hr + 1));
+        if (to > from) parts.push({ s, hr, a: (from - hourAt(hr)) / 60000, b: (to - hourAt(hr)) / 60000 }); // minuty w godzinie
+      }
+    }
+    const events = (day?.events || []).filter((ev) => dateKey(new Date(ev.at)) === key)
+      .map((ev) => { const t = new Date(ev.at); return { ev, hr: t.getHours(), min: t.getMinutes() + t.getSeconds() / 60 }; });
+    const total = segs.reduce((a, s) => a + segDuration(s, now), 0);
+    return { day, now, segs, parts, events, total };
+  }
+
+  function dayChartSvg(m) {
+    const W = 1120, ML = 44, MR = 8, MT = 10, PH = 420, MB = 22, band = (W - ML - MR) / 24, CW = 24, base = MT + PH;
+    const yOf = (min) => Math.round(base - (min / 60) * PH);
+    let out = `<svg viewBox="0 0 ${W} ${MT + PH + MB}" role="img" aria-label="Wykres dnia: godziny doby na osi X, minuty godziny na osi Y">`;
+    for (let hr = 0; hr < 24; hr++) {
+      const x = Math.round(ML + hr * band + (band - CW) / 2);
+      out += `<rect class="day-track" x="${x}" y="${MT}" width="${CW}" height="${PH}" rx="2"/><text class="chart-axis" x="${x + CW / 2}" y="${base + 14}" text-anchor="middle">${pad(hr)}:00</text>`;
+    }
+    for (const min of [0, 15, 30, 45, 60]) out += `<line class="chart-grid" x1="${ML}" x2="${W - MR}" y1="${yOf(min)}" y2="${yOf(min)}"/><text class="chart-axis" x="${ML - 8}" y="${yOf(min) + 3.5}" text-anchor="end">${min}:00</text>`;
+    m.parts.forEach((p, i) => {
+      const x = Math.round(ML + p.hr * band + (band - CW) / 2), top = yOf(p.b), bottom = yOf(p.a);
+      const full = bottom - top, hgt = Math.max(2, full - (full > 6 ? 2 : full > 3 ? 1 : 0)); // przerwa w kolorze tła między wpisami; nawet sekundowy wpis ma 2 px
+      const cls = { break: "seg-brk", org: "seg-org", praca: "seg-work" }[segBase(m.day, p.s)];
+      out += `<rect class="day-seg ${cls}" data-part="${i}" x="${x}" y="${top}" width="${CW}" height="${hgt}" rx="2"/>`;
+    });
+    m.events.forEach((e, i) => {
+      const x = ML + e.hr * band, y = yOf(e.min);
+      out += `<g class="day-ev ev-${e.ev.type}" data-ev="${i}"><rect class="chart-hit" x="${x}" y="${y - 7}" width="${band}" height="14"/><line x1="${x + 2}" x2="${x + band - 2}" y1="${y}" y2="${y}"/><circle cx="${x + 5}" cy="${y}" r="4.5"/></g>`;
+    });
+    return out + "</svg>";
+  }
+
+  function dayChartTipHtml(target) {
+    const m = dayChart;
+    if (target.dataset.ev !== undefined) {
+      const e = m.events[Number(target.dataset.ev)];
+      return e ? `<b>${DAY_EV_LABEL[e.ev.type] || e.ev.type}</b><span class="tip-line">${fmtClock(e.ev.at)}</span>` : "";
+    }
+    const p = m.parts[Number(target.dataset.part)];
+    if (!p) return "";
+    const s = p.s, task = s.kind === "task" ? findTask(m.day, s.taskId) : null, base = segBase(m.day, s);
+    const title = task ? (task.wi ? `#${task.wi} ` : "") + taskTitle(task) : "Przerwa";
+    const type = task ? typeLabel(task) + (typeLabel(task) !== BASES[base] ? ` (${BASES[base]})` : "") : "czas bez zadania";
+    return `<b>${esc(title)}</b><span class="tip-line">${esc(type)}</span>` +
+      `<span class="tip-line">${fmtClock(s.start)}–${s.end === null ? "… (trwa)" : fmtClock(s.end)} · ${fmtHMS(segDuration(s, m.now))}</span>` +
+      ((s.comment || "").trim() ? `<span class="tip-comment">„${esc(s.comment.trim())}”</span>` : "");
+  }
+  function showDayChartTip(target) {
+    const html = dayChartTipHtml(target), wrap = $("day-chart");
+    if (!html) return hideDayChartTip();
+    let tip = wrap.querySelector(".chart-tip");
+    if (!tip) { tip = document.createElement("div"); tip.className = "chart-tip"; wrap.appendChild(tip); }
+    tip.dataset.key = target.dataset.ev !== undefined ? `ev:${target.dataset.ev}` : `part:${target.dataset.part}`;
+    tip.innerHTML = html;
+    const w = wrap.getBoundingClientRect(), c = target.getBoundingClientRect();
+    const right = c.right - w.left + 8, fits = right + tip.offsetWidth <= w.width;
+    tip.style.left = `${Math.max(0, fits ? right : c.left - w.left - tip.offsetWidth - 8)}px`;
+    tip.style.top = `${Math.min(Math.max(0, c.top - w.top - 4), Math.max(0, w.height - tip.offsetHeight))}px`;
+  }
+  const hideDayChartTip = () => $("day-chart").querySelector(".chart-tip")?.remove();
+
+  function renderDayChart() {
+    if (!dayChartOpen()) return;
+    const m = (dayChart = dayChartModel(selectedDate));
+    setText("day-chart-date", fmtDatePl(selectedDate));
+    const stops = m.events.filter((e) => e.ev.type === "stop").length;
+    setText("day-chart-stats", m.segs.length
+      ? `${plural(m.segs.length, "wpis", "wpisy", "wpisów")} · średnio ${fmtHM(m.total / m.segs.length)} na wpis` + (stops ? ` · zatrzymań pracy: ${stops}` : "")
+      : "Brak zarejestrowanego czasu w tym dniu.");
+    const html = dayChartSvg(m);
+    if (html === lastDayChartHtml) return;
+    const key = $("day-chart").querySelector(".chart-tip")?.dataset.key;
+    $("day-chart").querySelector("svg")?.remove();
+    $("day-chart").insertAdjacentHTML("afterbegin", html);
+    lastDayChartHtml = html;
+    if (key) { // dymek przeżywa odświeżenie wykresu
+      const [kind, i] = key.split(":"), el = $("day-chart").querySelector(kind === "ev" ? `[data-ev="${i}"]` : `[data-part="${i}"]`);
+      if (el) showDayChartTip(el); else hideDayChartTip();
+    }
+  }
+  on("day-chart-open", "click", () => { $("day-chart-dialog").showModal(); lastDayChartHtml = ""; renderDayChart(); });
+  on("day-chart-close", "click", () => $("day-chart-dialog").close());
+  on("day-chart", "mouseover", (e) => { const t = e.target.closest?.("[data-part], [data-ev]"); if (t) showDayChartTip(t); else hideDayChartTip(); });
+  on("day-chart", "mouseleave", hideDayChartTip);
+
+  function renderSummary() {
+    $("summary-date").value = selectedDate;
+    const m = summaryModel(selectedDate), html = summaryHtml(m);
+    if (html !== lastSummaryHtml) { $("summary-view").innerHTML = html; lastSummaryHtml = html; } // nie gubi rozwinięcia ani zaznaczenia
+    setText("summary-text", summaryText(m));
+  }
+  // ---------- Podsumowanie miesiąca ----------
+  const MONTHS = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
+  let selectedMonth = today().slice(0, 7), lastMonthHtml = "", monthDetailsOpen = false; // lista dni domyślnie zwinięta
+
+  /** Wiersz na każdy dzień miesiąca + sumy. Dzień roboczy bez wpisów = wolne; praca w sobotę / niedzielę = w całości nadgodziny. */
+  function monthModel(ym) {
+    const [y, m] = ym.split("-").map(Number), count = new Date(y, m, 0).getDate(), now = Date.now(), tdy = today();
+    const rows = [], sum = { workdays: 0, offDays: 0, offKinds: {}, worked: 0, extraDays: 0, missing: 0, work: 0, brk: 0, owed: 0, overtime: 0, extraWork: 0 };
+    for (let d = 1; d <= count; d++) {
+      const key = `${y}-${pad(m)}-${pad(d)}`, dow = new Date(y, m - 1, d).getDay(), weekend = dow === 0 || dow === 6;
+      const day = getDay(key), started = !!day && day.segments.length > 0, off = weekend ? "" : offLabel(day);
+      const row = { key, d, dow, weekend, off, offShort: off ? OFF_SHORT[day.off] ?? "W" : "", holiday: !weekend && day?.off === "swieto", started, future: key > tdy, isToday: key === tdy, t: started ? dayTotals(day, now, key < tdy) : null };
+      if (!weekend) sum.workdays++;
+      if (off) { sum.offDays++; sum.offKinds[off] = (sum.offKinds[off] || 0) + 1; }
+      if (started) {
+        sum.work += row.t.work; sum.brk += row.t.brk;
+        if (weekend || off) { sum.extraDays++; sum.extraWork += row.t.work; } // praca w weekend / dzień wolny = w całości nadgodziny
+        else { sum.worked++; sum.owed += row.t.owed; sum.overtime += row.t.overtime; }
+      } else if (!weekend && !off && key < tdy) sum.missing++;
+      rows.push(row);
+    }
+    return { ym, y, m, rows, sum };
+  }
+
+  function monthHtml(mm) {
+    const s = mm.sum, days = s.worked + s.extraDays, overtime = s.overtime + s.extraWork, balance = overtime - s.owed;
+    const rowHtml = (r) => {
+      const dayCell = `<button type="button" class="month-day" title="Pokaż ten dzień w „Podsumowaniu dnia”">${pad(r.d)}.${pad(mm.m)}<span class="dow">${WEEKDAYS[r.dow]}</span></button>`;
+      let cells;
+      if (!r.started) cells = r.off ? `<span class="wide dayoff">${esc(r.off)}</span>`
+        : `<span class="wide ${!r.weekend && !r.future && !r.isToday ? "missing" : "free"}">${r.future ? "—" : r.isToday ? "nie rozpoczęto" : r.weekend ? "weekend" : "brak wpisów"}</span>`;
+      else if (r.weekend || r.off) cells = `<span class="wide over">nadgodziny ${fmtHM(r.t.work)}<small>${r.off ? ` · ${esc(r.off)}` : ""}${r.t.brk >= 60 ? ` · przerwy ${fmtHM(r.t.brk)}` : ""}</small></span>`;
+      else cells = `<span>${fmtHM(r.t.work)}</span><span>${fmtHM(r.t.brk)}</span>` +
+        (r.t.owed >= 30 ? `<span class="owed">${fmtHM(r.t.owed)}</span>` : r.t.overtime >= 30 ? `<span class="over" title="Nadgodziny">+${fmtHM(r.t.overtime)}</span>` : `<span class="free">0:00</span>`);
+      // soboty i niedziele są wolne z definicji – przełącznik mają tylko dni robocze
+      const offBtn = r.weekend ? "<span></span>" : `<button type="button" class="month-off ${r.off ? "on" : ""}" data-off="${r.key}" aria-pressed="${!!r.off}" title="${r.off ? `Dzień wolny: ${esc(r.off)} – kliknij, aby zmienić lub cofnąć` : "Oznacz jako dzień wolny (urlop, święto, szkolenie, L4)"}">${r.off ? r.offShort : "W"}</button>`;
+      const cls = `month-row ${r.weekend || r.holiday ? "weekend" : ""} ${r.holiday ? "holiday" : ""} ${r.isToday ? "today" : ""} ${r.key === selectedDate ? "selected" : ""}`;
+      return `<div class="${cls}" data-day="${r.key}">${dayCell}${cells}${offBtn}</div>`;
+    };
+    const stat = (label, value, cls = "") => `<li class="sum-stat ${cls}"><span>${label}</span><b>${value}</b></li>`;
+    const toggle = `<button type="button" class="btn month-toggle" data-month-toggle aria-expanded="${monthDetailsOpen}">${monthDetailsOpen ? "▴ Ukryj szczegóły" : "▾ Rozwiń szczegóły"}</button>`;
+    const details = !monthDetailsOpen ? "" : `
+      <div class="month-table">
+        <div class="month-row head"><span>Dzień</span><span>Praca</span><span>Przerwa</span><span>Do odprac.</span><span title="Dzień wolny">W</span></div>
+        ${mm.rows.map(rowHtml).join("")}
+      </div>
+      ${toggle}`; // lista jest długa – przycisk ukrywania także pod nią
+    return `
+      <ul class="sum-stats">
+        ${stat("Dni robocze (pn–pt)", s.offDays ? `${s.workdays - s.offDays} <small>z ${s.workdays}</small>` : s.workdays)}
+        ${stat("Dni wolne (oznaczone)", `${s.offDays}${s.offDays ? ` <small>${Object.entries(s.offKinds).map(([k, n]) => `${esc(k)} ${n}`).join(" · ")}</small>` : ""}`)}
+        ${stat("Dni przepracowane", `${s.worked}${s.extraDays ? ` <small>+ ${s.extraDays} w weekend / dzień wolny</small>` : ""}`)}
+        ${stat("Dni robocze bez wpisów (do wczoraj)", s.missing, s.missing ? "warn" : "")}
+        ${stat("Praca nad zadaniami", `${fmtHM(s.work)} <small>/ ${fmtHM(s.worked * obligo())} obliga</small>`)}
+        ${stat("Przerwy łącznie", fmtHM(s.brk))}
+        ${stat("Średnio na dzień pracy", days ? `${fmtHM(s.work / days)} <small>pracy · ${fmtHM(s.brk / days)} przerwy</small>` : "—")}
+        ${stat("Do odpracowania", fmtHM(s.owed), s.owed >= 30 ? "warn" : "")}
+        ${stat("Nadgodziny", `${fmtHM(overtime)}${s.extraWork >= 30 ? ` <small>w tym weekendy i dni wolne ${fmtHM(s.extraWork)}</small>` : ""}`, overtime >= 30 ? "over" : "")}
+        ${stat("Bilans (nadgodziny − do odpracowania)", `${balance < -29 ? "−" : balance > 29 ? "+" : ""}${fmtHM(Math.abs(balance))}`, balance < -29 ? "warn" : balance > 29 ? "ok" : "")}
+      </ul>
+      ${toggle}${details}`;
+  }
+
+  function renderMonth() {
+    setText("month-label", `${MONTHS[Number(selectedMonth.slice(5)) - 1]} ${selectedMonth.slice(0, 4)}`);
+    const html = monthHtml(monthModel(selectedMonth));
+    if (html !== lastMonthHtml) { $("month-view").innerHTML = html; lastMonthHtml = html; }
+  }
+  const shiftMonth = (n) => { const [y, m] = selectedMonth.split("-").map(Number), d = new Date(y, m - 1 + n, 1); selectedMonth = `${d.getFullYear()}-${pad(d.getMonth() + 1)}`; renderMonth(); };
+  on("month-prev", "click", () => shiftMonth(-1));
+  on("month-next", "click", () => shiftMonth(1));
+  on("month-current", "click", () => { selectedMonth = today().slice(0, 7); renderMonth(); });
+  on("month-view", "click", (e) => {
+    const offBtn = e.target.closest("[data-off]"), row = e.target.closest("[data-day]");
+    if (offBtn) openOffMenu(offBtn.dataset.off, offBtn);
+    else if (row) showDay(row.dataset.day);
+    else if (e.target.closest("[data-month-toggle]")) { monthDetailsOpen = !monthDetailsOpen; renderMonth(); }
+  });
+
+  function renderSettings() {
+    $("s-work").value = fmtHM(S().workHours * H);
+    $("s-break").value = fmtHM(S().breakHours * H);
+    $("s-org").value = S().orgUrl || "";
+    resetTypeForm();
+    renderTypeOptions();
+  }
+
+  // ---------- Typy zadań ----------
+  let editingTypeId = null;
+  /** Wybrany w formularzu typ jako pola zadania. */
+  const pickedType = (selectId) => { const t = types().find((x) => x.id === $(selectId).value) ?? types()[0]; return { typeId: t.id, type: t.base }; };
+  /** Listy „Typ” w formularzu nowego zadania i w edycji wpisu (z zachowaniem wyboru). */
+  function renderTypeOptions() {
+    const html = types().map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");
+    for (const id of ["f-type", "e-type"]) { const prev = $(id).value; $(id).innerHTML = html; if (types().some((t) => t.id === prev)) $(id).value = prev; }
+  }
+  function renderTypes() {
+    const only = types().length < 2;
+    $("types-list").innerHTML = types().map((t) => `
+      <li data-id="${esc(t.id)}" class="${t.id === editingTypeId ? "editing" : ""}">
+        <span class="types-name" title="${esc(t.name)}">${esc(t.name)}</span>
+        <span class="badge ${t.base}">${BASES[t.base]}</span>
+        <button type="button" class="btn entry-btn edit" data-act="edit" title="Edytuj typ" aria-label="Edytuj typ ${esc(t.name)}">${ICON.edit}</button>
+        <button type="button" class="btn entry-btn delete" data-act="delete" title="${only ? "Musi zostać co najmniej jeden typ" : "Usuń typ"}" aria-label="Usuń typ ${esc(t.name)}" ${only ? "disabled" : ""}>${ICON.trash}</button>
+      </li>`).join("");
+  }
+  function resetTypeForm() {
+    editingTypeId = null;
+    $("type-name").value = "";
+    $("type-base").value = "praca";
+    setText("type-save", "Dodaj");
+    $("type-cancel").hidden = true;
+    renderTypes();
+  }
+  const typesChanged = () => { resetTypeForm(); renderTypeOptions(); commit(); };
+  function saveType() {
+    const name = $("type-name").value.trim(), base = BASES[$("type-base").value] ? $("type-base").value : "praca";
+    if (!name) { $("type-name").focus(); return; }
+    if (types().some((t) => t.id !== editingTypeId && t.name.trim().toLowerCase() === name.toLowerCase())) { alert("Typ o tej nazwie już istnieje."); return; }
+    const current = types().find((t) => t.id === editingTypeId);
+    if (current) Object.assign(current, { name, base }); else types().push({ id: uid(), name, base });
+    typesChanged();
+  }
+  on("type-save", "click", saveType);
+  on("type-cancel", "click", resetTypeForm);
+  on("type-name", "keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveType(); } });
+  on("types-list", "click", (e) => {
+    const btn = e.target.closest("button[data-act]"), t = btn && types().find((x) => x.id === btn.closest("li").dataset.id);
+    if (!t) return;
+    if (btn.dataset.act === "edit") {
+      editingTypeId = t.id;
+      $("type-name").value = t.name;
+      $("type-base").value = t.base;
+      setText("type-save", "Zapisz");
+      $("type-cancel").hidden = false;
+      renderTypes();
+      $("type-name").focus();
+    } else if (types().length > 1) {
+      const used = Object.values(state.days).reduce((n, d) => n + d.tasks.filter((task) => typeOf(task) === t).length, 0);
+      if (!confirm(`Usunąć typ „${t.name}”?` + (used ? ` Używa go ${plural(used, "zadanie", "zadania", "zadań")} – zostaną w kategorii „${BASES[t.base]}”.` : ""))) return;
+      // zadania usuwanego typu zapamiętują jego kategorię bazową
+      for (const d of Object.values(state.days)) for (const task of d.tasks) if (typeOf(task) === t) { task.type = t.base; delete task.typeId; }
+      S().types = types().filter((x) => x !== t);
+      typesChanged();
+    }
+  });
+  function render() {
+    renderClock(); renderWorkday(); renderTimeline(); renderSuggestions(); renderSummary(); renderActivity(); renderDayChart(); renderMonth();
+  }
+  let tickDay = today();
+  function tick() {
+    // północ: wpisy wczorajszego dnia zamykają się o 23:59:59, zamiast liczyć dalej do przeładowania strony
+    if (tickDay !== today()) { tickDay = today(); closeStaleDays(); commit(); }
+    renderClock();
+    if (isWorking(todayDay())) { renderWorkday(); updateRunningEntry(); renderSummary(); renderActivity(); renderDayChart(); renderMonth(); }
+  }
+
+  // ---------- Zdarzenia: dzień pracy i nowe zadanie ----------
+  on("wd-start", "click", startWork);
+  on("wd-resume", "click", startWork);
+  on("wd-stop", "click", stopWork);
+  on("wd-off", "click", () => openOffMenu(today(), $("wd-off")));
+  on("task-pause", "click", stopTask);
+  on("task-resume", "click", resumeLastTask);
+
+  on("task-form", "submit", (e) => {
+    e.preventDefault();
+    const title = $("f-title").value.trim(), wi = $("f-wi").value.trim();
+    if (!title && !wi) { $("f-title").setCustomValidity("Podaj ID Azure lub tytuł zadania."); $("f-title").reportValidity(); return; }
+    const day = ensureDay(today());
+    const task = { id: uid(), wi, title, ...pickedType("f-type"), estimateH: parseEstimate($("f-est").value) };
+    day.tasks.push(task);
+    startTask(task.id);
+    $("task-form").reset();
+    $("f-wi").focus();
+  });
+  // autouzupełnianie z wcześniejszych zadań
+  const fillForm = (t) => { $("f-wi").value = t.wi || ""; $("f-title").value = t.title || ""; $("f-type").value = typeIdFor(t); $("f-est").value = estimateToInput(t.estimateH); };
+  on("f-title", "input", () => $("f-title").setCustomValidity(""));
+  on("f-wi", "input", () => $("f-title").setCustomValidity(""));
+  on("f-wi", "change", () => { const known = knownTasks().find((t) => t.wi === $("f-wi").value.trim()); if (known && !$("f-title").value.trim()) fillForm(known); });
+  on("f-title", "change", () => {
+    const title = $("f-title").value.trim().toLowerCase();
+    const known = title && knownTasks().find((t) => (t.title || "").trim().toLowerCase() === title);
+    if (known && !$("f-wi").value.trim()) fillForm(known);
+  });
+
+  // ---------- Zdarzenia: oś czasu ----------
+  const segFromEvent = (target, sel) => {
+    const node = target.closest(sel);
+    const day = todayDay();
+    const seg = node && day?.segments.find((s) => s.id === node.closest("li[data-id]").dataset.id);
+    return [node, day, seg];
+  };
+  on("timeline", "click", (e) => {
+    const [btn, day, seg] = segFromEvent(e.target, "button[data-act]");
+    if (!seg) return;
+    const act = btn.dataset.act;
+    if (act === "stop-task") stopTask();
+    else if (act === "resume-task") startTask(seg.taskId);
+    else if (act === "edit") openEdit(today(), seg.id);
+    else if (act === "delete") {
+      const task = seg.kind === "task" ? findTask(day, seg.taskId) : null;
+      if (!confirm(`Usunąć wpis ${task ? `zadania "${taskTitle(task)}"` : "przerwy"} (${fmtClock(seg.start)} – ${seg.end ? fmtClock(seg.end) : "…"})?`)) return;
+      day.segments = day.segments.filter((s) => s.id !== seg.id);
+      if (task && !segsOf(day, task.id).length) day.tasks = day.tasks.filter((t) => t.id !== task.id);
+      commit();
+    }
+  });
+  // komentarz zapisuje się na bieżąco przy pisaniu; Enter tylko „zatwierdza” – zdejmuje fokus z pola
+  on("timeline", "keydown", (e) => { if (e.key === "Enter" && e.target.matches("input[data-comment]")) { e.preventDefault(); e.target.blur(); } });
+  on("timeline", "input", (e) => {
+    const [input, , seg] = segFromEvent(e.target, "input[data-comment]");
+    if (!seg) return;
+    seg.comment = input.value;
+    save();
+    renderSummary();
+  });
+
+  // ---------- Nakładające się wpisy ----------
+  on("overlap-fix", "click", () => {
+    const day = todayDay(), now = Date.now();
+    // wcześniejszy wpis kończy się tam, gdzie zaczyna się późniejszy; par, w których jeden wpis leży w całości w drugim, nie ruszamy
+    const fixes = findOverlaps(day, now).filter(({ a, b }) => a.end !== null && b.start > a.start && (b.end ?? now) >= a.end);
+    const manual = findOverlaps(day, now).length - fixes.length;
+    if (!fixes.length) { alert("Tych nakładek nie da się przyciąć automatycznie (jeden wpis leży w całości w drugim) – popraw godziny ręcznie ikoną ołówka."); return; }
+    if (!confirm("Skrócić wcześniejsze wpisy tak, żeby kończyły się w chwili rozpoczęcia następnych?\n\n" +
+      fixes.map(({ a, b }) => `• ${segName(day, a)} → koniec ${fmtClock(b.start)}`).join("\n") + (manual ? `\n\nPozostanie do ręcznej poprawy: ${manual}.` : ""))) return;
+    for (const { a, b } of fixes) a.end = Math.max(a.start, Math.min(a.end, b.start));
+    commit();
+  });
+
+  // ---------- Wyszukiwarka ----------
+  const setSearch = (value) => { $("task-search").value = value; searchQuery = value; $("task-search-clear").hidden = !value; renderTimeline(); };
+  on("task-search", "input", () => setSearch($("task-search").value));
+  on("task-search", "keydown", (e) => { if (e.key === "Escape") setSearch(""); });
+  on("task-search-clear", "click", () => { setSearch(""); $("task-search").focus(); });
+
+  // ---------- Pole godziny (edycja wpisu): wpisywanie z klawiatury + kroki ±1 / ±5 min zamiast systemowego wybieraka ----------
+  /** "930" | "9:30" | "9.30" | "0930" | "9" -> "09:30" / "09:00"; null, gdy to nie godzina. */
+  function parseClock(str) {
+    const v = String(str ?? "").trim();
+    const m = v.match(/^(\d{1,2})\s*[:.,;\s-]\s*(\d{1,2})$/) || v.match(/^(\d{1,2})(\d{2})$/) || v.match(/^(\d{1,2})()$/);
+    if (!m) return null;
+    const hh = Number(m[1]), mm = Number(m[2] || 0);
+    return hh <= 23 && mm <= 59 ? `${pad(hh)}:${pad(mm)}` : null;
+  }
+  /** Porządkuje wpisaną wartość; pusta zostaje pusta. Zwraca false, gdy nie da się jej odczytać. */
+  function normalizeClock(input) {
+    if (!input.value.trim()) { input.value = ""; return true; }
+    const v = parseClock(input.value);
+    if (v) input.value = v;
+    input.classList.toggle("invalid", !v);
+    return !!v;
+  }
+  function stepClock(input, delta) {
+    const base = parseClock(input.value) ?? fmtClock(Date.now()); // puste pole startuje od „teraz”
+    const [hh, mm] = base.split(":").map(Number), total = Math.min(23 * 60 + 59, Math.max(0, hh * 60 + mm + delta));
+    input.value = `${pad(Math.floor(total / 60))}:${pad(total % 60)}`;
+    input.classList.remove("invalid");
+  }
+  /** Pole godziny: porządkowanie po wpisaniu, zaznaczanie przy wejściu, strzałki ↑ ↓ (Shift = 5 min). */
+  function wireClockInput(input) {
+    input.addEventListener("change", () => normalizeClock(input));
+    input.addEventListener("focus", () => input.select());
+    input.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+      e.preventDefault();
+      stepClock(input, (e.key === "ArrowUp" ? 1 : -1) * (e.shiftKey ? 5 : 1));
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
+  // ---------- Wyskakujące okienka: wybierak godziny (siatka – bez przewijania) i estymata „od – do” ----------
+  let clockPop = null, estPop = null; // { el, input } / { el, target }
+  /** Okienko przy polu: pod nim, a gdy brak miejsca – nad nim. Rodzicem jest otwarty dialog (warstwa modalna) albo body. */
+  function placePop(el, anchor) {
+    (anchor.closest("dialog") || document.body).appendChild(el);
+    const r = anchor.getBoundingClientRect(), w = el.offsetWidth, ht = el.offsetHeight;
+    el.style.left = `${Math.max(8, Math.min(r.left, innerWidth - w - 8))}px`;
+    el.style.top = `${r.bottom + 4 + ht <= innerHeight - 8 ? r.bottom + 4 : Math.max(8, r.top - ht - 4)}px`;
+  }
+  function closeClock() { clockPop?.el.remove(); clockPop = null; }
+  function closeEst() { closeClock(); estPop?.el.remove(); estPop = null; }
+
+  function renderClockPop() {
+    const cur = parseClock(clockPop.input.value), [ch, cm] = cur ? cur.split(":").map(Number) : [null, null];
+    const cells = (n, attr, on) => Array.from({ length: n }, (_, i) => `<button type="button" data-${attr}="${i}" class="${i === on ? "on" : ""} ${attr === "m" && i % 5 === 0 ? "five" : ""}">${pad(i)}</button>`).join("");
+    clockPop.el.innerHTML = `<h5>Godzina</h5><div class="clock-grid hours">${cells(24, "h", ch)}</div><h5>Minuta</h5><div class="clock-grid minutes">${cells(60, "m", cm)}</div>`;
+  }
+  function openClock(input, anchor) {
+    const same = clockPop?.input === input;
+    closeClock();
+    if (same) return; // drugie kliknięcie w zegar zamyka
+    const el = document.createElement("div");
+    el.className = "pop clock-pop";
+    clockPop = { el, input };
+    renderClockPop();
+    placePop(el, anchor);
+    el.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      const [hh, mm] = (parseClock(input.value) ?? `${pad(new Date().getHours())}:00`).split(":").map(Number);
+      const pickedMinute = btn.dataset.m !== undefined;
+      input.value = pickedMinute ? `${pad(hh)}:${pad(Number(btn.dataset.m))}` : `${pad(Number(btn.dataset.h))}:${pad(mm)}`;
+      input.classList.remove("invalid");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      if (pickedMinute) { closeClock(); input.focus(); } else renderClockPop(); // godzina → jeszcze minuta; minuta kończy wybór
+    });
+  }
+
+  const EST_PRESETS = ["0:30", "1:00", "2:00", "4:00", "6:00", "8:00"];
+  function openEst(target, anchor) {
+    const same = estPop?.target === target;
+    closeEst();
+    if (same) return;
+    const el = document.createElement("div");
+    el.className = "pop est-pop";
+    el.innerHTML = `
+      <h5>Estymata z godzin „od – do”</h5>
+      <div class="est-row">
+        <label>Od<span class="field-btn"><input type="text" id="est-from" inputmode="numeric" placeholder="gg:mm" maxlength="5" autocomplete="off" /><button type="button" class="btn icon-btn field-pick" data-clock="est-from" title="Wybierz godzinę" aria-label="Wybierz godzinę: od">${ICON.clock}</button></span></label>
+        <label>Do<span class="field-btn"><input type="text" id="est-to" inputmode="numeric" placeholder="gg:mm" maxlength="5" autocomplete="off" /><button type="button" class="btn icon-btn field-pick" data-clock="est-to" title="Wybierz godzinę" aria-label="Wybierz godzinę: do">${ICON.clock}</button></span></label>
+      </div>
+      <p class="est-result" id="est-result"></p>
+      <h5>albo gotowa wartość</h5>
+      <div class="est-presets">${EST_PRESETS.map((p) => `<button type="button" class="btn" data-preset="${p}">${p}</button>`).join("")}</div>
+      <div class="actions"><button type="button" class="btn" data-est-cancel>Anuluj</button><button type="button" class="btn primary" data-est-apply disabled>Wstaw</button></div>`;
+    estPop = { el, target };
+    placePop(el, anchor);
+    const from = el.querySelector("#est-from"), to = el.querySelector("#est-to"), apply = el.querySelector("[data-est-apply]");
+    from.value = fmtClock(Date.now());
+    for (const input of [from, to]) wireClockInput(input);
+    const setEstimate = (text) => { target.value = text; target.dispatchEvent(new Event("input", { bubbles: true })); closeEst(); target.focus(); };
+    /** Minuty między „od” a „do”; „do” wcześniejsze niż „od” oznacza koniec następnego dnia. */
+    const diff = () => {
+      const a = parseClock(from.value), b = parseClock(to.value);
+      if (!a || !b) return null;
+      const min = (s) => Number(s.slice(0, 2)) * 60 + Number(s.slice(3)), d = min(b) - min(a);
+      return d === 0 ? null : { min: d > 0 ? d : d + 1440, overnight: d < 0 };
+    };
+    const refresh = () => {
+      const d = diff();
+      apply.disabled = !d;
+      el.querySelector("#est-result").innerHTML = d ? `= <b>${fmtHM(d.min * 60)}</b>${d.overnight ? " (przez północ)" : ""}` : "Podaj godzinę „od” i „do” – czas wyliczy się sam.";
+    };
+    el.addEventListener("input", refresh);
+    el.addEventListener("change", refresh);
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); normalizeClock(from); normalizeClock(to); refresh(); const d = diff(); if (d) setEstimate(fmtHM(d.min * 60)); } });
+    el.addEventListener("click", (e) => {
+      const d = diff();
+      if (e.target.closest("[data-est-apply]") && d) setEstimate(fmtHM(d.min * 60));
+      else if (e.target.closest("[data-est-cancel]")) closeEst();
+      else if (e.target.closest("[data-preset]")) setEstimate(e.target.closest("[data-preset]").dataset.preset);
+    });
+    refresh();
+    to.focus();
+  }
+
+  for (const input of [$("e-start"), $("e-end")]) wireClockInput(input);
+  for (const btn of document.querySelectorAll("button[data-clock]")) btn.innerHTML = ICON.clock;
+  for (const btn of document.querySelectorAll("button[data-est]")) btn.innerHTML = ICON.clock;
+  // przyciski wybieraków (także te tworzone w okienku estymaty)
+  document.addEventListener("click", (e) => {
+    const clockBtn = e.target.closest("button[data-clock]"), estBtn = e.target.closest("button[data-est]");
+    if (clockBtn) openClock($(clockBtn.dataset.clock), clockBtn.closest(".field-btn"));
+    else if (estBtn) openEst($(estBtn.dataset.est), estBtn.closest(".field-btn"));
+  });
+  // kliknięcie poza okienkiem je zamyka
+  document.addEventListener("mousedown", (e) => {
+    if (e.target.closest(".pop, button[data-clock], button[data-est]")) return;
+    closeEst();
+  }, true);
+  document.addEventListener("mousedown", (e) => { if (clockPop && !e.target.closest(".clock-pop, button[data-clock]")) closeClock(); }, true);
+  // menu rodzaju dnia wolnego (przycisk w „Dniu pracy” i kółko W na liście miesiąca)
+  let offPop = null;
+  function closeOffMenu() { offPop?.remove(); offPop = null; }
+  function openOffMenu(key, anchor) {
+    const same = offPop?.dataset.key === key;
+    closeOffMenu();
+    if (same) return;
+    const current = getDay(key)?.off;
+    const el = document.createElement("div");
+    el.className = "pop off-pop";
+    el.dataset.key = key;
+    el.innerHTML = `<h5>Dzień wolny ${fmtDatePl(key)}</h5>` +
+      Object.entries(OFF_KINDS).map(([k, label]) => `<button type="button" class="btn ${current === k ? "primary" : ""}" data-kind="${k}">${label}</button>`).join("") +
+      (current ? `<button type="button" class="btn off-clear" data-kind="">Cofnij dzień wolny</button>` : "");
+    offPop = el;
+    placePop(el, anchor);
+    el.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-kind]");
+      if (!btn) return;
+      closeOffMenu();
+      setDayOff(key, btn.dataset.kind || null);
+    });
+  }
+  document.addEventListener("mousedown", (e) => { if (offPop && !e.target.closest(".off-pop, [data-off], #wd-off")) closeOffMenu(); }, true);
+
+  // Esc zamyka najpierw okienko, dopiero potem dialog
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || (!clockPop && !estPop && !offPop)) return;
+    e.preventDefault(); e.stopPropagation();
+    if (offPop) closeOffMenu(); else if (clockPop) closeClock(); else closeEst();
+  }, true);
+  for (const dlg of document.querySelectorAll("dialog")) {
+    dlg.addEventListener("cancel", (e) => { if (clockPop || estPop) { e.preventDefault(); if (clockPop) closeClock(); else closeEst(); } });
+    dlg.addEventListener("close", closeEst);
+  }
+
+  // ---------- Edycja wpisu ----------
+  function openEdit(dayKey, segId) {
+    const day = getDay(dayKey), seg = day?.segments.find((s) => s.id === segId);
+    if (!seg) return;
+    editing = { dayKey, segId };
+    const task = seg.kind === "task" ? findTask(day, seg.taskId) : null;
+    setText("e-heading", task ? "Edytuj wpis zadania" : "Edytuj przerwę");
+    $("e-task-fields").hidden = !task;
+    if (task) { $("e-wi").value = task.wi || ""; $("e-title").value = task.title || ""; $("e-type").value = typeIdFor(task); $("e-est").value = estimateToInput(task.estimateH); }
+    for (const id of ["e-start", "e-end"]) $(id).classList.remove("invalid");
+    $("e-start").value = fmtClock(seg.start);
+    $("e-end").value = seg.end === null ? "" : fmtClock(seg.end);
+    setText("e-end-hint", seg.end === null ? "Wpis trwa – zostaw koniec pusty, aby dalej liczyć." : "");
+    $("e-end-hint").hidden = seg.end !== null;
+    $("e-comment").value = seg.comment || "";
+    $("edit-dialog").showModal();
+  }
+  on("e-cancel", "click", () => $("edit-dialog").close());
+  on("edit-form", "submit", (e) => {
+    const day = editing && getDay(editing.dayKey), seg = day?.segments.find((s) => s.id === editing.segId);
+    if (!seg) return;
+    for (const id of ["e-start", "e-end"]) {
+      if (!normalizeClock($(id))) { e.preventDefault(); alert(`Nie rozumiem godziny „${$(id).value}”. Wpisz np. 9:30 albo 930.`); $(id).focus(); return; }
+    }
+    // pole ma dokładność do minuty – niezmieniona godzina zachowuje oryginalne sekundy (bez dziur i nakładek z sąsiednimi wpisami)
+    const pick = (value, old) => (!value ? null : old !== null && fmtClock(old) === value ? old : timeOnDay(day.date, value));
+    const start = pick($("e-start").value, seg.start);
+    const end = pick($("e-end").value, seg.end);
+    if (end !== null && end < start) { e.preventDefault(); alert("Koniec nie może być wcześniejszy niż początek."); return; }
+    if (Math.max(start, end ?? 0) > Date.now()) { e.preventDefault(); alert("Godzina wpisu nie może być w przyszłości."); return; }
+    const task = seg.kind === "task" ? findTask(day, seg.taskId) : null;
+    const wi = $("e-wi").value.trim(), title = $("e-title").value.trim();
+    if (task && !wi && !title) { e.preventDefault(); alert("Podaj ID Azure lub tytuł zadania."); return; }
+    // nowe godziny nie mogą nachodzić na inne wpisy: sąsiada przycinamy (za zgodą), wpisu leżącego w środku nie ruszamy
+    const now = Date.now(), newEnd = end ?? now, trims = [];
+    for (const o of day.segments) {
+      const oEnd = o.end ?? now;
+      if (o === seg || oEnd <= start || o.start >= newEnd) continue;
+      if (o.start < start && oEnd <= newEnd && o.end !== null) trims.push({ o, end: start });        // poprzednik kończy się w nowym zakresie
+      else if (o.start >= start && oEnd > newEnd) trims.push({ o, start: newEnd });                   // następnik zaczyna się w nowym zakresie
+      else { e.preventDefault(); alert(`Te godziny pokrywają się z wpisem „${segName(day, o)}”. Zmień najpierw tamten wpis albo wybierz inne godziny.`); return; }
+    }
+    if (trims.length && !confirm("Nowe godziny nachodzą na sąsiednie wpisy. Przyciąć je, żeby czas nie liczył się podwójnie?\n\n" +
+      trims.map((t) => `• ${segName(day, t.o)} → ${fmtClock(t.start ?? t.o.start)}–${t.end !== undefined ? fmtClock(t.end) : t.o.end === null ? "…" : fmtClock(t.o.end)}`).join("\n"))) { e.preventDefault(); return; }
+    for (const t of trims) { if (t.end !== undefined) t.o.end = t.end; else t.o.start = t.start; }
+    if (task) Object.assign(task, { wi, title, ...pickedType("e-type"), estimateH: parseEstimate($("e-est").value) });
+    const wasOpen = seg.end === null;
+    Object.assign(seg, { start, end, comment: $("e-comment").value.trim() });
+    // otwarty wpis zamknięto ręcznie → dzień dalej trwa jako przerwa
+    if (wasOpen && end !== null && isWorking(day) && day.date === today()) pushSegment(day, { start: end });
+    if (day.startedAt && start < day.startedAt) day.startedAt = start;
+    editing = null;
+    commit();
+  });
+
+  // ---------- Podsumowanie: nawigacja i opcje ----------
+  const showDay = (key) => { selectedDate = key; selectedMonth = key.slice(0, 7); renderSummary(); renderActivity(); renderMonth(); };
+  on("summary-date", "change", () => showDay($("summary-date").value || selectedDate));
+  on("day-prev", "click", () => showDay(shiftDate(selectedDate, -1)));
+  on("day-next", "click", () => showDay(shiftDate(selectedDate, 1)));
+  on("day-today", "click", () => showDay(today()));
+  $("summary-view").addEventListener("toggle", (e) => { if (e.target.classList?.contains("sum-events-box")) eventsOpen = e.target.open; }, true);
+  on("summary-options-toggle", "click", () => {
+    const open = $("summary-options").hidden;
+    $("summary-options").hidden = !open;
+    $("summary-options-toggle").classList.toggle("active", open);
+    $("summary-options-toggle").setAttribute("aria-expanded", String(open));
+  });
+  on("refresh-summary", "click", () => {
+    renderSummary();
+    $("refresh-summary").classList.add("spin");
+    setTimeout(() => $("refresh-summary").classList.remove("spin"), 500);
+  });
+  for (const id of ["summary-mode", "summary-show-id", "summary-show-ranges"]) on(id, "change", renderSummary);
+
+  // ---------- Ustawienia ----------
+  for (const [id, key, ok] of [["s-work", "workHours", (v) => v > 0], ["s-break", "breakHours", (v) => v >= 0]]) {
+    on(id, "change", () => { const v = parseHours($(id).value); if (v !== null && ok(v)) S()[key] = v; renderSettings(); commit(); });
+  }
+  on("s-org", "change", () => { S().orgUrl = $("s-org").value.trim(); commit(); });
+  on("settings-open", "click", () => { renderSettings(); $("settings-dialog").showModal(); });
+  on("settings-close", "click", () => $("settings-dialog").close());
+
+  // ---------- Eksport / import ----------
+  function downloadFile(name, content, type) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([content], { type }));
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  const exportJson = () => { save(); downloadFile(`liczmiczas-${today()}.json`, JSON.stringify(state, null, 2), "application/json"); };
+  on("export-json", "click", exportJson);
+  on("export-json-all", "click", exportJson);
+  on("export-open", "click", () => {
+    const range = $("csv-range").options;
+    range[1].textContent = `miesiąc ${selectedDate.slice(5, 7)}.${selectedDate.slice(0, 4)}`;
+    $("csv-day").value = selectedDate;
+    $("csv-day").max = today();
+    $("csv-day-row").hidden = $("csv-range").value !== "day";
+    $("export-dialog").showModal();
+  });
+  on("csv-range", "change", () => { $("csv-day-row").hidden = $("csv-range").value !== "day"; });
+  on("export-close", "click", () => $("export-dialog").close());
+
+  // CSV: separator ";" i BOM UTF-8 – otwiera się poprawnie w polskim Excelu; czasy trwania co do sekundy jako h:mm:ss (Excel je sumuje, a suma zadań zgadza się z sumą dnia)
+  /** Komórka CSV: cudzysłowy wg RFC 4180; tekst zaczynający się od = + - @ dostaje apostrof, żeby Excel nie wykonał go jako formuły. */
+  const csvCell = (v) => {
+    let s = String(v ?? "");
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const sortedDays = () => Object.values(state.days).sort((a, b) => a.date.localeCompare(b.date));
+  /** Dni do eksportu wg wybranego zakresu (dzień / miesiąc liczone od daty z „Podsumowania dnia”). */
+  function csvScope(withOff = false) {
+    const mode = $("csv-range").value, month = selectedDate.slice(0, 7), dayKey = $("csv-day").value || selectedDate;
+    const days = sortedDays().filter((d) => (d.segments.length || (withOff && d.off)) && (mode === "day" ? d.date === dayKey : mode === "month" ? d.date.startsWith(month) : true));
+    return { days, tag: mode === "day" ? dayKey : mode === "month" ? month : `wszystko-${today()}` };
+  }
+  function csvExport(kind, header, rowsOf, withOff = false) {
+    const { days, tag } = csvScope(withOff);
+    if (!days.length) { alert("Brak danych w wybranym zakresie."); return; }
+    const now = Date.now(), rows = [header];
+    for (const day of days) rows.push(...rowsOf(day, now));
+    downloadFile(`liczmiczas-${kind}-${tag}.csv`, "\uFEFF" + rows.map((r) => r.map(csvCell).join(";")).join("\r\n") + "\r\n", "text/csv;charset=utf-8");
+  }
+  const estCsv = (task) => (task.estimateH ? fmtHM(task.estimateH * H) : "");
+  const fmtClockSec = (ts) => { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; };
+  const WEEKDAYS = ["nd", "pn", "wt", "śr", "cz", "pt", "sb"];
+  const weekday = (key) => { const [y, m, d] = ymd(key); return WEEKDAYS[new Date(y, m - 1, d).getDay()]; };
+
+  /** Wpisy: każdy wpis (zadanie / przerwa) jako osobny wiersz, co do sekundy – widać każde przerwanie. */
+  on("export-csv-entries", "click", () => csvExport("wpisy",
+    ["Data", "Lp.", "Typ", "Kategoria", "ID Azure", "Tytuł", "Start", "Koniec", "Czas [h:mm:ss]", "W toku", "Komentarz"],
+    (day, now) => [...day.segments].sort((a, b) => a.start - b.start).map((seg, i) => {
+      const task = seg.kind === "task" ? findTask(day, seg.taskId) : null;
+      return [fmtDatePl(day.date), i + 1, typeLabel(task), BASES[segBase(day, seg)], task?.wi || "", task ? task.title || "" : "Przerwa",
+        fmtClockSec(seg.start), seg.end === null ? "" : fmtClockSec(seg.end), fmtHMS(segDuration(seg, now)), seg.end === null ? "tak" : "", seg.comment || ""];
+    })));
+
+  /** Zadania per dzień: czysta tabela (bez wierszy sum – te są w arkuszu „Dni”), gotowa pod tabelę przestawną. */
+  on("export-csv-tasks", "click", () => csvExport("zadania",
+    ["Data", "Typ", "Kategoria", "ID Azure", "Tytuł", "Czas dnia [h:mm:ss]", "Czas łączny [h:mm:ss]", "Estymata [h:mm]", "Ponad estymatę", "Wpisów", "Komentarze"],
+    (day, now) => {
+      const date = fmtDatePl(day.date), rows = [];
+      for (const task of day.tasks) {
+        const sec = taskSecondsInDay(day, task.id, now), all = taskSecondsAllDays(day, task, now), segs = segsOf(day, task.id);
+        if (sec > 0) rows.push([date, typeLabel(task), BASES[baseOf(task)], task.wi || "", task.title || "", fmtHMS(sec), fmtHMS(all), estCsv(task),
+          task.estimateH && all > task.estimateH * H ? "tak" : "", segs.length, uniqComments(segs).join("; ")]);
+      }
+      // przerwy nazwane (zadania typu „przerwa”) mają własne wiersze – tu tylko przerwy automatyczne
+      const auto = day.segments.filter((s) => s.kind === "break"), autoSec = auto.reduce((a, s) => a + segDuration(s, now), 0);
+      if (autoSec > 0) rows.push([date, "przerwa", "przerwa", "", "Przerwy (automatyczne)", fmtHMS(autoSec), "", "", "", auto.length, uniqComments(auto).join("; ")]);
+      return rows;
+    }));
+
+  /** Dni: jeden wiersz na dzień – godziny pracy, sumy, nadgodziny, rozdrobnienie dnia. */
+  on("export-csv-days", "click", () => csvExport("dni",
+    ["Data", "Dzień tyg.", "Start", "Koniec", "Łącznie [h:mm:ss]", "Praca [h:mm:ss]", "Organizacyjne [h:mm:ss]", "Przerwy [h:mm:ss]", "Nadgodziny [h:mm:ss]", "Do odpracowania [h:mm:ss]", "Zadań", "Wpisów", "Zatrzymań pracy", "Dzień wolny"],
+    (day, now) => {
+      const t = dayTotals(day, now, day.date < today()), running = day.segments.some((s) => s.end === null), any = day.segments.length > 0;
+      return [[fmtDatePl(day.date), weekday(day.date), any ? fmtClock(day.startedAt ?? Math.min(...day.segments.map((s) => s.start))) : "",
+        running || !any ? "" : fmtClock(Math.max(...day.segments.map((s) => s.end))), fmtHMS(t.total), fmtHMS(t.work), fmtHMS(t.org), fmtHMS(t.idle), fmtHMS(t.overtime), fmtHMS(t.owed),
+        day.tasks.filter((task) => segsOf(day, task.id).length).length, day.segments.length, (day.events || []).filter((ev) => ev.type === "stop").length, offLabel(day)]];
+    }, true));
+
+  on("import-json", "change", async () => {
+    const input = $("import-json"), file = input.files?.[0];
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (!parsed.days || typeof parsed.days !== "object") throw new Error("Brak danych dni w pliku.");
+      if (!confirm("Zaimportować dane? Bieżące dane zostaną zastąpione.")) return;
+      state = normalize(parsed);
+      closeStaleDays();
+      renderSettings();
+      commit();
+    } catch (err) {
+      alert("Nie udało się zaimportować pliku: " + err.message);
+    } finally {
+      input.value = "";
+    }
+  });
+
+  on("clear-day", "click", () => {
+    if (!todayDay() || !confirm(`Usunąć wszystkie wpisy z dnia ${fmtDatePl(today())}?`)) return;
+    delete state.days[today()];
+    commit();
+    $("settings-dialog").close();
+  });
+
+  // Ctrl+Shift+S – zatrzymaj bieżące zadanie
+  document.addEventListener("keydown", (e) => { if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "s") { e.preventDefault(); stopTask(); } });
+
+  // ---------- Motyw ----------
+  on("theme-toggle", "click", () => {
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    S().theme = next; // motyw jest ustawieniem w pliku danych
+    save();
+  });
+
+  // ---------- Plik danych: zdarzenia ----------
+  on("store-chip", "click", openStoreDialog);
+  on("store-close", "click", () => $("store-dialog").close());
+  on("store-open", "click", openDataFile);
+  on("store-new", "click", () => newDataFile(null));
+  on("store-migrate", "click", () => newDataFile(legacyData()));
+  on("store-reload", "click", reloadDataFile);
+  on("store-save-now", "click", async () => {
+    try { if ((await store.handle.requestPermission({ mode: "readwrite" })) !== "granted") throw new Error("Brak zgody na zapis."); store.paused = false; await flushSave(true); }
+    catch (err) { store.error = err.message || String(err); renderStore(); }
+  });
+  on("store-manual-empty", "click", () => {
+    if (store.mode && store.dirty && !confirm("Niezapisane zmiany przepadną. Zacząć od pustych danych?")) return;
+    adoptData(null, "manual", null, "", 0);
+  });
+  on("store-manual-load", "change", async () => {
+    const input = $("store-manual-load"), file = input.files?.[0];
+    if (!file) return;
+    try { adoptData(parseDataFile(await file.text()), "manual", null, file.name, 0); store.dirty = false; renderStore(); }
+    catch (err) { alert("Nie udało się wczytać pliku: " + (err.message || err)); }
+    finally { input.value = ""; }
+  });
+  on("store-manual-save", "click", () => { downloadFile(store.name || "liczmiczas-dane.json", serialize(), "application/json"); store.dirty = false; store.savedAt = Date.now(); renderStore(); });
+  // bez pliku danych okna nie da się zamknąć klawiszem Esc
+  $("store-dialog").addEventListener("cancel", (e) => { if (!store.mode) e.preventDefault(); });
+  // przed schowaniem / zamknięciem karty: zapisz od razu, a gdy się nie da – ostrzeż
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && store.dirty) flushSave(); });
+  window.addEventListener("beforeunload", (e) => { if (store.dirty || store.saving) { if (store.mode === "fs") flushSave(); e.preventDefault(); e.returnValue = ""; } });
+
+  // ---------- Start ----------
+  renderStore();
+  openStoreDialog();
+  renderSettings();
+  render();
+  setInterval(tick, 1000);
+})();
+  </script>
+</body>
+</html>

@@ -12,6 +12,26 @@ nawet gdyby ktoś je dopisał w kodzie. Dane opuszczają przeglądarkę tylko na
 (plik zapisywany lokalnie) oraz kliknięcie linku `#ID`, który otwiera Azure DevOps w nowej karcie
 (tylko gdy adres projektu jest ustawiony w ustawieniach).
 
+## Wariant „dane w pliku” – `cipucha.html`
+
+`cipucha.html` to ta sama aplikacja (też jeden plik, bez bibliotek i bez sieci), ale **nie zapisuje niczego w przeglądarce**
+(ani localStorage, ani IndexedDB). Cały stan – dni, zadania, typy, ustawienia i motyw – żyje w **pliku `.json` na dysku**,
+który sam wskazujesz. Plik można kopiować, trzymać w folderze OneDrive i otwierać na innym komputerze.
+
+- **Start:** okno „Plik danych” – „Otwórz…” (istniejący plik), „Utwórz…” (nowy) albo „Przenieś…” (nowy plik z danymi,
+  które `index.html` zostawił w localStorage; to jedyne miejsce, gdzie localStorage jest **czytany**, nigdy zapisywany).
+  Bez wskazania pliku okna nie da się pominąć. Po odświeżeniu strony plik trzeba wskazać ponownie – przeglądarka nie
+  pamięta go, bo aplikacja niczego w niej nie przechowuje.
+- **Zapis:** automatyczny po każdej zmianie (File System Access API – Chrome / Edge), z krótką zwłoką sklejającą serie zmian
+  (np. pisanie komentarza = jeden zapis). Zapis idzie przez plik tymczasowy podmieniany na końcu, więc przerwany zapis nie
+  ucina danych. Stan widać na pasku u góry: zapisano (zielona kropka), niezapisane zmiany (żółta), błąd (czerwona).
+- **Konflikt:** jeśli plik zmienił się na dysku poza tą kartą (druga karta, synchronizacja), zapis się wstrzymuje zamiast
+  nadpisać cudze zmiany – w oknie pliku wybierasz „Zapisz” (nadpisz) albo „Wczytaj” (weź stan z dysku).
+- **Tryb ręczny** (Firefox, Safari albo gdy przeglądarka zablokuje zapis): plik wczytujesz, a zmiany pobierasz przyciskiem
+  „Pobierz plik”. Przy niezapisanych zmianach przeglądarka ostrzega przed zamknięciem karty.
+
+`cipucha.html` jest samodzielną kopią – zmiany robione w `index.html` nie przenoszą się do niej automatycznie.
+
 ## Wygląd
 
 Styl na wzór Azure DevOps (Fluent UI). Domyślnie motyw **ciemny** (paleta „Dark” z Azure DevOps),
