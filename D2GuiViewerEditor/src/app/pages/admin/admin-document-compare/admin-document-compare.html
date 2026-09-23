@@ -1,0 +1,279 @@
+<div class="admin-page">
+  <div class="page-header">
+    <div class="header-top">
+      <div>
+        <h2 class="page-title">Porównanie dokumentów</h2>
+        <p class="page-subtitle">
+          Dwa pliki DOCX porównane literalnie: wpisy pakietu, części binarne bajt po bajcie, części XML element po
+          elemencie, atrybut po atrybucie i tekst po tekście. Każda różnica ma wycinek XML obu stron do porównania
+          wizualnego; identyczne fragmenty nie są wypisywane.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="upload-bar">
+    <label class="file-picker">
+      <input type="file" accept=".docx,.docm,.dotx,.dotm" (change)="onFileSelected('left', $event)" />
+      <span class="picker-button">Lewy plik</span>
+      <span class="picker-name">{{ leftFileName() || 'Nie wybrano pliku' }}</span>
+    </label>
+
+    <button type="button" class="icon-btn" title="Zamień pliki miejscami" (click)="swapFiles()" [disabled]="!leftFileName() && !rightFileName()">⇄</button>
+
+    <label class="file-picker">
+      <input type="file" accept=".docx,.docm,.dotx,.dotm" (change)="onFileSelected('right', $event)" />
+      <span class="picker-button">Prawy plik</span>
+      <span class="picker-name">{{ rightFileName() || 'Nie wybrano pliku' }}</span>
+    </label>
+
+    <label class="option-toggle" title="Atrybuty w:rsid* i blok w:rsids to identyfikatory sesji edycji Worda — zmieniają się przy każdym zapisie">
+      <input type="checkbox" [ngModel]="ignoreRevisionIds()" (ngModelChange)="ignoreRevisionIds.set($event)" />
+      Pomiń rsid
+    </label>
+    <label class="option-toggle" title="docProps/core.xml i app.xml: daty zapisu, liczniki słów, autor">
+      <input type="checkbox" [ngModel]="ignoreDocumentProperties()" (ngModelChange)="ignoreDocumentProperties.set($event)" />
+      Pomiń docProps
+    </label>
+
+    <button type="button" class="primary-btn" [disabled]="!canCompare()" (click)="compare()">
+      @if (isComparing()) {
+        <span class="spinner-sm"></span>
+      }
+      Porównaj
+    </button>
+  </div>
+
+  @if (error()) {
+    <div class="error-banner">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+      </svg>
+      {{ error() }}
+    </div>
+  }
+
+  @if (isComparing()) {
+    <div class="loading-state">
+      <span class="spinner"></span>
+      <span>Porównuję pakiety&hellip;</span>
+    </div>
+  }
+
+  @if (report(); as current) {
+    <section class="files-grid">
+      <article class="file-card side-left">
+        <span class="file-kicker">Lewy</span>
+        <strong class="file-name">{{ current.left.fileName }}</strong>
+        <span class="file-meta">{{ formatBytes(current.left.sizeInBytes) }} · format <code class="mono">{{ current.left.detectedFormat }}</code> · {{ current.left.partCount }} części</span>
+        @for (note of current.left.notes; track note) {
+          <span class="file-note">{{ note }}</span>
+        }
+      </article>
+
+      <article class="verdict-card" [attr.data-level]="current.identical ? 'identical' : 'different'">
+        <span class="file-kicker">Wynik</span>
+        <strong class="verdict-title">
+          @if (current.identical) {
+            Pliki identyczne
+          } @else {
+            {{ current.totalDifferences }} różnic
+          }
+        </strong>
+        <span class="file-meta">
+          {{ changedParts().length }} części z różnicami · porównanie {{ formatDuration(current.durationMs) }}
+          @if (current.ignoredAttributeCount > 0) {
+            · pominięto {{ current.ignoredAttributeCount }} atrybutów rsid
+          }
+        </span>
+        <div class="kind-chips">
+          @for (kind of kinds(); track kind) {
+            <button type="button" class="chip clickable" [class.active]="kindFilter() === kind" (click)="setKind(kindFilter() === kind ? 'All' : kind)">
+              {{ kindLabel(kind) }} {{ current.countsByKind[kind] }}
+            </button>
+          }
+        </div>
+        <button type="button" class="secondary-btn" (click)="copyReport()">
+          {{ copied() ? 'Skopiowano ✓' : 'Kopiuj raport (JSON)' }}
+        </button>
+      </article>
+
+      <article class="file-card side-right">
+        <span class="file-kicker">Prawy</span>
+        <strong class="file-name">{{ current.right.fileName }}</strong>
+        <span class="file-meta">{{ formatBytes(current.right.sizeInBytes) }} · format <code class="mono">{{ current.right.detectedFormat }}</code> · {{ current.right.partCount }} części</span>
+        @for (note of current.right.notes; track note) {
+          <span class="file-note">{{ note }}</span>
+        }
+      </article>
+    </section>
+
+    @if (current.truncated) {
+      <div class="notice-banner">
+        Lista różnic została przycięta do limitu prezentacyjnego — licznik {{ current.totalDifferences }} jest pełny,
+        ale nie każda różnica ma tu wiersz. Zawęź porównanie (np. porównaj wersje bliższe sobie) albo filtruj po części.
+      </div>
+    }
+
+    <div class="workspace">
+      <section class="panel parts-panel">
+        <header class="panel-header">
+          <span class="panel-title">Części pakietu</span>
+          <span class="panel-count">{{ changedParts().length }} / {{ current.parts.length }}</span>
+        </header>
+        <div class="panel-body">
+          @if (changedParts().length === 0) {
+            <div class="empty-state">Wszystkie części identyczne.</div>
+          }
+          @for (part of changedParts(); track part.path) {
+            <button type="button" class="part-row" [class.active]="partFilter() === part.path" [attr.data-status]="part.status" (click)="togglePart(part)">
+              <span class="part-path mono">{{ part.path }}</span>
+              <span class="part-status">{{ statusLabel(part.status) }}</span>
+              <span class="part-meta">
+                @if (part.differenceCount > 0) {
+                  {{ part.differenceCount }} różnic ·
+                }
+                {{ formatBytes(part.leftSize) }} → {{ formatBytes(part.rightSize) }}
+                @if (part.leftElementCount !== null) {
+                  · {{ part.leftElementCount }} → {{ part.rightElementCount }} elem.
+                }
+              </span>
+              @if (part.note) {
+                <span class="part-note">{{ part.note }}</span>
+              }
+            </button>
+          }
+        </div>
+      </section>
+
+      <section class="panel diff-panel">
+        <header class="panel-header">
+          <span class="panel-title">Różnice</span>
+          <span class="panel-count">{{ visibleDifferences().length }} / {{ current.differences.length }}</span>
+
+          <select class="filter-select" [ngModel]="kindFilter()" (ngModelChange)="setKind($event)" aria-label="Rodzaj">
+            <option value="All">Wszystkie rodzaje</option>
+            @for (kind of kinds(); track kind) {
+              <option [value]="kind">{{ kindLabel(kind) }} ({{ current.countsByKind[kind] }})</option>
+            }
+          </select>
+
+          <select class="filter-select" [ngModel]="categoryFilter()" (ngModelChange)="setCategory($event)" aria-label="Kategoria">
+            <option value="All">Wszystkie kategorie</option>
+            @for (category of categories(); track category) {
+              <option [value]="category">{{ category }} ({{ current.countsByCategory[category] }})</option>
+            }
+          </select>
+
+          <input
+            type="search"
+            class="filter-search"
+            placeholder="Szukaj w ścieżce, nazwie, wartości, tekście…"
+            [ngModel]="search()"
+            (ngModelChange)="setSearch($event)"
+          />
+
+          @if (hasFilters()) {
+            <button type="button" class="link-btn" (click)="clearFilters()">wyczyść filtry</button>
+          }
+        </header>
+
+        <div class="panel-body">
+          @if (current.differences.length === 0) {
+            <div class="empty-state">Brak różnic.</div>
+          } @else if (visibleDifferences().length === 0) {
+            <div class="empty-state">Żadna różnica nie pasuje do filtrów.</div>
+          }
+
+          @for (difference of pagedDifferences(); track $index) {
+            <article class="difference" [attr.data-kind]="difference.kind">
+              <div class="difference-head">
+                <span class="kind-pill" [attr.data-kind]="difference.kind">{{ kindLabel(difference.kind) }}</span>
+                <span class="chip">{{ difference.category }}</span>
+                <code class="mono part-ref">{{ difference.partPath }}</code>
+                @if (difference.name) {
+                  <code class="mono name-ref">{{ difference.name }}</code>
+                }
+              </div>
+
+              <div class="paths">
+                @if (difference.leftPath) {
+                  <span class="mono path-left" title="Ścieżka w lewym pliku">L{{ difference.leftLine !== null ? ':' + difference.leftLine : '' }} {{ difference.leftPath }}</span>
+                }
+                @if (difference.rightPath) {
+                  <span class="mono path-right" title="Ścieżka w prawym pliku">P{{ difference.rightLine !== null ? ':' + difference.rightLine : '' }} {{ difference.rightPath }}</span>
+                }
+              </div>
+
+              @if (difference.leftContext || difference.rightContext) {
+                <div class="context">
+                  <span class="context-label">Akapit:</span>
+                  @if (difference.leftContext && difference.rightContext && difference.leftContext !== difference.rightContext) {
+                    <span class="context-left">„{{ difference.leftContext }}”</span>
+                    <span class="context-arrow">→</span>
+                    <span class="context-right">„{{ difference.rightContext }}”</span>
+                  } @else {
+                    <span>„{{ difference.leftContext || difference.rightContext }}”</span>
+                  }
+                </div>
+              }
+
+              @if (hasValues(difference)) {
+                @if (valueDiff(difference); as diff) {
+                  <div class="values">
+                    <div class="value value-left">
+                      @for (segment of diff.left; track $index) {
+                        <span [class.removed]="segment.kind === 'removed'">{{ segment.text }}</span>
+                      }
+                    </div>
+                    <div class="value value-right">
+                      @for (segment of diff.right; track $index) {
+                        <span [class.added]="segment.kind === 'added'">{{ segment.text }}</span>
+                      }
+                    </div>
+                  </div>
+                } @else {
+                  <div class="values">
+                    <div class="value value-left" [class.absent]="difference.leftValue === null">{{ difference.leftValue ?? '— brak —' }}</div>
+                    <div class="value value-right" [class.absent]="difference.rightValue === null">{{ difference.rightValue ?? '— brak —' }}</div>
+                  </div>
+                }
+              }
+
+              @if (difference.leftExcerpt || difference.rightExcerpt) {
+                <button type="button" class="link-btn" (click)="toggleExcerpt($index)">
+                  {{ isExcerptExpanded($index) ? 'ukryj wycinek XML' : (isOneSided(difference.kind) ? 'pokaż cały obiekt' : 'pokaż wycinek XML obu stron') }}
+                </button>
+                @if (isExcerptExpanded($index)) {
+                  <div class="excerpts">
+                    <pre class="excerpt excerpt-left mono" [class.absent]="!difference.leftExcerpt">{{ difference.leftExcerpt ?? '— brak po lewej —' }}</pre>
+                    <pre class="excerpt excerpt-right mono" [class.absent]="!difference.rightExcerpt">{{ difference.rightExcerpt ?? '— brak po prawej —' }}</pre>
+                  </div>
+                  @if (difference.excerptTruncated) {
+                    <span class="muted small">Wycinek przycięty do limitu znaków.</span>
+                  }
+                }
+              }
+            </article>
+          }
+
+          @if (hasMore()) {
+            <button type="button" class="secondary-btn more-btn" (click)="showMore()">
+              Pokaż więcej ({{ visibleDifferences().length - pagedDifferences().length }} pozostałych)
+            </button>
+          }
+        </div>
+      </section>
+    </div>
+  } @else if (!isComparing() && !error()) {
+    <div class="empty-state standalone">
+      <p>Wskaż lewy i prawy plik, potem kliknij „Porównaj".</p>
+      <p class="muted">
+        Porównanie jest literalne (XML, nie wygląd): kolejność atrybutów i deklaracje przestrzeni nazw nie liczą się jako
+        różnice, identyczne akapity i tabele są pomijane w całości, a obiekty o tej samej tożsamości (Id relationshipu,
+        styleId, w:id przypisu, paraId akapitu) są parowane niezależnie od pozycji. Identyczny fragment w innym miejscu
+        to „element przeniesiony", nie „usunięty + dodany".
+      </p>
+    </div>
+  }
+</div>

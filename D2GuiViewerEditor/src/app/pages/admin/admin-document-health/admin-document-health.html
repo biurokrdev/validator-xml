@@ -1,0 +1,256 @@
+<div class="admin-page">
+  <div class="page-header">
+    <div class="header-top">
+      <div>
+        <h2 class="page-title">Kondycja dokumentu</h2>
+        <p class="page-subtitle">
+          Czy plik DOCX jest uszkodzony (kontener ZIP, pakiet OPC, XML, struktura wymagana przez Worda)
+          i co blokuje konwersję do PDF. Próby przetworzenia cytują błędy realnych komponentów:
+          Open XML SDK, bramki uploadu, importu do edytora, konwertera PDF i LibreOffice.
+        </p>
+      </div>
+      <a class="link-btn" routerLink="/admin/walidator-struktury">Walidator struktury (drzewo i XML) →</a>
+    </div>
+  </div>
+
+  <div class="upload-bar">
+    <label class="file-picker">
+      <input type="file" accept=".docx,.docm,.dotx,.dotm,.doc" (change)="onFileSelected($event)" />
+      <span class="picker-button">Wybierz plik</span>
+      <span class="picker-name">{{ selectedFileName() || 'Nie wybrano pliku' }}</span>
+    </label>
+
+    <label class="probes-toggle" title="Import do edytora, zarejestrowany konwerter PDF i LibreOffice (jeśli dostępny) — trwa dłużej">
+      <input type="checkbox" [ngModel]="includeProbes()" (ngModelChange)="includeProbes.set($event)" />
+      Uruchom próby konwersji
+    </label>
+
+    <button
+      type="button"
+      class="primary-btn"
+      [disabled]="!selectedFileName() || isAnalyzing()"
+      (click)="analyze()"
+    >
+      @if (isAnalyzing()) {
+        <span class="spinner-sm"></span>
+      }
+      Sprawdź
+    </button>
+  </div>
+
+  @if (error()) {
+    <div class="error-banner">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+      </svg>
+      {{ error() }}
+    </div>
+  }
+
+  @if (isAnalyzing()) {
+    <div class="loading-state">
+      <span class="spinner"></span>
+      <span>Analizuję plik{{ includeProbes() ? ' i uruchamiam próby konwersji' : '' }}&hellip;</span>
+    </div>
+  }
+
+  @if (report(); as current) {
+    <section class="verdict-grid">
+      <article class="verdict-card" [attr.data-level]="current.verdict">
+        <span class="verdict-kicker">Werdykt</span>
+        <strong class="verdict-title">{{ verdictLabel(current.verdict) }}</strong>
+        <p class="verdict-summary">{{ current.verdictSummary }}</p>
+      </article>
+
+      <article class="verdict-card" [attr.data-level]="current.wordOpen">
+        <span class="verdict-kicker">Czy Word otworzy plik?</span>
+        <strong class="verdict-title">{{ wordOpenLabel(current.wordOpen) }}</strong>
+        <p class="verdict-summary">{{ current.wordOpenSummary }}</p>
+      </article>
+
+      <article class="verdict-card" [attr.data-level]="current.pdfConversion">
+        <span class="verdict-kicker">Czy konwersja do PDF się uda?</span>
+        <strong class="verdict-title">{{ pdfLabel(current.pdfConversion) }}</strong>
+        <p class="verdict-summary">{{ current.pdfConversionSummary }}</p>
+      </article>
+    </section>
+
+    <div class="summary-bar">
+      <div class="summary-file">
+        <strong>{{ current.fileName }}</strong>
+        <span>
+          {{ formatBytes(current.fileSizeInBytes) }} ·
+          format: <code class="mono">{{ current.detectedFormat }}</code>
+          @if (current.mainDocumentPartPath) {
+            · główna część: <code class="mono">{{ current.mainDocumentPartPath }}</code>
+          }
+          · analiza {{ formatDuration(current.durationMs) }}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        class="count-badge severity-error"
+        [class.active]="severityFilter() === 'Error'"
+        title="Kliknij, aby pokazać tylko błędy"
+        (click)="setSeverity('Error')"
+      >Błędy {{ current.errorCount }}</button>
+      <button
+        type="button"
+        class="count-badge severity-warning"
+        [class.active]="severityFilter() === 'Warning'"
+        title="Kliknij, aby pokazać tylko ostrzeżenia"
+        (click)="setSeverity('Warning')"
+      >Ostrzeżenia {{ current.warningCount }}</button>
+      <button
+        type="button"
+        class="count-badge severity-info"
+        [class.active]="severityFilter() === 'Info'"
+        title="Kliknij, aby pokazać tylko informacje"
+        (click)="setSeverity('Info')"
+      >Informacje {{ current.infoCount }}</button>
+
+      <button type="button" class="secondary-btn" (click)="copyReport()">
+        {{ copied() ? 'Skopiowano ✓' : 'Kopiuj raport (JSON)' }}
+      </button>
+    </div>
+
+    @if (current.findingsTruncated) {
+      <div class="notice-banner">
+        Lista ustaleń została przycięta (powtórzenia tej samej reguły są liczone, nie wypisywane) —
+        liczniki błędów i ostrzeżeń pozostają pełne.
+      </div>
+    }
+
+    <section class="stats-row" aria-label="Statystyki dokumentu">
+      <span class="chip">wpisy ZIP: {{ current.statistics.packageEntries }}</span>
+      <span class="chip">części XML: {{ current.statistics.xmlParts }}</span>
+      <span class="chip">obrazy: {{ current.statistics.imageParts }} ({{ formatBytes(current.statistics.imageBytes) }})</span>
+      <span class="chip">elementy: {{ current.statistics.elements }}</span>
+      <span class="chip">akapity: {{ current.statistics.paragraphs }}</span>
+      <span class="chip">tabele: {{ current.statistics.tables }} (zagnieżdżenie {{ current.statistics.maxTableNesting }})</span>
+      <span class="chip">grafiki: {{ current.statistics.drawings }}</span>
+      <span class="chip">pola: {{ current.statistics.fields }}</span>
+      <span class="chip">sekcje: {{ current.statistics.sections }}</span>
+      <span class="chip">przypisy: {{ current.statistics.footnotes }} + {{ current.statistics.endnotes }}</span>
+      <span class="chip">komentarze: {{ current.statistics.comments }}</span>
+      <span class="chip">rewizje: {{ current.statistics.trackedRevisions }}</span>
+      <span class="chip">formanty: {{ current.statistics.contentControls }}</span>
+      <span class="chip">altChunk: {{ current.statistics.altChunks }}</span>
+      <span class="chip">fonty osadzone: {{ current.statistics.embeddedFonts }}</span>
+    </section>
+
+    <div class="workspace">
+      <section class="panel findings-panel">
+        <header class="panel-header">
+          <span class="panel-title">Ustalenia</span>
+          <span class="panel-count">{{ visibleFindings().length }} / {{ current.findings.length }}</span>
+
+          <select class="stage-select" [ngModel]="stageFilter()" (ngModelChange)="setStage($event)" aria-label="Etap">
+            <option value="All">Wszystkie etapy</option>
+            @for (stage of stages; track stage) {
+              <option [value]="stage">{{ stageLabel(stage) }} ({{ stageCounts()[stage] }})</option>
+            }
+          </select>
+
+          <button
+            type="button"
+            class="toggle-btn"
+            [class.active]="impactFilter() === 'Word'"
+            title="Tylko ustalenia, które wpływają na otwarcie w Wordzie"
+            (click)="setImpact('Word')"
+          >Wpływ na Worda ({{ wordImpactCount() }})</button>
+          <button
+            type="button"
+            class="toggle-btn"
+            [class.active]="impactFilter() === 'Pdf'"
+            title="Tylko ustalenia, które wpływają na konwersję do PDF"
+            (click)="setImpact('Pdf')"
+          >Wpływ na PDF ({{ pdfImpactCount() }})</button>
+
+          @if (hasFilters()) {
+            <button type="button" class="link-btn" (click)="clearFilters()">wyczyść filtry</button>
+          }
+        </header>
+
+        <div class="panel-body">
+          @if (current.findings.length === 0) {
+            <div class="empty-state">Brak ustaleń — plik nie budzi zastrzeżeń na żadnym etapie.</div>
+          } @else if (visibleFindings().length === 0) {
+            <div class="empty-state">Żadne ustalenie nie pasuje do filtrów.</div>
+          }
+
+          @for (group of findingGroups(); track group.stage) {
+            <h3 class="group-title">{{ group.label }} <span class="muted">({{ group.items.length }})</span></h3>
+
+            @for (finding of group.items; track $index) {
+              <article class="finding" [attr.data-severity]="finding.severity">
+                <div class="finding-head">
+                  <span class="severity-pill" [attr.data-severity]="finding.severity">{{ severityLabel(finding.severity) }}</span>
+                  <strong class="finding-title">{{ finding.title }}</strong>
+                  <code class="mono finding-code">{{ finding.code }}</code>
+                  @if (wordImpactLabel(finding.wordImpact); as label) {
+                    <span class="impact-pill" [attr.data-impact]="finding.wordImpact">{{ label }}</span>
+                  }
+                  @if (pdfImpactLabel(finding.pdfImpact); as label) {
+                    <span class="impact-pill" [attr.data-impact]="finding.pdfImpact">{{ label }}</span>
+                  }
+                </div>
+                <p class="finding-description">{{ finding.description }}</p>
+                @if (finding.location) {
+                  <div class="finding-location mono" title="Część pakietu, linia i ścieżka elementu — do odnalezienia w Walidatorze struktury">{{ finding.location }}</div>
+                }
+                @if (finding.remedy) {
+                  <p class="finding-remedy"><span class="remedy-label">Co zrobić:</span> {{ finding.remedy }}</p>
+                }
+              </article>
+            }
+          }
+        </div>
+      </section>
+
+      <section class="panel probes-panel">
+        <header class="panel-header">
+          <span class="panel-title">Próby przetworzenia</span>
+          <span class="panel-count">{{ current.probes.length }}</span>
+        </header>
+
+        <div class="panel-body">
+          @if (current.probes.length === 0) {
+            <div class="empty-state">Nie uruchomiono prób.</div>
+          }
+
+          @for (probe of current.probes; track probe.id) {
+            <article class="probe" [attr.data-status]="probe.status">
+              <div class="probe-head">
+                <span class="status-pill" [attr.data-status]="probe.status">{{ probeStatusLabel(probe.status) }}</span>
+                <strong class="probe-name">{{ probe.name }}</strong>
+                <span class="muted small">{{ formatDuration(probe.durationMs) }}</span>
+              </div>
+              <p class="probe-description muted">{{ probe.description }}</p>
+              @if (probe.message) {
+                <p class="probe-message">{{ probe.message }}</p>
+              }
+              @if (probe.details) {
+                <button type="button" class="link-btn" (click)="toggleProbe(probe)">
+                  {{ isProbeExpanded(probe) ? 'ukryj szczegóły' : 'pokaż szczegóły' }}
+                </button>
+                @if (isProbeExpanded(probe)) {
+                  <pre class="probe-details mono">{{ probe.details }}</pre>
+                }
+              }
+            </article>
+          }
+        </div>
+      </section>
+    </div>
+  } @else if (!isAnalyzing() && !error()) {
+    <div class="empty-state standalone">
+      <p>Wybierz plik i kliknij „Sprawdź".</p>
+      <p class="muted">
+        Format jest rozpoznawany po bajtach, nie po rozszerzeniu — plik „.docx", który w rzeczywistości jest
+        stroną HTML, dokumentem RTF, binarnym .doc albo pakietem zaszyfrowanym hasłem, zostanie nazwany po imieniu.
+      </p>
+    </div>
+  }
+</div>

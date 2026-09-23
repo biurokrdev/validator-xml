@@ -1,0 +1,53 @@
+
+heartbeat.monitors:
+
+  - type: http
+    id: d2-gui
+    name: D2 GUI (frontend)
+    enabled: true
+    schedule: '@every 30s'
+    urls: ["https://GUI_HOST/health"]
+    timeout: 10s
+    check.response.status: [200]
+    check.response.json:
+      - description: frontend zdrowy
+        expression: 'status == "healthy"'
+    tags: ["d2", "frontend"]
+
+  - type: http
+    id: d2-webapi
+    name: D2 WebApi (D2ViewerEditor.Api)
+    enabled: true
+    schedule: '@every 30s'
+    urls: ["https://API_HOST/api/health"]
+    timeout: 10s
+    check.response.status: [200]
+    check.response.json:
+      - description: webapi zdrowy
+        expression: 'status == "healthy"'
+    tags: ["d2", "webapi"]
+
+  - type: http
+    id: d2-services
+    name: D2 Services (D2ServicesViewerEditor.Api)
+    enabled: true
+    schedule: '@every 30s'
+    urls: ["https://SERVICES_HOST/health"]
+    timeout: 10s
+    check.response.status: [200]
+    check.response.body: ["Healthy"]
+    tags: ["d2", "services"]
+
+
+processors:
+  - add_observer_metadata:
+      geo:
+        name: gcp-europe-central2
+
+output.elasticsearch:
+  hosts: ["${ES_HOST}"]
+  api_key: "${ES_API_KEY}"
+
+setup.template.enabled: true
+setup.ilm.enabled: true
+

@@ -1,0 +1,172 @@
+
+POST kbn:/api/alerting/rule
+{
+  "name": "D2 — WebApi milczy (brak logów 5 min)",
+  "tags": ["d2", "liveness"],
+  "rule_type_id": ".es-query",
+  "consumer": "alerts",
+  "schedule": { "interval": "1m" },
+  "params": {
+    "searchType": "esQuery",
+    "esQuery": "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"container.name\":\"doc2tools-viewer-api\"}}]}}}",
+    "index": ["DOC2_APP_LOGS_INDEX"],
+    "timeField": "@timestamp",
+    "size": 0,
+    "threshold": [1],
+    "thresholdComparator": "<",
+    "timeWindowSize": 5,
+    "timeWindowUnit": "m",
+    "aggType": "count",
+    "groupBy": "all",
+    "excludeHitsFromPreviousRun": false
+  },
+  "actions": []
+}
+
+POST kbn:/api/alerting/rule
+{
+  "name": "D2 — Services milczy (brak logów 5 min)",
+  "tags": ["d2", "liveness"],
+  "rule_type_id": ".es-query",
+  "consumer": "alerts",
+  "schedule": { "interval": "1m" },
+  "params": {
+    "searchType": "esQuery",
+    "esQuery": "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"container.name\":\"doc2tools-viewer-service\"}}]}}}",
+    "index": ["DOC2_APP_LOGS_INDEX"],
+    "timeField": "@timestamp",
+    "size": 0,
+    "threshold": [1],
+    "thresholdComparator": "<",
+    "timeWindowSize": 5,
+    "timeWindowUnit": "m",
+    "aggType": "count",
+    "groupBy": "all",
+    "excludeHitsFromPreviousRun": false
+  },
+  "actions": []
+}
+
+POST kbn:/api/alerting/rule
+{
+  "name": "D2 — sonda HTTP down (GUI / WebApi / Services)",
+  "tags": ["d2", "liveness"],
+  "rule_type_id": ".es-query",
+  "consumer": "alerts",
+  "schedule": { "interval": "1m" },
+  "params": {
+    "searchType": "esQuery",
+    "esQuery": "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"monitor.status\":\"down\"}},{\"terms\":{\"monitor.id\":[\"d2-gui\",\"d2-webapi\",\"d2-services\"]}}]}}}",
+    "index": ["heartbeat-*"],
+    "timeField": "@timestamp",
+    "size": 0,
+    "threshold": [3],
+    "thresholdComparator": ">=",
+    "timeWindowSize": 3,
+    "timeWindowUnit": "m",
+    "aggType": "count",
+    "groupBy": "top",
+    "termField": "monitor.id",
+    "termSize": 5,
+    "excludeHitsFromPreviousRun": false
+  },
+  "actions": []
+}
+
+POST kbn:/api/alerting/rule
+{
+  "name": "D2 — wysyp HTTP 5xx",
+  "tags": ["d2", "errors"],
+  "rule_type_id": ".es-query",
+  "consumer": "alerts",
+  "schedule": { "interval": "1m" },
+  "params": {
+    "searchType": "esQuery",
+    "esQuery": "{\"query\":{\"bool\":{\"filter\":[{\"range\":{\"statusCode\":{\"gte\":500}}},{\"bool\":{\"should\":[{\"exists\":{\"field\":\"elapsedMs\"}},{\"exists\":{\"field\":\"Elapsed\"}}],\"minimum_should_match\":1}}]}}}",
+    "index": ["DOC2_APP_LOGS_INDEX"],
+    "timeField": "@timestamp",
+    "size": 0,
+    "threshold": [5],
+    "thresholdComparator": ">=",
+    "timeWindowSize": 10,
+    "timeWindowUnit": "m",
+    "aggType": "count",
+    "groupBy": "top",
+    "termField": "container.name",
+    "termSize": 5,
+    "excludeHitsFromPreviousRun": true
+  },
+  "actions": []
+}
+
+POST kbn:/api/alerting/rule
+{
+  "name": "D2 — wysyłka dead-lettered (dokument nie dojechał)",
+  "tags": ["d2", "delivery"],
+  "rule_type_id": ".es-query",
+  "consumer": "alerts",
+  "schedule": { "interval": "5m" },
+  "params": {
+    "searchType": "esQuery",
+    "esQuery": "{\"query\":{\"bool\":{\"filter\":[{\"match_phrase_prefix\":{\"message\":\"Delivery dead-lettered\"}},{\"exists\":{\"field\":\"deliveryId\"}}]}}}",
+    "index": ["DOC2_APP_LOGS_INDEX"],
+    "timeField": "@timestamp",
+    "size": 10,
+    "threshold": [1],
+    "thresholdComparator": ">=",
+    "timeWindowSize": 15,
+    "timeWindowUnit": "m",
+    "aggType": "count",
+    "groupBy": "all",
+    "excludeHitsFromPreviousRun": true
+  },
+  "actions": []
+}
+
+POST kbn:/api/alerting/rule
+{
+  "name": "D2 — Services odrzuca ingest (zła integracja)",
+  "tags": ["d2", "ingest"],
+  "rule_type_id": ".es-query",
+  "consumer": "alerts",
+  "schedule": { "interval": "5m" },
+  "params": {
+    "searchType": "esQuery",
+    "esQuery": "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"container.name\":\"doc2tools-viewer-service\"}},{\"match_phrase\":{\"message\":\"Ingest dokumentu nie powiódł się\"}}]}}}",
+    "index": ["DOC2_APP_LOGS_INDEX"],
+    "timeField": "@timestamp",
+    "size": 5,
+    "threshold": [5],
+    "thresholdComparator": ">",
+    "timeWindowSize": 15,
+    "timeWindowUnit": "m",
+    "aggType": "count",
+    "groupBy": "all",
+    "excludeHitsFromPreviousRun": true
+  },
+  "actions": []
+}
+
+POST kbn:/api/alerting/rule
+{
+  "name": "D2 — błędy frontendu (client-log)",
+  "tags": ["d2", "frontend"],
+  "rule_type_id": ".es-query",
+  "consumer": "alerts",
+  "schedule": { "interval": "5m" },
+  "params": {
+    "searchType": "esQuery",
+    "esQuery": "{\"query\":{\"bool\":{\"filter\":[{\"term\":{\"source\":\"browser\"}},{\"term\":{\"level\":\"Error\"}}]}}}",
+    "index": ["DOC2_APP_LOGS_INDEX"],
+    "timeField": "@timestamp",
+    "size": 0,
+    "threshold": [20],
+    "thresholdComparator": ">",
+    "timeWindowSize": 15,
+    "timeWindowUnit": "m",
+    "aggType": "count",
+    "groupBy": "all",
+    "excludeHitsFromPreviousRun": true
+  },
+  "actions": []
+}
