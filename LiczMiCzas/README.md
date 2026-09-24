@@ -187,8 +187,8 @@ krótka statystyka: liczba wpisów, średni czas na wpis i liczba zatrzymań pra
 
 ## Eksport CSV
 
-Przycisk **Eksport** w nagłówku panelu „Podsumowanie dnia” otwiera okno eksportu: wybór zakresu i pięć przycisków
-**Pobierz** – cztery arkusze CSV oraz kopia zapasowa JSON. (W ustawieniach została tylko kopia JSON z importem.)
+Przycisk **Eksport** w nagłówku panelu „Podsumowanie dnia” otwiera okno eksportu: wybór zakresu i przyciski
+**Pobierz** – arkusze CSV, plik do importu w Azure Boards oraz kopia zapasowa JSON. (W ustawieniach została tylko kopia JSON z importem.)
 
 Bez bibliotek – plik jest składany w JS i pobierany przez przeglądarkę. Separator `;`, kodowanie UTF-8 z BOM
 (otwiera się poprawnie w polskim Excelu). Czasy trwania są **co do sekundy** (`h:mm:ss`) – Excel traktuje je jak czas,
@@ -201,7 +201,10 @@ Zakres trafia do nazwy pliku, np. `liczmiczas-wpisy-2026-09.csv` albo `liczmicza
 
 - **Wpisy** – każdy wpis osobno: Data; Lp.; Typ (nazwa); Grupa czasu (praca / scrum / inne / przerwa); ID Azure; Tytuł;
   Start; Koniec (z sekundami); Czas; W toku; Komentarz. Najlepszy do pokazania przerwań i skakania między zadaniami.
-- **Zadania per dzień** – czysta tabela pod tabelę przestawną: Data; Typ; Grupa czasu; ID Azure; Tytuł; Czas dnia;
+- **Zadania** – jeden wiersz na zadanie **zsumowane za wybrany zakres** (dzień / miesiąc / wszystko; zadania łączone po ID Azure,
+  bez ID – po tytule): Typ; Grupa czasu; ID Azure; Tytuł; Czas w zakresie (h:mm:ss i dziesiętnie do Azure); Czas łączny (ze
+  wszystkich dni); Estymata; Ponad estymatę; Dni; Wpisów; Komentarze. Przerwy automatyczne to jeden wiersz za cały zakres.
+- Trzy dawne arkusze są ukryte w oknie (kod został): **Zadania per dzień** – czysta tabela pod tabelę przestawną: Data; Typ; Grupa czasu; ID Azure; Tytuł; Czas dnia;
   Czas łączny (to samo ID we wszystkich dniach); Estymata; Ponad estymatę; Wpisów (na ile kawałków pocięto zadanie);
   Komentarze. Przerwy automatyczne to jeden wiersz na dzień; nazwane (np. lunch) mają własne wiersze.
 - **Dni** – jeden wiersz na dzień, liczony tak jak w „Podsumowaniu miesiąca”: Data; Dzień tyg.; Rodzaj dnia (roboczy / weekend /
@@ -214,6 +217,23 @@ Zakres trafia do nazwy pliku, np. `liczmiczas-wpisy-2026-09.csv` albo `liczmicza
 
 Komórki są cytowane wg RFC 4180 (średniki, cudzysłowy i entery w tytułach / komentarzach nie psują kolumn), a tekst
 zaczynający się od `=`, `+`, `-` lub `@` dostaje na początku apostrof, żeby Excel nie potraktował go jak formuły.
+
+## Import do Azure Boards
+
+W oknie „Eksport” jest przycisk **Azure Boards – import (CSV)**. Plik jest w formacie, którego oczekuje *Boards → Queries →
+Import work items* (przecinek, UTF-8, kropka dziesiętna) i zawiera **tylko zadania z ID Azure**, jeden wiersz na ID, jako
+`Work Item Type = Task` (User Story i wyżej uzupełniasz ręcznie – nie trafiają do pliku, bo w aplikacji zapisujesz tylko taski).
+Kolumny to nazwy pól Azure: `ID`, `Work Item Type`, `Title`, `Completed Work` (godziny dziesiętnie, np. 5.25), a gdy zadanie
+ma estymatę – także `Original Estimate` i `Remaining Work` (= estymata − cały czas). Nic poza tym, bo importer odrzuca nieznane
+kolumny. Zakres eksportu decyduje, **które** zadania trafią do pliku (te, nad którymi pracowałeś w zakresie).
+
+Dwie opcje w oknie:
+- **Completed Work = czas ze wszystkich dni** (domyślnie) – Azure *zastępuje* wartość pola, nie dodaje, więc do pola trafia
+  suma ze wszystkich dni, także spoza zakresu. Odznaczone: tylko czas z zakresu (gdy wolisz dopisywać przyrosty ręcznie).
+- **Dołącz kolumnę Title** (domyślnie) – Azure nadpisze tytuł zadania tym z aplikacji; odznacz, jeśli wpisujesz skrócone tytuły.
+
+Import w Azure najpierw pokazuje wiersze do przejrzenia i dopiero „Save items” je zapisuje – tam widać, co się zmieni.
+Pola Completed / Remaining / Original Estimate istnieją w procesach Agile, Scrum i CMMI; w procesie Basic ich nie ma.
 
 ## Podsumowanie dnia
 

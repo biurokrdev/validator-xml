@@ -579,6 +579,10 @@ a.entry-wi:hover { color: var(--primary); text-decoration: underline; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .settings-row-text { display: flex; flex-direction: column; min-width: 0; }
 .settings-row-text b { font-size: 13px; font-weight: 600; }
+.azure-opt { display: flex; flex-direction: row; gap: 6px; align-items: flex-start; margin: 4px 0 0; font-size: 12px; font-weight: 400; color: var(--text-secondary); }
+.settings-row.featured { margin: 0 -12px; padding: 10px 12px; border: 1px solid var(--primary); border-radius: var(--radius); background: var(--primary-lighter); }
+.settings-row.featured .settings-row-text b { color: var(--primary); font-size: 14px; }
+.azure-opt input { margin: 3px 0 0; flex: none; }
 .settings-row .actions { flex: none; margin: 0; }
 .settings-row .btn { padding: 0 12px; }
 .danger-zone h4 { color: var(--danger); }
@@ -857,7 +861,7 @@ dialog.wide { width: min(1180px, 96vw); }
         <h2>Nowe zadanie</h2>
         <form id="task-form" class="task-form" autocomplete="off">
           <label>
-            <span>ID (Azure)</span>
+            <span>Task (Azure)</span>
             <input type="text" id="f-wi" placeholder="np. 12345" list="wi-suggestions" />
             <datalist id="wi-suggestions"></datalist>
           </label>
@@ -1134,6 +1138,15 @@ dialog.wide { width: min(1180px, 96vw); }
       <p class="muted small">Miesiąc to miesiąc dnia wybranego w „Podsumowaniu dnia”; konkretny dzień wskazujesz sam (domyślnie ten z podsumowania). CSV: średnik, UTF-8 – otwiera się w Excelu; czasy co do sekundy (h:mm:ss), więc sumują się bez rozjazdów.</p>
 
       <section class="settings-section">
+        <div class="settings-row featured">
+          <div class="settings-row-text">
+            <b>Azure Boards – import (CSV)</b>
+            <span class="muted small">Plik do <i>Boards → Queries → Import work items</i>: tylko zadania z ID Azure, jako Task. Kolumny: ID, Work Item Type, Title, Completed Work (godziny dziesiętnie), a przy estymacie także Original Estimate i Remaining Work. Zakres decyduje, które zadania trafią do pliku.</span>
+            <label class="azure-opt"><input type="checkbox" id="azure-total" checked /> Completed Work = czas ze wszystkich dni (Azure trzyma sumę, nie przyrost); odznacz, aby wpisać tylko czas z zakresu</label>
+            <label class="azure-opt"><input type="checkbox" id="azure-title" checked /> dołącz kolumnę Title (Azure nadpisze nią tytuł zadania – odznacz, jeśli tytuły w aplikacji są skrócone)</label>
+          </div>
+          <div class="actions"><button type="button" class="btn primary" id="export-azure">Pobierz</button></div>
+        </div>
         <div class="settings-row">
           <div class="settings-row-text">
             <b>Wpisy (CSV)</b>
@@ -1143,19 +1156,26 @@ dialog.wide { width: min(1180px, 96vw); }
         </div>
         <div class="settings-row">
           <div class="settings-row-text">
+            <b>Zadania (CSV)</b>
+            <span class="muted small">Zadania zsumowane za wybrany zakres (dzień / miesiąc / wszystko), jeden wiersz na zadanie: typ, grupa czasu, ID, tytuł, czas w zakresie (h:mm:ss i dziesiętnie do Azure), czas łączny, estymata, liczba dni i wpisów, komentarze.</span>
+          </div>
+          <div class="actions"><button type="button" class="btn primary" id="export-csv-tasks-range">Pobierz</button></div>
+        </div>
+        <div class="settings-row" hidden>
+          <div class="settings-row-text">
             <b>Zadania per dzień (CSV)</b>
             <span class="muted small">Zadania zsumowane w dniu, z typem i grupą czasu (praca / scrum / inne / przerwa): czas dnia, czas łączny, estymata, liczba wpisów.</span>
           </div>
           <div class="actions"><button type="button" class="btn primary" id="export-csv-tasks">Pobierz</button></div>
         </div>
-        <div class="settings-row">
+        <div class="settings-row" hidden>
           <div class="settings-row-text">
             <b>Dni (CSV)</b>
             <span class="muted small">Jeden wiersz na dzień: rodzaj dnia, godziny pracy, praca / scrum / inne / przerwa, pula „inne + scrum” z limitem, nadgodziny, do odpracowania.</span>
           </div>
           <div class="actions"><button type="button" class="btn primary" id="export-csv-days">Pobierz</button></div>
         </div>
-        <div class="settings-row">
+        <div class="settings-row" hidden>
           <div class="settings-row-text">
             <b>Miesiące (CSV)</b>
             <span class="muted small">Jeden wiersz na miesiąc – te same liczby co w „Podsumowaniu miesiąca” (dla miesięcy objętych zakresem).</span>
@@ -1225,7 +1245,7 @@ dialog.wide { width: min(1180px, 96vw); }
     <form method="dialog" class="edit-form" id="convert-form">
       <h3>Przypisz zadanie do przerwy</h3>
       <p class="muted small" id="c-info"></p>
-      <label><span>ID (Azure)</span><input type="text" id="c-wi" placeholder="np. 12345" list="wi-suggestions" autocomplete="off" /></label>
+      <label><span>Task (Azure)</span><input type="text" id="c-wi" placeholder="np. 12345" list="wi-suggestions" autocomplete="off" /></label>
       <label><span>Tytuł</span><input type="text" id="c-title" placeholder="Opis zadania" list="title-suggestions" autocomplete="off" /></label>
       <div class="settings-grid">
         <label><span>Typ</span><select id="c-type"></select></label>
@@ -1251,7 +1271,7 @@ dialog.wide { width: min(1180px, 96vw); }
     <form method="dialog" class="edit-form" id="edit-form">
       <h3 id="e-heading">Edytuj wpis</h3>
       <div id="e-task-fields">
-        <label><span>ID (Azure)</span><input type="text" id="e-wi" /></label>
+        <label><span>Task (Azure)</span><input type="text" id="e-wi" /></label>
         <label><span>Tytuł</span><input type="text" id="e-title" /></label>
         <div class="settings-grid">
           <label>
@@ -2789,6 +2809,31 @@ dialog.wide { width: min(1180px, 96vw); }
         day.tasks.filter((task) => segsOf(day, task.id).length).length, day.segments.length, (day.events || []).filter((ev) => ev.type === "stop").length]];
     }, true));
 
+  /** Zadania za zakres: jeden wiersz na zadanie (łączone po ID Azure, a bez ID – po tytule), zsumowane ze wszystkich dni zakresu. */
+  on("export-csv-tasks-range", "click", () => {
+    const { days, tag } = csvScope(), now = Date.now(), map = new Map();
+    for (const day of days) for (const task of day.tasks) {
+      const sec = taskSecondsInDay(day, task.id, now);
+      if (sec <= 0) continue;
+      const key = task.wi ? `wi:${task.wi}` : `t:${(task.title || "").trim().toLowerCase()}`;
+      const r = map.get(key) || { task, sec: 0, all: taskSecondsAllDays(day, task, now), days: 0, segs: 0, comments: new Set(), est: 0 };
+      r.task = task; r.sec += sec; r.days++; r.segs += segsOf(day, task.id).length;
+      for (const c of uniqComments(segsOf(day, task.id))) r.comments.add(c);
+      if (task.estimateH) r.est = task.estimateH * H;
+      map.set(key, r);
+    }
+    // przerwy automatyczne – jeden wiersz na cały zakres
+    const auto = days.flatMap((d) => d.segments.filter((s) => s.kind === "break")), autoSec = auto.reduce((a, s) => a + segDuration(s, now), 0);
+    if (!map.size && autoSec <= 0) { alert("Brak danych w wybranym zakresie."); return; }
+    const rows = [["Typ", "Grupa czasu", "ID Azure", "Tytuł", "Czas w zakresie [h:mm:ss]", "Czas w zakresie [h dziesiętnie]", "Czas łączny [h:mm:ss]", "Estymata [h:mm]", "Ponad estymatę", "Dni", "Wpisów", "Komentarze"]];
+    for (const r of [...map.values()].sort((a, b) => b.sec - a.sec)) {
+      rows.push([typeLabel(r.task), BASES[baseOf(r.task)], r.task.wi || "", r.task.title || "", fmtHMS(r.sec), fmtAzure(r.sec), fmtHMS(r.all),
+        r.est ? fmtHM(r.est) : "", r.est && r.all > r.est ? "tak" : "", r.days, r.segs, [...r.comments].join("; ")]);
+    }
+    if (autoSec > 0) rows.push(["przerwa", "przerwa", "", "Przerwy (automatyczne)", fmtHMS(autoSec), fmtAzure(autoSec), "", "", "", new Set(auto.map((s) => dateKey(new Date(s.start)))).size, auto.length, ""]);
+    csvDownload("zadania-zakres", tag, rows);
+  });
+
   /** Miesiące: jeden wiersz na miesiąc – liczby z „Podsumowania miesiąca” (monthModel), dla miesięcy objętych wybranym zakresem. */
   on("export-csv-months", "click", () => {
     const { days, tag } = csvScope(true);
@@ -2803,6 +2848,37 @@ dialog.wide { width: min(1180px, 96vw); }
         fmtHMS(s.owed), fmtHMS(overtime), fmtHMS(s.extraWork), balance < 0 ? "na minus" : balance > 0 ? "na plus" : "zero", fmtHMS(Math.abs(balance))]);
     }
     csvDownload("miesiace", tag, rows);
+  });
+
+  /**
+   * Azure Boards – import: przecinek, UTF-8 z BOM, kropka dziesiętna – format, którego oczekuje „Import work items”.
+   * Jeden wiersz na ID Azure (ze wszystkich dni zakresu), tylko zadania z ID. Nazwy kolumn = nazwy pól w Azure; nic poza nimi,
+   * bo importer odrzuca nieznane kolumny. Import zastępuje wartości pól (nie dodaje), stąd domyślnie czas ze wszystkich dni.
+   */
+  on("export-azure", "click", () => {
+    const { days, tag } = csvScope(), now = Date.now(), useTotal = $("azure-total").checked, withTitle = $("azure-title").checked;
+    const byWi = new Map();
+    for (const day of days) for (const task of day.tasks) {
+      if (!task.wi || !segsOf(day, task.id).length) continue;
+      const row = byWi.get(task.wi) || { wi: task.wi, title: "", est: 0, inRange: 0, total: taskSecondsAllDays(day, task, now) };
+      row.inRange += taskSecondsInDay(day, task.id, now);
+      if ((task.title || "").trim()) row.title = task.title.trim(); // ostatni dzień zakresu ma pierwszeństwo
+      if (task.estimateH) row.est = task.estimateH * H;
+      byWi.set(task.wi, row);
+    }
+    const rows = [...byWi.values()].sort((a, b) => a.wi.localeCompare(b.wi, undefined, { numeric: true }));
+    if (!rows.length) { alert("W wybranym zakresie nie ma zadań z ID Azure."); return; }
+    const anyEst = rows.some((r) => r.est > 0);
+    const header = ["ID", "Work Item Type", ...(withTitle ? ["Title"] : []), "Completed Work", ...(anyEst ? ["Original Estimate", "Remaining Work"] : [])];
+    const lines = [header, ...rows.map((r) => {
+      const completed = useTotal ? r.total : r.inRange;
+      return [r.wi, "Task", ...(withTitle ? [r.title || `Zadanie #${r.wi}`] : []), fmtAzure(completed),
+        ...(anyEst ? (r.est > 0 ? [fmtAzure(r.est), fmtAzure(Math.max(0, r.est - r.total))] : ["", ""]) : [])];
+    })];
+    const CRLF = String.fromCharCode(13, 10), DQ = String.fromCharCode(34);
+    const quote = (v) => (typeof v === "string" && v !== "" && !/^[0-9.]+$/.test(v) ? DQ + v.split(DQ).join(DQ + DQ) + DQ : String(v)); // tekst w cudzysłowie (przecinki, cudzysłowy w tytule)
+    const csv = lines.map((l) => l.map(quote).join(",")).join(CRLF) + CRLF;
+    downloadFile(`azure-boards-import-${tag}.csv`, "﻿" + csv, "text/csv;charset=utf-8");
   });
 
   on("import-json", "change", async () => {
