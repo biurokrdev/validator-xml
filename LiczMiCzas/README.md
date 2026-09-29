@@ -78,8 +78,9 @@ razem z tekstem – długi komentarz zawija się, zamiast chować za krawędzią
 zdarzeniem przesuwa się krawędź wpisu, który wtedy ruszył albo został zamknięty (np. „Rozpoczęto pracę” 10:00 → 7:00 wydłuża
 pierwszy wpis do 7:00 i koryguje licznik dnia). Zdarzenia muszą zachować kolejność i nie mogą być w przyszłości.
 
-**Przerwa → zadanie** – przycisk „Przypisz zadanie” na karcie przerwy (także trwającej). Okno otwiera się puste: podajesz zadanie (wcześniejsze
-podpowiadają się przy wpisywaniu ID lub tytułu) i godzinę, od której trwa: zostawiona bez zmian zamienia całą przerwę, późniejsza dzieli wpis – do niej przerwa,
+**Przerwa → zadanie** – przycisk „Przypisz zadanie” na karcie przerwy (także trwającej). Okno otwiera się puste: podajesz zadanie – wpisując je albo
+klikając **lupę przy polu Task (Azure)**, która otwiera wyszukiwarkę po liście zadań (bez zamkniętych, ostatnio używane na górze;
+klik albo Enter wypełnia Task, tytuł, typ i estymatę) – i godzinę, od której trwa: zostawiona bez zmian zamienia całą przerwę, późniejsza dzieli wpis – do niej przerwa,
 od niej zadanie (trwająca przerwa liczy dalej już jako zadanie). Jeśli takie zadanie było już dziś, dochodzi do niego kolejny wpis.
 
 Ikona ✎ pozwala poprawić godziny wpisu, ID/tytuł/typ/estymatę zadania i komentarz. Godzinę wpisuje się z klawiatury
@@ -94,6 +95,29 @@ czy go przyciąć (np. cofasz start zadania o 10 min → poprzednia przerwa koń
 znalazłby się w całości w środku edytowanego, zmiana jest blokowana. Nakładki, które już są w danych dzisiejszego dnia,
 pokazuje żółty pasek nad listą z przyciskiem **Napraw** (wcześniejszy wpis kończy się tam, gdzie zaczyna się następny);
 na wykresie aktywności taka godzina jest przeskalowana do 60 min i opisana pod wykresem.
+
+## Lista zadań (panel wysuwany)
+
+Przycisk ☰ w lewym górnym rogu wysuwa z lewej **listę zadań** – rejestr wszystkich zadań, nad którymi pracujesz, żeby nie
+wpisywać ich każdego dnia od nowa. Trafiają tam same: każde zadanie rozpoczęte w aplikacji (z Task (Azure) albo z samym
+tytułem), także te z dni sprzed wprowadzenia listy. Zadania łączą się po ID Azure, a bez ID – po tytule.
+
+- **Wyszukiwanie** po ID lub tytule, potem **▶ Wznów** – zadanie trafia na dzisiejszą listę i od razu liczy czas
+  (z tym samym typem i estymatą). Zadanie, które trwa, jest na górze listy i ma „trwa…” zamiast przycisku.
+- **Stan** każdej karteczki: *New* (jeszcze nierozpoczęte), *Active* (w pracy), *Closed* (zakończone). Stan zmienia się
+  na karcie w panelu albo na karcie zadania na głównej liście dnia. **Closed chowa zadanie z panelu**; wpisy i czas zostają,
+  a opcja „pokaż też zamknięte” pozwala je zobaczyć i przywrócić. Rozpoczęcie pracy nad zadaniem zawsze ustawia je na Active.
+- **Edycja z listy:** ołówek na karteczce otwiera okno z polami Task (Azure), tytuł, typ, estymata i stan. Zmiana obejmuje
+  wpisy tego zadania ze wszystkich dni (np. nadanie ID zadaniu, które miało sam tytuł). Zadanie bez żadnego czasu można usunąć (kosz).
+- **Import z Azure (CSV):** przycisk w panelu wczytuje plik wyeksportowany z Azure Boards (*Queries → Export to CSV*). Do importu
+  trafiają tylko elementy typu Task (inne typy są pomijane i policzone). Najpierw otwiera się **okno pośrednie** z listą zadań z pliku:
+  przy każdym można poprawić Task (Azure), tytuł, estymatę i stan oraz wybrać typ – osobno albo „Typ dla wszystkich”. Na listę
+  trafiają tylko zaznaczone wiersze. Zadania, które już są na liście, oraz zamknięte w Azure są domyślnie odznaczone
+  (zaznaczenie istniejącego aktualizuje jego dane). Rozpoznawane kolumny: ID, Work Item Type, Title (także Title 1, Title 2…
+  z zapytań drzewiastych), State, Original Estimate; separator przecinek, średnik albo tabulator.
+- Karteczka pokazuje typ, czas łączny ze wszystkich dni (i estymatę) oraz datę ostatniej pracy. Esc albo × zamyka panel.
+
+Rejestr jest częścią danych aplikacji (kopia JSON, plik danych w `file.html`).
 
 ## Typy zadań
 

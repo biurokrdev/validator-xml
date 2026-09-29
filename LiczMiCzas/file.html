@@ -345,6 +345,48 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; opaci
 .task-form label:not(.grow) input, .task-form label:not(.grow) select { width: 110px; }
 .task-form label:not(.grow) .field-btn input { width: 74px; flex: none; }
 
+/* ---------- Lista zadań: panel wysuwany z lewej ---------- */
+.backlog {
+  position: fixed; z-index: 4; top: 48px; bottom: 0; left: 0; width: min(400px, 94vw);
+  display: flex; flex-direction: column; gap: 10px; padding: 16px;
+  background: var(--surface); border-right: 1px solid var(--border-strong); box-shadow: var(--shadow-16); overflow-y: auto;
+}
+.backlog[hidden] { display: none; }
+.backlog-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.backlog-head h2 { margin: 0; }
+.backlog .filter-bar { margin: 0; }
+.backlog-opt { display: flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; font-size: 12px; font-weight: 400; color: var(--text-secondary); }
+.backlog-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.imp-bulk { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.imp-bulk-type { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 0; font-size: 12px; }
+.imp-table { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); max-height: 52vh; overflow-y: auto; }
+.imp-row { display: grid; grid-template-columns: 24px 110px minmax(160px, 1fr) 170px 90px 100px; gap: 8px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.imp-row:last-child { border-bottom: none; }
+.imp-row.head { position: sticky; top: 0; z-index: 1; background: var(--surface-2); font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.imp-row.off { opacity: 0.55; }
+.imp-row input[type="text"], .imp-row select { width: 100%; min-width: 0; height: 28px; }
+.imp-note { grid-column: 2 / -1; font-size: 11px; color: var(--warn); margin-top: -4px; }
+@media (max-width: 900px) { .imp-row { grid-template-columns: 24px 90px minmax(0, 1fr); } .imp-row.head { display: none; } }
+.backlog-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.backlog-item {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 8px; align-items: center;
+  padding: 8px 10px 8px 9px; border-radius: var(--radius); border-left: 4px solid var(--wit-task); background: var(--surface-2); box-shadow: var(--shadow-4);
+}
+.backlog-item.org { border-left-color: var(--wit-org); }
+.backlog-item.other { border-left-color: var(--wit-other); }
+.backlog-item.break { border-left-color: var(--wit-break); }
+.backlog-item.running { background: var(--primary-lighter); box-shadow: inset 0 0 0 1px var(--primary), var(--shadow-4); }
+.backlog-item.closed { opacity: 0.65; }
+.backlog-title { display: flex; align-items: baseline; gap: 6px; min-width: 0; flex-wrap: wrap; font-weight: 600; overflow-wrap: anywhere; }
+.backlog-meta { grid-column: 1; font-size: 12px; color: var(--text-secondary); display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.backlog-actions { grid-column: 2; grid-row: 1 / span 2; display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.backlog-actions > .btn { height: 28px; line-height: 28px; padding: 0 10px; font-size: 13px; justify-content: center; }
+.backlog-icons { display: flex; gap: 4px; justify-content: flex-end; }
+.backlog-icons .entry-btn { width: 28px; }
+.state-select { height: 24px; padding: 0 4px; border-radius: 2px; border: 1px solid var(--border-strong); background: var(--input-bg); color: var(--text); font: inherit; font-size: 12px; font-weight: 400; }
+.state-select:hover { border-color: var(--text-secondary); }
+.state-select:focus { outline: none; border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+
 /* ---------- Oś czasu (karty jak na Azure Boards) ---------- */
 .list-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 
@@ -635,6 +677,14 @@ textarea { font: inherit; color: var(--text); }
 .clock-grid button.five { font-weight: 600; background: var(--neutral-btn-hover); }
 .clock-grid button.on, .clock-grid button.on:hover { background: var(--primary-btn); color: #fff; font-weight: 600; }
 .est-pop { width: 320px; }
+.pick-pop { width: 380px; max-width: 92vw; display: flex; flex-direction: column; gap: 8px; }
+.pick-pop input[type="search"] { width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 2px; background: var(--input-bg); color: var(--text); font: inherit; }
+.pick-pop input[type="search"]:focus { outline: none; border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.pick-list { list-style: none; margin: 0; padding: 0; max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.pick-list button { width: 100%; display: flex; align-items: baseline; gap: 6px; padding: 6px 8px; border: none; border-radius: 2px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.pick-list button:hover, .pick-list button:focus-visible, .pick-list li:first-child button.first { background: var(--neutral-btn-hover); outline: none; }
+.pick-list .pick-title { flex: 1; min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
+.pick-list small { color: var(--text-secondary); white-space: nowrap; }
 .off-pop { display: flex; flex-direction: column; gap: 4px; min-width: 180px; }
 .off-pop .btn { justify-content: flex-start; }
 .off-pop .off-clear { margin-top: 6px; color: var(--danger); }
@@ -839,6 +889,9 @@ dialog.wide { width: min(1180px, 96vw); }
 <body>
   <header class="topbar">
     <div class="brand">
+      <button type="button" class="btn icon-btn" id="backlog-toggle" title="Lista zadań – wyszukaj zadanie i wznów je bez wpisywania od nowa" aria-label="Lista zadań" aria-expanded="false" aria-controls="backlog">
+        <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M3 4.75A.75.75 0 0 1 3.75 4h12.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 4.75zm0 5.25a.75.75 0 0 1 .75-.75h12.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 10zm.75 4.5a.75.75 0 0 0 0 1.5h12.5a.75.75 0 0 0 0-1.5H3.75z"/></svg>
+      </button>
       <span class="logo" aria-hidden="true">
         <svg viewBox="0 0 16 16" width="18" height="18"><path fill="#fff" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM8 3a5 5 0 1 1 0 10A5 5 0 0 1 8 3zm-.75 2v3.31l2.47 1.48.77-1.28-1.74-1.04V5h-1.5z"/></svg>
       </span>
@@ -863,6 +916,26 @@ dialog.wide { width: min(1180px, 96vw); }
       </button>
     </div>
   </header>
+
+  <!-- Wysuwany panel: lista zadań (rejestr ze stanami New / Active / Closed) -->
+  <aside class="backlog" id="backlog" aria-label="Lista zadań" hidden>
+    <div class="backlog-head">
+      <h2>Lista zadań <span class="muted" id="backlog-count"></span></h2>
+      <button type="button" class="btn icon-btn" id="backlog-close" title="Zamknij (Esc)" aria-label="Zamknij listę zadań">
+        <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M4.47 4.47a.75.75 0 0 1 1.06 0L10 8.94l4.47-4.47a.75.75 0 1 1 1.06 1.06L11.06 10l4.47 4.47a.75.75 0 1 1-1.06 1.06L10 11.06l-4.47 4.47a.75.75 0 0 1-1.06-1.06L8.94 10 4.47 5.53a.75.75 0 0 1 0-1.06z"/></svg>
+      </button>
+    </div>
+    <div class="filter-bar">
+      <svg class="filter-icon" viewBox="0 0 20 20" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8.5 3a5.5 5.5 0 0 1 4.38 8.82l4.15 4.15a.75.75 0 0 1-1.06 1.06l-4.15-4.15A5.5 5.5 0 1 1 8.5 3zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+      <input type="search" id="backlog-search" placeholder="Szukaj po Task (Azure) lub tytule" autocomplete="off" spellcheck="false" />
+    </div>
+    <div class="backlog-tools">
+      <label class="backlog-opt"><input type="checkbox" id="backlog-closed" /> pokaż też zamknięte (Closed)</label>
+      <label class="btn small file-btn" title="Wczytaj plik CSV wyeksportowany z Azure Boards (Queries → Export to CSV) – przed dodaniem zobaczysz listę do przejrzenia">Import z Azure (CSV)<input type="file" id="backlog-import" accept=".csv,text/csv" hidden /></label>
+    </div>
+    <ul class="backlog-list" id="backlog-list"></ul>
+    <p class="muted small" id="backlog-empty" hidden></p>
+  </aside>
 
   <main class="layout">
     <!-- LEWA KOLUMNA -->
@@ -1309,7 +1382,7 @@ dialog.wide { width: min(1180px, 96vw); }
     <form method="dialog" class="edit-form" id="convert-form">
       <h3>Przypisz zadanie do przerwy</h3>
       <p class="muted small" id="c-info"></p>
-      <label><span>Task (Azure)</span><input type="text" id="c-wi" placeholder="np. 12345" list="wi-suggestions" autocomplete="off" /></label>
+      <label><span>Task (Azure)</span><span class="field-btn"><input type="text" id="c-wi" placeholder="np. 12345" list="wi-suggestions" autocomplete="off" /><button type="button" class="btn icon-btn field-pick" data-pick="convert" title="Wyszukaj zadanie z listy zadań" aria-label="Wyszukaj zadanie z listy zadań"></button></span></label>
       <label><span>Tytuł</span><input type="text" id="c-title" placeholder="Opis zadania" list="title-suggestions" autocomplete="off" /></label>
       <div class="settings-grid">
         <label><span>Typ</span><select id="c-type"></select></label>
@@ -1326,6 +1399,51 @@ dialog.wide { width: min(1180px, 96vw); }
       <div class="actions">
         <button type="button" class="btn" id="c-cancel">Anuluj</button>
         <button type="submit" class="btn primary">Przypisz zadanie</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Okno pośrednie importu z Azure Boards: przegląd i uzupełnienie zadań przed dodaniem do listy -->
+  <dialog id="import-dialog" class="wide">
+    <form method="dialog" class="edit-form" id="import-form">
+      <div class="activity-head">
+        <h3>Import z Azure Boards</h3>
+        <span class="muted small" id="imp-info"></span>
+      </div>
+      <p class="muted small">Zadania z pliku nie mają typu z aplikacji – ustaw go tutaj (dla wszystkich naraz albo osobno). Możesz też poprawić Task (Azure), tytuł, estymatę i stan. Na listę trafią tylko zaznaczone wiersze.</p>
+      <div class="imp-bulk">
+        <label class="backlog-opt"><input type="checkbox" id="imp-all" checked /> zaznacz wszystkie</label>
+        <label class="imp-bulk-type"><span>Typ dla wszystkich</span><select id="imp-type-all"></select></label>
+      </div>
+      <div class="imp-table" id="imp-table"></div>
+      <div class="actions">
+        <button type="button" class="btn" id="imp-cancel">Anuluj</button>
+        <button type="submit" class="btn primary" id="imp-submit">Dodaj do listy</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Dialog: edycja zadania z listy zadań -->
+  <dialog id="backlog-dialog">
+    <form method="dialog" class="edit-form" id="backlog-edit-form">
+      <h3>Edytuj zadanie</h3>
+      <label><span>Task (Azure)</span><input type="text" id="b-wi" placeholder="np. 12345" autocomplete="off" /></label>
+      <label><span>Tytuł</span><input type="text" id="b-title" placeholder="Opis zadania" autocomplete="off" /></label>
+      <div class="settings-grid">
+        <label><span>Typ</span><select id="b-type"></select></label>
+        <label><span>Estymata (czas)</span><span class="field-btn"><input type="text" id="b-est" placeholder="np. 8:30" inputmode="decimal" /><button type="button" class="btn icon-btn field-pick" data-est="b-est" title="Wylicz estymatę z godzin od – do" aria-label="Wylicz estymatę z godzin od – do"></button></span></label>
+      </div>
+      <label><span>Stan</span>
+        <select id="b-status">
+          <option value="new">New</option>
+          <option value="active">Active</option>
+          <option value="closed">Closed</option>
+        </select>
+      </label>
+      <p class="muted small" id="b-hint"></p>
+      <div class="actions">
+        <button type="button" class="btn" id="b-cancel">Anuluj</button>
+        <button type="submit" class="btn primary">Zapisz</button>
       </div>
     </form>
   </dialog>
@@ -1447,7 +1565,9 @@ dialog.wide { width: min(1180px, 96vw); }
     settings.types = !types.length ? DEFAULT_TYPES.map((t) => ({ ...t })) : version < TYPES_VERSION ? migrateTypes(types, days, version) : types;
     if (!settings.types.length) settings.types = DEFAULT_TYPES.map((t) => ({ ...t }));
     settings.typesVersion = TYPES_VERSION;
-    return { settings, days };
+    // rejestr zadań (lista w panelu): klucz = ID Azure albo tytuł; stan New / Active / Closed
+    const backlog = p?.backlog && typeof p.backlog === "object" && !Array.isArray(p.backlog) ? p.backlog : {};
+    return { settings, days, backlog };
   };
   let state;
   state = normalize(null); // puste do chwili otwarcia pliku danych
@@ -1509,6 +1629,7 @@ dialog.wide { width: min(1180px, 96vw); }
     document.documentElement.dataset.theme = S().theme === "light" ? "light" : "dark";
     const loaded = serialize();
     closeStaleDays();
+    syncBacklog();
     selectedDate = today();
     selectedMonth = today().slice(0, 7);
     renderSettings();
@@ -1666,6 +1787,45 @@ dialog.wide { width: min(1180px, 96vw); }
   const workItemUrl = (wi) => { const base = (S().orgUrl || "").trim().replace(/\/+$/, ""); return base && wi ? `${base}/_workitems/edit/${encodeURIComponent(wi)}` : null; };
   const taskInfo = (daySec, totalSec, estSec) =>
     `zadanie dziś: ${fmtHM(daySec)}` + (totalSec > daySec + 1 ? ` · łącznie: ${fmtHM(totalSec)}` : "") + (estSec ? ` · estymata: ${fmtHM(estSec)}` : "");
+  // ---------- Rejestr zadań (lista w panelu) ----------
+  //  state.backlog[klucz] = { wi, title, typeId, type, estimateH, status: "new"|"active"|"closed" }
+  //  Zadania dnia (day.tasks) łączą się z rejestrem po kluczu: ID Azure, a bez ID – tytuł.
+  const TASK_STATES = { new: "New", active: "Active", closed: "Closed" };
+  const taskKey = (t) => (t.wi ? `wi:${String(t.wi).trim()}` : `t:${(t.title || "").trim().toLowerCase()}`);
+  const taskState = (t) => state.backlog[taskKey(t)]?.status || "active";
+  /** Każde zadanie z dowolnego dnia ma wpis w rejestrze; dane wpisu idą za najnowszym dniem. Zadanie, które ma już czas, nie może być „New”. */
+  function syncBacklog() {
+    for (const day of Object.values(state.days).sort((a, b) => a.date.localeCompare(b.date))) for (const t of day.tasks) {
+      const key = taskKey(t);
+      if (key === "t:") continue;
+      const used = segsOf(day, t.id).length > 0, entry = (state.backlog[key] ??= { status: "active" });
+      Object.assign(entry, { wi: t.wi || "", title: t.title || "", typeId: t.typeId ?? t.type, type: t.type, estimateH: t.estimateH ?? null });
+      if (used && entry.status === "new") entry.status = "active";
+    }
+  }
+  function setTaskState(key, status) {
+    if (!state.backlog[key] || !TASK_STATES[status]) return;
+    state.backlog[key].status = status;
+    commit();
+  }
+  /** Zadanie z rejestru jako zadanie dzisiejszego dnia (istniejące albo nowe) – do wznowienia z panelu. */
+  function todayTaskFor(key) {
+    const entry = state.backlog[key], day = ensureDay(today());
+    let task = day.tasks.find((t) => taskKey(t) === key);
+    if (!task) {
+      const type = types().find((x) => x.id === entry.typeId);
+      task = { id: uid(), wi: entry.wi || "", title: entry.title || "", typeId: type ? type.id : entry.typeId ?? "", type: type ? type.base : entry.type || "praca", estimateH: entry.estimateH ?? null };
+      day.tasks.push(task);
+    }
+    return task;
+  }
+  /** Sekundy zadania ze wszystkich dni + data ostatniej pracy (do sortowania i opisu na liście). */
+  function keyUsage(key, now) {
+    let sec = 0, last = 0;
+    for (const day of Object.values(state.days)) for (const t of day.tasks) if (taskKey(t) === key) for (const s of segsOf(day, t.id)) { sec += segDuration(s, now); last = Math.max(last, s.start); }
+    return { sec, last };
+  }
+
   function knownTasks() {
     const map = new Map();
     for (const day of Object.values(state.days)) for (const t of day.tasks) map.set(t.wi ? `wi:${t.wi}` : `t:${(t.title || "").trim().toLowerCase()}`, t);
@@ -1730,7 +1890,7 @@ dialog.wide { width: min(1180px, 96vw); }
   }
 
   // ---------- Operacje ----------
-  const commit = () => { save(); render(); };
+  const commit = () => { syncBacklog(); save(); render(); };
   const closeOpen = (day, now) => { const o = openSegment(day); if (o) o.end = Math.max(o.start, now); };
   const pushSegment = (day, seg) => day.segments.push({ id: uid(), kind: "break", taskId: null, start: Date.now(), end: null, comment: "", ...seg });
   const addEvent = (day, type, at) => ensureDay(day.date).events.push({ id: uid(), type, at });
@@ -1760,6 +1920,9 @@ dialog.wide { width: min(1180px, 96vw); }
     const day = ensureDay(today()), now = Date.now();
     if (isWorking(day)) closeOpen(day, now); else beginWorking(day, now);
     pushSegment(day, { kind: "task", taskId, start: now });
+    // rozpoczęcie pracy nad zadaniem przywraca je na listę (New / Closed → Active)
+    const started = findTask(day, taskId), entry = started && state.backlog[taskKey(started)];
+    if (entry) entry.status = "active";
     commit();
   }
   /** Zatrzymuje zadanie – czas leci dalej jako przerwa. */
@@ -1933,8 +2096,12 @@ dialog.wide { width: min(1180px, 96vw); }
     trash: svgIcon("M8.5 2a1.5 1.5 0 0 0-1.5 1.5V4H3.75a.75.75 0 0 0 0 1.5h.6l.72 10.13A2 2 0 0 0 7.07 17.5h5.86a2 2 0 0 0 2-1.87l.72-10.13h.6a.75.75 0 0 0 0-1.5H13v-.5A1.5 1.5 0 0 0 11.5 2h-3zm3 2h-3v-.5h3V4zM5.86 5.5h8.28l-.71 10.02a.5.5 0 0 1-.5.48H7.07a.5.5 0 0 1-.5-.48L5.86 5.5zM8.5 7.75a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V8.5a.75.75 0 0 1 .75-.75zm3 0a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0V8.5a.75.75 0 0 1 .75-.75z"),
     stop: svgIcon("M5.5 4h9A1.5 1.5 0 0 1 16 5.5v9a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 4 14.5v-9A1.5 1.5 0 0 1 5.5 4z"),
     clock: svgIcon("M10 2a8 8 0 1 0 0 16 8 8 0 0 0 0-16zm0 1.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13zm-.75 2.25v4.56l3.1 1.86.77-1.28-2.37-1.42V5.75h-1.5z"),
+    search: svgIcon("M8.5 3a5.5 5.5 0 0 1 4.38 8.82l4.15 4.15a.75.75 0 0 1-1.06 1.06l-4.15-4.15A5.5 5.5 0 1 1 8.5 3zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"),
     play: svgIcon("M6.5 3.7a1 1 0 0 1 1.52-.85l9.1 5.8a1.6 1.6 0 0 1 0 2.7l-9.1 5.8a1 1 0 0 1-1.52-.85V3.7z"),
   };
+
+  const stateSelectHtml = (key, status) => `<select class="state-select ${status}" data-state="${esc(key)}" title="Stan zadania – „Closed” chowa je z listy zadań" aria-label="Stan zadania">` +
+    Object.entries(TASK_STATES).map(([k, label]) => `<option value="${k}" ${k === status ? "selected" : ""}>${label}</option>`).join("") + "</select>";
 
   function entryHtml(day, s, now, isLastOfTask) {
     const running = s.end === null;
@@ -1947,7 +2114,7 @@ dialog.wide { width: min(1180px, 96vw); }
         ? `<span class="badge noid" title="Zadanie bez ID w Azure Boards">Brak ID Azure</span>`
         : url ? `<a class="entry-wi" href="${esc(url)}" target="_blank" rel="noopener">#${esc(task.wi)}</a>` : `<span class="entry-wi">#${esc(task.wi)}</span>`;
       head = `${wiHtml}<span class="entry-title" title="${esc(title)}">${esc(title)}</span>
-              <span class="badge ${type}">${typeLabel(task)}</span>`;
+              <span class="badge ${type}">${typeLabel(task)}</span>${stateSelectHtml(taskKey(task), taskState(task))}`;
       const daySec = taskSecondsInDay(day, task.id, now), allSec = taskSecondsAllDays(day, task, now);
       overEst = !!task.estimateH && allSec > task.estimateH * H;
       sub = taskInfo(daySec, allSec, task.estimateH * H);
@@ -2407,6 +2574,220 @@ dialog.wide { width: min(1180px, 96vw); }
     else if (e.target.closest("[data-month-toggle]")) { monthDetailsOpen = !monthDetailsOpen; renderMonth(); }
   });
 
+  // ---------- Lista zadań (panel wysuwany) ----------
+  let backlogQuery = "", lastBacklogHtml = "";
+  const backlogOpen = () => !$("backlog").hidden;
+  function renderBacklog() {
+    if (!backlogOpen()) return;
+    const now = Date.now(), q = backlogQuery.trim().toLowerCase().replace(/^#/, ""), showClosed = $("backlog-closed").checked;
+    const day = todayDay(), open = day ? openSegment(day) : null, runningKey = open?.kind === "task" ? taskKey(findTask(day, open.taskId) || {}) : "";
+    const all = Object.entries(state.backlog).map(([key, e]) => ({ key, e, ...keyUsage(key, now) }));
+    const order = { active: 0, new: 1, closed: 2 };
+    const items = all.filter(({ e }) => (showClosed || e.status !== "closed") && (!q || (e.wi || "").toLowerCase().includes(q) || (e.title || "").toLowerCase().includes(q)))
+      .sort((a, b) => (b.key === runningKey) - (a.key === runningKey) || order[a.e.status] - order[b.e.status] || b.last - a.last || taskTitle(a.e).localeCompare(taskTitle(b.e)));
+    setText("backlog-count", `(${all.filter(({ e }) => e.status !== "closed").length})`);
+    const html = items.map(({ key, e, sec, last }) => {
+      const running = key === runningKey, url = workItemUrl(e.wi), type = types().find((x) => x.id === e.typeId), base = type ? type.base : BASES[e.type] ? e.type : "praca";
+      const wiHtml = !e.wi ? "" : url ? `<a class="entry-wi" href="${esc(url)}" target="_blank" rel="noopener">#${esc(e.wi)}</a>` : `<span class="entry-wi">#${esc(e.wi)}</span>`;
+      return `
+        <li class="backlog-item ${base} ${running ? "running" : ""} ${e.status}" data-key="${esc(key)}">
+          <div class="backlog-title">${wiHtml}<span>${esc(taskTitle(e))}</span></div>
+          <div class="backlog-meta"><span class="badge ${base}">${esc(type ? type.name : BASES[base])}</span>${stateSelectHtml(key, e.status)}
+            <span>${sec > 0 ? `łącznie ${fmtHM(sec)}` : "jeszcze bez czasu"}${e.estimateH ? ` / ${fmtHM(e.estimateH * H)}` : ""}${last ? ` · ostatnio ${fmtDatePl(dateKey(new Date(last)))}` : ""}</span></div>
+          <div class="backlog-actions">
+            ${running ? `<button type="button" class="btn" disabled>trwa…</button>` : `<button type="button" class="btn success" data-act="resume" title="Rozpoczyna liczenie czasu tego zadania (nowa karta na dzisiejszej liście)">${ICON.play}${sec > 0 ? "Wznów" : "Rozpocznij"}</button>`}
+            <div class="backlog-icons">
+              <button type="button" class="btn entry-btn edit" data-act="edit" title="Edytuj zadanie (Task, tytuł, typ, estymata, stan)" aria-label="Edytuj zadanie">${ICON.edit}</button>
+              ${sec > 0 ? "" : `<button type="button" class="btn entry-btn delete" data-act="remove" title="Usuń z listy (zadanie nie ma jeszcze żadnego czasu)" aria-label="Usuń z listy">${ICON.trash}</button>`}
+            </div>
+          </div>
+        </li>`;
+    }).join("");
+    if (html !== lastBacklogHtml) { $("backlog-list").innerHTML = html; lastBacklogHtml = html; }
+    $("backlog-empty").hidden = items.length > 0;
+    setText("backlog-empty", q ? "Brak zadań pasujących do wyszukiwania." : "Lista jest pusta – zadania trafiają tu same, gdy zaczniesz nad nimi pracę.");
+  }
+  function toggleBacklog(show = !backlogOpen()) {
+    $("backlog").hidden = !show;
+    $("backlog-toggle").classList.toggle("active", show);
+    $("backlog-toggle").setAttribute("aria-expanded", String(show));
+    if (show) { lastBacklogHtml = ""; renderBacklog(); $("backlog-search").focus(); }
+  }
+  on("backlog-toggle", "click", () => toggleBacklog());
+  on("backlog-close", "click", () => toggleBacklog(false));
+  on("backlog-search", "input", () => { backlogQuery = $("backlog-search").value; renderBacklog(); });
+  on("backlog-closed", "change", renderBacklog);
+  on("backlog-list", "change", (e) => { const sel = e.target.closest("select[data-state]"); if (sel) setTaskState(sel.dataset.state, sel.value); });
+  on("backlog-list", "click", (e) => {
+    const btn = e.target.closest("button[data-act]"), key = btn?.closest("li[data-key]").dataset.key;
+    if (!btn || !state.backlog[key]) return;
+    if (btn.dataset.act === "resume") startTask(todayTaskFor(key).id);
+    else if (btn.dataset.act === "edit") openBacklogEdit(key);
+    else if (btn.dataset.act === "remove" && confirm(`Usunąć z listy zadanie „${taskTitle(state.backlog[key])}”?`)) { delete state.backlog[key]; commit(); }
+  });
+  // ---------- Import zadań z CSV wyeksportowanego z Azure Boards ----------
+  /** Parser CSV wg RFC 4180 (cudzysłowy, znaki nowej linii w polach); separator wykrywany z nagłówka: przecinek, średnik albo tabulator. */
+  function parseCsv(text) {
+    const src = text.replace(/^\uFEFF/, ""), head = src.split(/\r?\n/, 1)[0] || "";
+    const sep = [",", ";", "\t"].map((s) => [s, head.split(s).length]).sort((a, b) => b[1] - a[1])[0][0];
+    const rows = [];
+    let row = [], cell = "", quoted = false;
+    for (let i = 0; i < src.length; i++) {
+      const ch = src[i];
+      if (quoted) {
+        if (ch === '"') { if (src[i + 1] === '"') { cell += '"'; i++; } else quoted = false; }
+        else cell += ch;
+      } else if (ch === '"') quoted = true;
+      else if (ch === sep) { row.push(cell); cell = ""; }
+      else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && src[i + 1] === "\n") i++;
+        row.push(cell); cell = "";
+        if (row.some((c) => c.trim() !== "")) rows.push(row);
+        row = [];
+      } else cell += ch;
+    }
+    row.push(cell);
+    if (row.some((c) => c.trim() !== "")) rows.push(row);
+    return rows;
+  }
+  // nazwy kolumn z eksportu Azure (angielskie i polskie wersje interfejsu)
+  const IMPORT_COLS = {
+    id: ["id", "identyfikator"],
+    kind: ["work item type", "typ elementu roboczego"],
+    state: ["state", "stan"],
+    est: ["original estimate", "oryginalne oszacowanie", "szacowanie pierwotne"],
+  };
+  const AZURE_STATE = { new: "new", "to do": "new", proposed: "new", active: "active", "in progress": "active", doing: "active", committed: "active", resolved: "active", closed: "closed", done: "closed", removed: "closed" };
+  let importRows = [];
+  /** Wiersze z pliku jako propozycje wpisów rejestru; pomija elementy inne niż Task, gdy plik ma kolumnę typu. */
+  function readAzureCsv(text) {
+    const rows = parseCsv(text);
+    if (rows.length < 2) throw new Error("Plik jest pusty albo ma tylko nagłówek.");
+    const header = rows[0].map((c) => c.trim().toLowerCase());
+    const col = (names) => header.findIndex((c) => names.includes(c));
+    const iId = col(IMPORT_COLS.id), iKind = col(IMPORT_COLS.kind), iState = col(IMPORT_COLS.state), iEst = col(IMPORT_COLS.est);
+    const titleCols = header.map((c, i) => (/^(title|tytuł)( \d+)?$/.test(c) ? i : -1)).filter((i) => i >= 0); // zapytanie drzewiaste ma „Title 1”, „Title 2”…
+    if (iId < 0 && !titleCols.length) throw new Error("Nie rozpoznaję kolumn – w pliku powinny być co najmniej „ID” i „Title”.");
+    const defType = (types().find((t) => t.base === "praca") ?? types()[0]).id;
+    let skipped = 0;
+    const out = [];
+    for (const r of rows.slice(1)) {
+      const kind = iKind >= 0 ? (r[iKind] || "").trim() : "";
+      if (kind && kind.toLowerCase() !== "task") { skipped++; continue; }
+      const wi = iId >= 0 ? (r[iId] || "").trim() : "", title = titleCols.map((i) => (r[i] || "").trim()).find(Boolean) || "";
+      if (!wi && !title) continue;
+      const est = iEst >= 0 ? parseEstimate(r[iEst]) : null, azState = iState >= 0 ? (r[iState] || "").trim() : "";
+      const existing = state.backlog[taskKey({ wi, title })];
+      out.push({ wi, title, typeId: existing ? existing.typeId : defType, est: estimateToInput(est ?? existing?.estimateH ?? null), azState,
+        status: existing ? existing.status : AZURE_STATE[azState.toLowerCase()] || "new", existing: !!existing,
+        on: !existing && (AZURE_STATE[azState.toLowerCase()] || "new") !== "closed" });
+    }
+    return { rows: out, skipped };
+  }
+  function renderImport() {
+    const typeOpts = (sel) => types().map((t) => `<option value="${esc(t.id)}" ${t.id === sel ? "selected" : ""}>${esc(t.name)}</option>`).join("");
+    const stateOpts = (sel) => Object.entries(TASK_STATES).map(([k, l]) => `<option value="${k}" ${k === sel ? "selected" : ""}>${l}</option>`).join("");
+    $("imp-table").innerHTML = `<div class="imp-row head"><span></span><span>Task (Azure)</span><span>Tytuł</span><span>Typ</span><span>Estymata</span><span>Stan</span></div>` +
+      importRows.map((r, i) => `
+        <div class="imp-row ${r.on ? "" : "off"}" data-i="${i}">
+          <input type="checkbox" data-f="on" ${r.on ? "checked" : ""} aria-label="Dodaj to zadanie" />
+          <input type="text" data-f="wi" value="${esc(r.wi)}" aria-label="Task (Azure)" />
+          <input type="text" data-f="title" value="${esc(r.title)}" aria-label="Tytuł" />
+          <select data-f="typeId" aria-label="Typ">${typeOpts(r.typeId)}</select>
+          <input type="text" data-f="est" value="${esc(r.est)}" placeholder="np. 8:30" aria-label="Estymata" />
+          <select data-f="status" aria-label="Stan">${stateOpts(r.status)}</select>
+          ${r.existing || r.azState ? `<span class="imp-note">${r.existing ? "już na liście – zaznacz, aby zaktualizować dane" : ""}${r.existing && r.azState ? " · " : ""}${r.azState ? `stan w Azure: ${esc(r.azState)}` : ""}</span>` : ""}
+        </div>`).join("");
+    updateImportCount();
+  }
+  function updateImportCount() {
+    const n = importRows.filter((r) => r.on).length;
+    setText("imp-submit", n ? `Dodaj do listy (${n})` : "Dodaj do listy");
+    $("imp-submit").disabled = !n;
+    $("imp-all").checked = n === importRows.length;
+  }
+  on("backlog-import", "change", async () => {
+    const input = $("backlog-import"), f = input.files?.[0];
+    if (!f) return;
+    try {
+      const { rows, skipped } = readAzureCsv(await f.text());
+      if (!rows.length) throw new Error(skipped ? `W pliku nie ma elementów typu Task (pominięte inne typy: ${skipped}).` : "W pliku nie ma zadań do zaimportowania.");
+      importRows = rows;
+      $("imp-type-all").innerHTML = `<option value="">— bez zmian —</option>` + types().map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");
+      setText("imp-info", `${f.name} · ${plural(rows.length, "zadanie", "zadania", "zadań")}` + (skipped ? ` · pominięto ${skipped} innego typu niż Task` : "") + (rows.some((r) => r.existing) ? ` · ${rows.filter((r) => r.existing).length} już na liście` : ""));
+      renderImport();
+      $("import-dialog").showModal();
+    } catch (err) { alert("Nie udało się zaimportować pliku: " + (err.message || err)); }
+    finally { input.value = ""; }
+  });
+  // pola wiersza zapisują się w modelu na bieżąco (bez przebudowy tabeli – nie gubi fokusu)
+  const importField = (e) => {
+    const el = e.target.closest("[data-f]"), row = el && importRows[Number(el.closest(".imp-row").dataset.i)];
+    if (!row) return;
+    row[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value;
+    if (el.dataset.f === "on") { el.closest(".imp-row").classList.toggle("off", !el.checked); updateImportCount(); }
+  };
+  on("imp-table", "input", importField);
+  on("imp-table", "change", importField);
+  on("imp-all", "change", () => { for (const r of importRows) r.on = $("imp-all").checked; renderImport(); });
+  on("imp-type-all", "change", () => { const v = $("imp-type-all").value; if (v) { for (const r of importRows) r.typeId = v; renderImport(); } });
+  on("imp-cancel", "click", () => $("import-dialog").close());
+  on("import-form", "submit", (ev) => {
+    const chosen = importRows.filter((r) => r.on), keys = new Set();
+    for (const r of chosen) {
+      const where = `„${r.title || r.wi || "wiersz bez nazwy"}”`;
+      const fail = (msg) => { ev.preventDefault(); alert(msg); };
+      if (!r.wi.trim() && !r.title.trim()) return fail("Zaznaczony wiersz nie ma ani Task (Azure), ani tytułu – uzupełnij go albo odznacz.");
+      if (r.est.trim() && parseEstimate(r.est) === null) return fail(`Nie rozumiem estymaty „${r.est}” w zadaniu ${where}. Wpisz np. 8:30 albo 8.5.`);
+      const key = taskKey({ wi: r.wi.trim(), title: r.title.trim() });
+      if (keys.has(key)) return fail(`Zadanie ${where} jest w imporcie dwa razy (ten sam Task (Azure) / tytuł) – odznacz jedno.`);
+      keys.add(key);
+    }
+    for (const r of chosen) {
+      const type = types().find((t) => t.id === r.typeId) ?? types()[0];
+      const fields = { wi: r.wi.trim(), title: r.title.trim(), typeId: type.id, type: type.base, estimateH: parseEstimate(r.est) }, key = taskKey(fields);
+      // zadanie, które już było na liście: dane idą też do jego wpisów w dniach (jak przy edycji z listy)
+      for (const d of Object.values(state.days)) for (const t of d.tasks) if (taskKey(t) === key) Object.assign(t, fields);
+      state.backlog[key] = { ...fields, status: r.status };
+    }
+    importRows = [];
+    commit();
+  });
+
+  // edycja zadania z listy: zmiana dotyczy wpisu w rejestrze i wszystkich wpisów tego zadania w każdym dniu
+  let editingBacklogKey = null;
+  function openBacklogEdit(key) {
+    const e = state.backlog[key];
+    if (!e) return;
+    editingBacklogKey = key;
+    $("b-wi").value = e.wi || "";
+    $("b-title").value = e.title || "";
+    $("b-type").value = (types().find((x) => x.id === e.typeId) ?? types().find((x) => x.base === e.type) ?? types()[0]).id;
+    $("b-est").value = estimateToInput(e.estimateH);
+    $("b-status").value = e.status;
+    const daysUsed = Object.values(state.days).filter((d) => d.tasks.some((t) => taskKey(t) === key)).length;
+    setText("b-hint", daysUsed ? `Zmiana Task (Azure), tytułu, typu i estymaty obejmie wpisy tego zadania ze wszystkich dni (${plural(daysUsed, "dzień", "dni", "dni")}).` : "To zadanie nie ma jeszcze żadnych wpisów.");
+    $("backlog-dialog").showModal();
+    $("b-title").focus();
+  }
+  on("b-cancel", "click", () => $("backlog-dialog").close());
+  on("backlog-edit-form", "submit", (ev) => {
+    const oldKey = editingBacklogKey, entry = state.backlog[oldKey];
+    if (!entry) return;
+    const fail = (msg, id) => { ev.preventDefault(); alert(msg); $(id).focus(); };
+    const wi = $("b-wi").value.trim(), title = $("b-title").value.trim();
+    if (!wi && !title) return fail("Podaj Task (Azure) lub tytuł zadania.", "b-title");
+    const fields = { wi, title, ...pickedType("b-type"), estimateH: parseEstimate($("b-est").value) }, newKey = taskKey(fields);
+    if (newKey !== oldKey && state.backlog[newKey]) return fail(`Na liście jest już zadanie „${taskTitle(state.backlog[newKey])}” z takim Task (Azure) / tytułem.`, wi ? "b-wi" : "b-title");
+    for (const d of Object.values(state.days)) for (const t of d.tasks) if (taskKey(t) === oldKey) Object.assign(t, fields);
+    delete state.backlog[oldKey];
+    state.backlog[newKey] = { ...fields, status: $("b-status").value };
+    editingBacklogKey = null;
+    commit();
+  });
+
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && backlogOpen() && !document.querySelector("dialog[open], .pop")) toggleBacklog(false); });
+
   function renderSettings() {
     $("s-work").value = fmtHM(S().workHours * H);
     $("s-break").value = fmtHM(S().breakHours * H);
@@ -2422,7 +2803,7 @@ dialog.wide { width: min(1180px, 96vw); }
   /** Listy „Typ” w formularzu nowego zadania i w edycji wpisu (z zachowaniem wyboru). */
   function renderTypeOptions() {
     const html = types().map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");
-    for (const id of ["f-type", "e-type", "c-type"]) { const prev = $(id).value; $(id).innerHTML = html; if (types().some((t) => t.id === prev)) $(id).value = prev; }
+    for (const id of ["f-type", "e-type", "c-type", "b-type"]) { const prev = $(id).value; $(id).innerHTML = html; if (types().some((t) => t.id === prev)) $(id).value = prev; }
   }
   function renderTypes() {
     const only = types().length < 2;
@@ -2475,14 +2856,14 @@ dialog.wide { width: min(1180px, 96vw); }
     }
   });
   function render() {
-    renderClock(); renderWorkday(); renderTimeline(); renderSuggestions(); renderSummary(); renderActivity(); renderDayChart(); renderMonth();
+    renderClock(); renderWorkday(); renderTimeline(); renderSuggestions(); renderSummary(); renderActivity(); renderDayChart(); renderMonth(); renderBacklog();
   }
   let tickDay = today();
   function tick() {
     // północ: wpisy wczorajszego dnia zamykają się o 23:59:59, zamiast liczyć dalej do przeładowania strony
     if (tickDay !== today()) { tickDay = today(); closeStaleDays(); commit(); }
     renderClock();
-    if (isWorking(todayDay())) { renderWorkday(); updateRunningEntry(); renderSummary(); renderActivity(); renderDayChart(); renderMonth(); }
+    if (isWorking(todayDay())) { renderWorkday(); updateRunningEntry(); renderSummary(); renderActivity(); renderDayChart(); renderMonth(); renderBacklog(); }
   }
 
   // ---------- Zdarzenia: dzień pracy i nowe zadanie ----------
@@ -2543,6 +2924,7 @@ dialog.wide { width: min(1180px, 96vw); }
   // komentarz zapisuje się na bieżąco przy pisaniu; Enter tylko „zatwierdza” – zdejmuje fokus z pola
   on("timeline", "keydown", (e) => { if (e.key === "Enter" && !e.shiftKey && e.target.matches("[data-comment]")) { e.preventDefault(); e.target.blur(); } });
   window.addEventListener("resize", () => { for (const el of $("timeline").querySelectorAll("textarea[data-comment]")) fitComment(el); });
+  on("timeline", "change", (e) => { const sel = e.target.closest("select[data-state]"); if (sel) setTaskState(sel.dataset.state, sel.value); });
   on("timeline", "input", (e) => {
     const [input, , seg] = segFromEvent(e.target, "[data-comment]");
     if (!seg) return;
@@ -2732,15 +3114,50 @@ dialog.wide { width: min(1180px, 96vw); }
   }
   document.addEventListener("mousedown", (e) => { if (offPop && !e.target.closest(".off-pop, [data-off], #wd-off")) closeOffMenu(); }, true);
 
+  // wyszukiwarka zadań z listy zadań (okienko przy polu) – wybrane zadanie wypełnia pola formularza
+  let pickPop = null;
+  function closePick() { pickPop?.remove(); pickPop = null; }
+  function openPick(anchor, onPick) {
+    if (pickPop) { closePick(); return; }
+    const el = document.createElement("div");
+    el.className = "pop pick-pop";
+    el.innerHTML = `<input type="search" placeholder="Szukaj w liście zadań (Task lub tytuł)" autocomplete="off" spellcheck="false" aria-label="Szukaj w liście zadań" /><ul class="pick-list"></ul>`;
+    pickPop = el;
+    const input = el.querySelector("input"), list = el.querySelector("ul"), now = Date.now();
+    // bez zamkniętych; ostatnio używane na górze
+    const all = Object.entries(state.backlog).filter(([, e]) => e.status !== "closed").map(([key, e]) => ({ key, e, ...keyUsage(key, now) })).sort((a, b) => b.last - a.last || taskTitle(a.e).localeCompare(taskTitle(b.e)));
+    const render = () => {
+      const q = input.value.trim().toLowerCase().replace(/^#/, "");
+      const hits = all.filter(({ e }) => !q || (e.wi || "").toLowerCase().includes(q) || (e.title || "").toLowerCase().includes(q));
+      list.innerHTML = hits.length ? hits.map(({ key, e }, i) => {
+        const type = types().find((x) => x.id === e.typeId);
+        return `<li><button type="button" class="${i === 0 ? "first" : ""}" data-key="${esc(key)}">${e.wi ? `<span class="entry-wi">#${esc(e.wi)}</span>` : ""}<span class="pick-title">${esc(taskTitle(e))}</span><small>${esc(type ? type.name : BASES[e.type] || "")} · ${TASK_STATES[e.status]}</small></button></li>`;
+      }).join("") : `<li class="muted small">${all.length ? "Brak zadań pasujących do wyszukiwania." : "Lista zadań jest pusta."}</li>`;
+    };
+    const pick = (key) => { const e = state.backlog[key]; closePick(); if (e) onPick(e); };
+    render();
+    placePop(el, anchor);
+    input.addEventListener("input", render);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); const first = list.querySelector("button[data-key]"); if (first) pick(first.dataset.key); } });
+    list.addEventListener("click", (e) => { const btn = e.target.closest("button[data-key]"); if (btn) pick(btn.dataset.key); });
+    input.focus();
+  }
+  for (const btn of document.querySelectorAll("button[data-pick]")) btn.innerHTML = ICON.search;
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-pick]");
+    if (btn?.dataset.pick === "convert") openPick(btn.closest(".field-btn"), (entry) => { fillConvert(entry); $("c-start").focus(); });
+  });
+  document.addEventListener("mousedown", (e) => { if (pickPop && !e.target.closest(".pick-pop, button[data-pick]")) closePick(); }, true);
+
   // Esc zamyka najpierw okienko, dopiero potem dialog
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || (!clockPop && !estPop && !offPop)) return;
+    if (e.key !== "Escape" || (!clockPop && !estPop && !offPop && !pickPop)) return;
     e.preventDefault(); e.stopPropagation();
-    if (offPop) closeOffMenu(); else if (clockPop) closeClock(); else closeEst();
+    if (pickPop) closePick(); else if (offPop) closeOffMenu(); else if (clockPop) closeClock(); else closeEst();
   }, true);
   for (const dlg of document.querySelectorAll("dialog")) {
-    dlg.addEventListener("cancel", (e) => { if (clockPop || estPop) { e.preventDefault(); if (clockPop) closeClock(); else closeEst(); } });
-    dlg.addEventListener("close", closeEst);
+    dlg.addEventListener("cancel", (e) => { if (clockPop || estPop || pickPop) { e.preventDefault(); if (pickPop) closePick(); else if (clockPop) closeClock(); else closeEst(); } });
+    dlg.addEventListener("close", () => { closeEst(); closePick(); });
   }
 
   // ---------- Godzina zdarzenia dnia (rozpoczęcie / zatrzymanie / wznowienie pracy) ----------
@@ -2883,7 +3300,12 @@ dialog.wide { width: min(1180px, 96vw); }
     if (trims.length && !confirm("Nowe godziny nachodzą na sąsiednie wpisy. Przyciąć je, żeby czas nie liczył się podwójnie?\n\n" +
       trims.map((t) => `• ${segName(day, t.o)} → ${fmtClock(t.start ?? t.o.start)}–${t.end !== undefined ? fmtClock(t.end) : t.o.end === null ? "…" : fmtClock(t.o.end)}`).join("\n"))) { e.preventDefault(); return; }
     for (const t of trims) { if (t.end !== undefined) t.o.end = t.end; else t.o.start = t.start; }
-    if (task) Object.assign(task, { wi, title, ...pickedType("e-type"), estimateH: parseEstimate($("e-est").value) });
+    if (task) {
+      const oldKey = taskKey(task);
+      Object.assign(task, { wi, title, ...pickedType("e-type"), estimateH: parseEstimate($("e-est").value) });
+      const newKey = taskKey(task), stillUsed = Object.values(state.days).some((d) => d.tasks.some((t) => t !== task && taskKey(t) === oldKey));
+      if (newKey !== oldKey && state.backlog[oldKey] && !stillUsed) { state.backlog[newKey] ??= state.backlog[oldKey]; delete state.backlog[oldKey]; }
+    }
     const wasOpen = seg.end === null;
     Object.assign(seg, { start, end, comment: $("e-comment").value.trim() });
     // otwarty wpis zamknięto ręcznie → dzień dalej trwa jako przerwa
@@ -3119,6 +3541,8 @@ dialog.wide { width: min(1180px, 96vw); }
     S().theme = next; // motyw jest ustawieniem w pliku danych
     save();
   });
+
+  syncBacklog(); // rejestr zadań z dni zapisanych przed wprowadzeniem listy
 
   // ---------- Plik danych: zdarzenia ----------
   on("store-chip", "click", openStoreDialog);
