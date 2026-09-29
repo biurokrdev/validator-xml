@@ -61,14 +61,6 @@ const SUPPORT_LEVEL_LABELS: Record<AppSupportLevel, string> = {
   Unknown: 'nieznana',
 };
 
-/**
- * Narzędzie administracyjne „Kondycja dokumentu": odpowiada na trzy pytania — czy plik DOCX jest
- * uszkodzony (jako plik, pakiet, XML, struktura wymagana przez Worda), co blokuje konwersję do PDF
- * i co NASZA implementacja (reader DOCX→HTML, edytor, writer HTML→DOCX) robi z tym dokumentem źle,
- * częściowo albo wcale. W odróżnieniu od Walidatora struktury (eksploracja drzewa i XML) pokazuje
- * werdykty, ustalenia z oceną wpływu i podpowiedzią naprawy, pokrycie konstrukcji dokumentu przez
- * pipeline aplikacji (rejestr × round-trip) oraz notatkę dla programisty do skopiowania.
- */
 @Component({
   selector: 'd2-admin-document-health',
   standalone: true,
@@ -118,7 +110,6 @@ export class AdminDocumentHealthComponent {
     );
   });
 
-  /** Ustalenia pogrupowane etapami w kolejności od zewnątrz (plik) do wewnątrz (próby, nasza implementacja). */
   readonly findingGroups = computed<FindingGroup[]>(() => {
     const visible = this.visibleFindings();
 
@@ -149,12 +140,10 @@ export class AdminDocumentHealthComponent {
     () => (this.report()?.findings ?? []).filter((finding) => finding.pdfImpact !== 'None').length,
   );
 
-  /** Liczba ostrzeżeń etapu „Aplikacja” — to, co w naszej implementacji realnie gubi treść lub psuje plik. */
   readonly appWarningCount = computed(
     () => (this.report()?.findings ?? []).filter((finding) => finding.stage === 'Application' && finding.severity === 'Warning').length,
   );
 
-  /** Pokrycie z pominięciem konstrukcji w pełni obsługiwanych (domyślny widok — luki najpierw). */
   readonly coverageGaps = computed<ImplementationCoverageItem[]>(
     () => (this.report()?.coverage ?? []).filter((item) => item.status !== 'Supported'),
   );
@@ -176,7 +165,6 @@ export class AdminDocumentHealthComponent {
       return;
     }
 
-    // Rozszerzenie celowo nie jest sprawdzane: „DOCX, który nie jest DOCX-em" to jeden z diagnozowanych przypadków.
     this.selectedFile = file;
     this.selectedFileName.set(file.name);
     this.error.set(null);
@@ -243,7 +231,6 @@ export class AdminDocumentHealthComponent {
     this.expandedProbes.set(next);
   }
 
-  /** Raport do zgłoszenia: pełny JSON (z próbami, pokryciem i lokalizacjami) w schowku. */
   async copyReport(): Promise<void> {
     const report = this.report();
 
@@ -254,7 +241,6 @@ export class AdminDocumentHealthComponent {
     await this.copyToClipboard(JSON.stringify(report, null, 2), this.copied);
   }
 
-  /** Notatka dla programisty / agenta AI: tylko luki, ustalenia etapu „Aplikacja” i nieudane próby — Markdown. */
   async copyDeveloperNote(): Promise<void> {
     const report = this.report();
 
@@ -351,7 +337,6 @@ export class AdminDocumentHealthComponent {
     }
   }
 
-  /** Etykieta „jak radzi sobie nasza aplikacja” przy ustaleniu; null = brak wiedzy (nic nie pokazujemy). */
   appSupportLabel(level: AppSupportLevel): string | null {
     switch (level) {
       case 'Full':

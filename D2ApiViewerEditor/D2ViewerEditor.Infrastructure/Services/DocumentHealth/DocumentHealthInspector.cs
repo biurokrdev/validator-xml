@@ -7,15 +7,6 @@ using Microsoft.Extensions.Options;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <inheritdoc cref="IDocumentHealthInspector"/>
-/// <remarks>
-/// Etapy biegną od zewnątrz do wewnątrz (plik → pakiet → XML → struktura → próby → aplikacja)
-/// i każdy jest osłonięty: awaria etapu jest ustaleniem <c>TOOL_STAGE_FAILED</c>, nie wyjątkiem —
-/// narzędzie ma działać właśnie na plikach, na których inne komponenty padają. Etap „Aplikacja"
-/// odpowiada na pytanie, co NASZ pipeline z tym dokumentem robi źle: inwentarz konstrukcji ×
-/// rejestr możliwości × round-trip przez reader i writer edytora (ten sam zestaw etapów
-/// statycznych biegnie drugi raz na wyniku zapisu). Anulowanie przechodzi dalej.
-/// </remarks>
 public sealed class DocumentHealthInspector : IDocumentHealthInspector
 {
     private readonly FileContainerCheck _fileCheck;
@@ -78,8 +69,6 @@ public sealed class DocumentHealthInspector : IDocumentHealthInspector
                 $"{exception.GetType().Name}: {exception.Message}. Wyniki prób są niekompletne; pozostałe etapy pozostają ważne.");
         }
 
-        // Kody ustaleń źródła zapamiętujemy PRZED etapem Aplikacja, żeby porównanie „przed/po”
-        // round-tripie nie widziało własnych ustaleń jako problemów źródła.
         var sourceCodes = findings.Codes.ToArray();
         var coverage = new ImplementationCoverage([], "Etap „Aplikacja” nie został uruchomiony.");
 
@@ -127,7 +116,6 @@ public sealed class DocumentHealthInspector : IDocumentHealthInspector
         DocumentHealthStatistics? Statistics,
         DocumentFeatureInventory Inventory);
 
-    /// <summary>Etapy Plik → Pakiet → XML → Struktura + inwentarz konstrukcji; ten sam przebieg dla źródła i dla wyniku round-tripu.</summary>
     private StaticAnalysis RunStaticStages(byte[] bytes, HealthFindingCollector findings, CancellationToken cancellationToken)
     {
         var detectedFormat = "unknown";

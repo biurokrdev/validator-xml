@@ -10,7 +10,6 @@ using Microsoft.Extensions.Options;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentCompare;
 
-/// <inheritdoc cref="IDocumentComparer"/>
 public sealed class DocumentComparer : IDocumentComparer
 {
     private static readonly string[] DocumentPropertyParts = ["docProps/core.xml", "docProps/app.xml", "docProps/custom.xml"];
@@ -55,8 +54,6 @@ public sealed class DocumentComparer : IDocumentComparer
                 ? new HashSet<XName> { XName.Get("rsids", OoxmlNamespaces.WordprocessingTransitional), XName.Get("rsids", OoxmlNamespaces.WordprocessingStrict) }
                 : new HashSet<XName>();
 
-            // Części binarne o identycznych bajtach pod inną ścieżką (writer zapisuje obrazy pod własnymi nazwami):
-            // jedna różnica „pod inną ścieżką” zamiast pary „tylko w oryginale” + „tylko w porównywanym”.
             var renames = DetectRenamedBinaryParts(leftPackage, rightPackage);
             var renameTargets = new HashSet<string>(renames.Values, StringComparer.OrdinalIgnoreCase);
 
@@ -104,8 +101,6 @@ public sealed class DocumentComparer : IDocumentComparer
             }
         }
 
-        // Analiza przyczyn: dlaczego różnica istnieje i co z niej wynika — liczona na każdej różnicy z listy
-        // (perspektywa: lewy = oryginał, prawy = kopia zapisana z edytora).
         for (var index = 0; index < differences.Count; index++)
         {
             differences[index] = differences[index] with { Analysis = DifferenceCauseAnalyzer.Analyze(differences[index]) };
@@ -158,7 +153,6 @@ public sealed class DocumentComparer : IDocumentComparer
         return (package, new ComparedFile(fileName, bytes.LongLength, RefineFormat(package, format), package?.Entries.Count ?? 0, notes));
     }
 
-    /// <summary>„ooxml” z czytnika kontenera doprecyzowane po typie głównej części z [Content_Types].xml.</summary>
     private static string RefineFormat(LenientPackage? package, string fallback)
     {
         if (package is null || package.DetectedFormat != "ooxml")
@@ -184,10 +178,6 @@ public sealed class DocumentComparer : IDocumentComparer
         };
     }
 
-    /// <summary>
-    /// Pary „część binarna tylko w lewym” ↔ „część binarna tylko w prawym” o identycznych bajtach (SHA-256 + porównanie
-    /// bajtów). Każda część paruje się najwyżej raz; XML nie jest parowany (różnice w XML są mierzone treścią).
-    /// </summary>
     private static Dictionary<string, string> DetectRenamedBinaryParts(LenientPackage left, LenientPackage right)
     {
         var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -239,7 +229,6 @@ public sealed class DocumentComparer : IDocumentComparer
             paths.Add(entry.Path);
         }
 
-        // Kolejność czytania: typy zawartości, relationshipy korzenia, treść główna, reszta alfabetycznie.
         return paths.OrderBy(Rank).ThenBy(path => path, StringComparer.OrdinalIgnoreCase);
 
         static int Rank(string path) => path switch
@@ -348,7 +337,6 @@ public sealed class DocumentComparer : IDocumentComparer
         using var stream = new MemoryStream(entry.Bytes!, writable: false);
         using var reader = new StreamReader(stream, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
 
-        // Bez PreserveWhitespace: białe znaki między elementami nie są treścią, a wycinki dostają wcięcia.
         return _xmlLoader.Load(reader.ReadToEnd(), LoadOptions.SetLineInfo);
     }
 
@@ -374,8 +362,6 @@ public sealed class DocumentComparer : IDocumentComparer
             excerptLeft,
             excerptRight,
             leftTruncated || rightTruncated,
-            // Różnica jednostronna dostaje kontekst akapitu także po drugiej stronie (ze sparowanego rodzica):
-            // „w:br tylko w oryginale” przy identycznym tekście akapitu to podział runów przez writer, nie strata.
             Context(difference.Left ?? difference.Counterpart),
             Context(difference.Right ?? difference.Counterpart));
     }
@@ -415,8 +401,6 @@ public sealed class DocumentComparer : IDocumentComparer
             return null;
         }
 
-        // Podział wiersza i tabulator są częścią „tekstu” akapitu (↵, ⇥): identyczny kontekst po obu stronach znaczy wtedy,
-        // że naprawdę nic nie zginęło — także w:br/w:tab przeniesione przez writer do osobnych runów.
         var text = string.Concat(paragraph.Descendants()
             .Where(node => OoxmlNamespaces.IsWordprocessing(node.Name.NamespaceName))
             .Select(node => node.Name.LocalName switch

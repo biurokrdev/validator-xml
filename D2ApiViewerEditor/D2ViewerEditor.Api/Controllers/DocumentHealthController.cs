@@ -8,15 +8,9 @@ using Microsoft.Extensions.Options;
 
 namespace D2ViewerEditor.Api.Controllers;
 
-/// <summary>
-/// Narzędzie administracyjne „Kondycja dokumentu": czy plik DOCX jest uszkodzony (jako plik,
-/// pakiet OPC, XML, struktura wymagana przez Worda) i co blokuje konwersję do PDF. Bezstanowe —
-/// jedna odpowiedź z pełnym raportem, nic nie trafia do magazynu dokumentów.
-/// </summary>
 [Authorize(Policy = AuthorizationPolicies.RequireAppAdmin)]
 public class DocumentHealthController : BaseApiController
 {
-    /// <summary>Sufit Kestrela dla atrybutu (musi być stałą); realny limit to <c>DocumentHealth:MaxUploadBytes</c>.</summary>
     private const long UploadSizeCeiling = 100 * 1024 * 1024;
 
     private readonly DocumentHealthOptions _options;
@@ -26,13 +20,6 @@ public class DocumentHealthController : BaseApiController
         _options = options.Value;
     }
 
-    /// <summary>
-    /// Analizuje przesłany plik. Rozszerzenie nie jest wymagane ani sprawdzane — format jest
-    /// rozpoznawany po bajtach, bo „DOCX, który nie jest DOCX-em" to jeden z diagnozowanych przypadków.
-    /// </summary>
-    /// <param name="file">Plik do analizy.</param>
-    /// <param name="includeConversionProbes">Czy uruchamiać próby przetworzenia (edytor, konwerter PDF, LibreOffice); domyślnie tak.</param>
-    /// <param name="cancellationToken">Token anulowania.</param>
     [HttpPost("analyze")]
     [RequestSizeLimit(UploadSizeCeiling)]
     [ProducesResponseType(typeof(DocumentHealthReportDto), StatusCodes.Status200OK)]

@@ -12,11 +12,6 @@ using NUnit.Framework;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services.DocumentCompare;
 
-/// <summary>
-/// „Porównanie dokumentów”: literalny diff dwóch pakietów — różnice mają właściwy rodzaj, nazwę
-/// atrybutu, wartości obu stron, wycinek XML i kontekst tekstowy; identyczne poddrzewa nie generują
-/// szumu, a szum Worda (rsid) jest pomijany tylko na życzenie.
-/// </summary>
 [TestFixture]
 public class DocumentComparerTests
 {
@@ -56,8 +51,6 @@ public class DocumentComparerTests
     [Test]
     public void PropertyContainerChildren_ArePairedByNameRegardlessOfOrder()
     {
-        // Oryginał (generator): tcW, tcMar, shd; zapis (schemat CT_TcPr): tcW, shd, tcMar — to TEN SAM shd z jednym nowym atrybutem,
-        // a nie „shd tylko w oryginale” + „shd tylko po zapisie” (dokument_tabele: 3× w:shd, 15× w:tblLook).
         const string Grid = """<w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid>""";
         static string Table(string cellProps) =>
             $"""<w:tbl><w:tblPr><w:tblW w:w="0" w:type="auto"/></w:tblPr>{Grid}<w:tr><w:tc><w:tcPr>{cellProps}</w:tcPr><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc></w:tr></w:tbl>""";
@@ -77,7 +70,6 @@ public class DocumentComparerTests
     [Test]
     public void OneSidedRunDifferences_CarryParagraphContextOfBothSides_AndAreExplainedAsRunSplit()
     {
-        // Oryginał: jeden run z podziałem wiersza; writer: trzy runy (per <br>). Tekst akapitu identyczny → nie strata.
         var left = Doc("""<w:p><w:r><w:t>Reference</w:t><w:br/><w:t>cell height</w:t></w:r></w:p>""");
         var right = Doc("""<w:p><w:r><w:t>Reference</w:t></w:r><w:r><w:br/></w:r><w:r><w:t>cell height</w:t></w:r></w:p>""");
 
@@ -188,7 +180,6 @@ public class DocumentComparerTests
         report.Differences.Should().Contain(difference =>
             difference.Kind == DifferenceKind.PartOnlyInRight && difference.PartPath == "word/styles.xml" && difference.Category == "Style");
         report.Parts.Single(part => part.Path == "word/styles.xml").Status.Should().Be(ComparedPartStatus.OnlyInRight);
-        // Nowa część pociąga za sobą nowy relationship i nowy Override w [Content_Types].xml — różnice atrybutowe, nie „cała część”.
         report.Differences.Should().Contain(difference => difference.PartPath == "[Content_Types].xml" && difference.Kind == DifferenceKind.ElementOnlyInRight);
         report.Identical.Should().BeFalse();
     }

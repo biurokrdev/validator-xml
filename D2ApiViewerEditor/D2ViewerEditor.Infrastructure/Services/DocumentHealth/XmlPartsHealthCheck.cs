@@ -5,13 +5,6 @@ using D2ViewerEditor.Infrastructure.Services.StructureInspection;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>
-/// Etap „XML": każda część XML (poza .rels, które sprawdza analizator OPC) musi być poprawnie
-/// sformułowana, mieć korzeń zgodny z zadeklarowanym content type i deklarować każdy prefiks
-/// wymieniony w <c>mc:Ignorable</c>/<c>mc:MustUnderstand</c>. Ten ostatni przypadek to
-/// najczęstsza przyczyna komunikatu Worda „znaleziono nieczytelną zawartość" w dokumentach
-/// generowanych programowo.
-/// </summary>
 public sealed class XmlPartsHealthCheck
 {
     private static readonly XNamespace Mc = OoxmlNamespaces.MarkupCompatibility;
@@ -45,7 +38,6 @@ public sealed class XmlPartsHealthCheck
         _xmlLoader = xmlLoader;
     }
 
-    /// <summary>Zwraca sparsowane części XML (ścieżka → dokument); części niepoprawne są tylko w ustaleniach.</summary>
     public Dictionary<string, XDocument> Run(
         HealthPackageContext context,
         HealthFindingCollector findings,

@@ -6,10 +6,6 @@ import {
   ImplementationCoverageItem,
 } from '../../../services/document-health.service';
 
-/**
- * Notatka dla programisty ma wymieniać WYŁĄCZNIE luki (nieoczekiwane straty najpierw), ustalenia
- * etapu „Aplikacja” i problemy pliku z notatką o naszym zachowaniu — nigdy konstrukcje w pełni obsługiwane.
- */
 function coverage(overrides: Partial<ImplementationCoverageItem>): ImplementationCoverageItem {
   return {
     featureKey: 'tables',

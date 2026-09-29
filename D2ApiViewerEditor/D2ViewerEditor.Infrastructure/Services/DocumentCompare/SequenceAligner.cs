@@ -1,11 +1,5 @@
 namespace D2ViewerEditor.Infrastructure.Services.DocumentCompare;
 
-/// <summary>
-/// Wyrównanie dwóch sekwencji kluczy (hasze poddrzew albo nazwy elementów): zwraca rosnące pary
-/// indeksów dopasowanych pozycji. Dla list, których iloczyn długości mieści się w limicie, liczy
-/// dokładny LCS; dla dłuższych używa heurystyki zachłannej z oknem (jak klasyczny diff plikowy),
-/// żeby dokument z dziesiątkami tysięcy akapitów nie zjadł pamięci ani czasu.
-/// </summary>
 public sealed class SequenceAligner
 {
     private readonly long _lcsCellLimit;

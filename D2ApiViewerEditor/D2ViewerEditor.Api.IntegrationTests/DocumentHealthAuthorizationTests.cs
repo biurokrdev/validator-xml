@@ -4,11 +4,6 @@ using FluentAssertions;
 
 namespace D2ViewerEditor.Api.IntegrationTests;
 
-/// <summary>
-/// Kontrola dostępu do „Kondycji dokumentu” (<c>api/documenthealth</c>): endpoint wymaga polityki
-/// RequireAppAdmin — samo uwierzytelnienie ani rola Operator nie wystarczają. Test przechodzi przez
-/// prawdziwy pipeline, więc padnie, gdyby polityka została zdjęta z kontrolera.
-/// </summary>
 [TestFixture]
 public class DocumentHealthAuthorizationTests
 {
@@ -66,7 +61,6 @@ public class DocumentHealthAuthorizationTests
     {
         var response = await CreateClient(roles: "Administrator").PostAsync(AnalyzePath, new MultipartFormDataContent());
 
-        // Nie 401/403 = autoryzacja przepuściła; 400 „nie przesłano pliku” należy do logiki endpointu.
         response.StatusCode.Should().NotBe(HttpStatusCode.Unauthorized);
         response.StatusCode.Should().NotBe(HttpStatusCode.Forbidden);
     }

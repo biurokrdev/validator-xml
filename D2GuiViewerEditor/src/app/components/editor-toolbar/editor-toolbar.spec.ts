@@ -3,14 +3,6 @@ import { vi } from 'vitest';
 import { EditorToolbarComponent } from './editor-toolbar';
 import { EditorCommand, EditorState } from '../../models/document.model';
 
-/**
- * Testy przycisku „Cofnij" (undo) i „Ponów" (redo) w pasku narzędzi.
- *
- * Sprawdzają WIRING przycisku (widoczność, stan disabled/enabled, emitowaną komendę),
- * niezależnie od samego mechanizmu historii edytora (ten żyje w WysiwygEditorComponent
- * i opiera się na contenteditable/execCommand, których jsdom nie wspiera — patrz
- * scenariusz manualny w .ai/CHANGELOG.md).
- */
 describe('EditorToolbarComponent — przyciski undo/redo', () => {
   let fixture: ComponentFixture<EditorToolbarComponent>;
   let component: EditorToolbarComponent;
@@ -113,11 +105,6 @@ describe('EditorToolbarComponent — przyciski undo/redo', () => {
   });
 });
 
-/**
- * Rozmiar czcionki z pola input — ENTER nie może kasować zaznaczonego tekstu.
- * Przyczyna: synchroniczny blur w trakcie ENTER → setFontSize przywraca zaznaczenie do edytora,
- * a domyślny ENTER kasuje je. Fix: preventDefault + odroczony blur (aplikacja przez blur).
- */
 describe('EditorToolbarComponent — ENTER w polu rozmiaru czcionki', () => {
   let fixture: ComponentFixture<EditorToolbarComponent>;
   let component: EditorToolbarComponent;
@@ -139,10 +126,10 @@ describe('EditorToolbarComponent — ENTER w polu rozmiaru czcionki', () => {
 
     component.onFontSizeInputEnter(ev);
 
-    expect(prevented).toBe(true);              // domyślny ENTER zablokowany
-    expect(blurSpy).not.toHaveBeenCalled();    // blur NIE jest synchroniczny (w trakcie ENTER)
+    expect(prevented).toBe(true);
+    expect(blurSpy).not.toHaveBeenCalled();
 
-    vi.runAllTimers();                         // dopiero po zdarzeniu ENTER
+    vi.runAllTimers();
     expect(blurSpy).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
@@ -159,11 +146,6 @@ describe('EditorToolbarComponent — ENTER w polu rozmiaru czcionki', () => {
   });
 });
 
-/**
- * „Pokaż wszystko" (¶) — przycisk ZNÓW UKRYTY (2026-08-18, decyzja użytkownika;
- * wcześniej ukryty 2026-08-10, przywrócony 2026-08-14). Funkcja żyje pod
- * Ctrl+Shift+8; stan isFormattingMarksActive nadal czytany (gotowość na powrót).
- */
 describe('EditorToolbarComponent — przycisk „Pokaż wszystko"', () => {
   let fixture: ComponentFixture<EditorToolbarComponent>;
   let component: EditorToolbarComponent;
@@ -212,11 +194,6 @@ describe('EditorToolbarComponent — przycisk „Pokaż wszystko"', () => {
   });
 });
 
-/**
- * Menu „Pola wyboru" (zgłoszenie: „element w toolbarze totalnie niezrozumiały"): dwie sekcje — „Wstaw"
- * (lista kontrolna / pojedyncze pole) i „Pole pod kursorem" (zaznacz / odznacz). Pozycja przełączania
- * mówi, CO zrobi (etykieta ze stanu pola pod karetką) i jest wyszarzona, gdy pod kursorem nie ma pola.
- */
 describe('EditorToolbarComponent — menu pól wyboru', () => {
   let fixture: ComponentFixture<EditorToolbarComponent>;
   let component: EditorToolbarComponent;
@@ -314,7 +291,6 @@ describe('EditorToolbarComponent — menu pól wyboru', () => {
     expect(marks().map((mark) => mark.getAttribute('aria-checked'))).toEqual(['false', 'true', 'false']);
     expect(options()[2].querySelector('.checkbox-option-glyph')!.textContent).toBe('☑');
     expect(localStorage.getItem('d2.editor.checkboxMark')).toBe('check');
-    // Menu zostaje otwarte — widać, co jest wybrane.
     expect(component.showCheckboxMenu()).toBe(true);
   });
 

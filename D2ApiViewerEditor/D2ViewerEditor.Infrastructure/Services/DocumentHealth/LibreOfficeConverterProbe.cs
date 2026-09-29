@@ -6,14 +6,6 @@ using Microsoft.Extensions.Options;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>
-/// Opcjonalna próba konwersji przez LibreOffice headless (<c>soffice --convert-to pdf</c>).
-/// To niezależny, drugi silnik konwersji: gdy zewnętrzna usługa DOCX→PDF milczy o przyczynie,
-/// stderr LibreOffice zwykle nazywa konstrukcję, na której konwersja padła. Binarka NIE jest
-/// instalowana przez aplikację — próba działa tylko, gdy <c>DocumentHealth:LibreOfficePath</c>
-/// albo <c>SOFFICE_BIN</c> wskazują istniejący plik (obraz API ma ją w Dockerze).
-/// Uruchomienia są serializowane, bo LibreOffice nie znosi równoległych instancji na jednym profilu.
-/// </summary>
 public sealed class LibreOfficeConverterProbe
 {
     public const string ProbeId = "libreoffice";
@@ -192,7 +184,6 @@ public sealed class LibreOfficeConverterProbe
         }
         catch
         {
-            // Proces mógł zakończyć się między sprawdzeniem a zabiciem.
         }
     }
 
@@ -207,7 +198,6 @@ public sealed class LibreOfficeConverterProbe
         }
         catch
         {
-            // Katalog tymczasowy — sprzątanie nie może wywrócić diagnostyki.
         }
     }
 }

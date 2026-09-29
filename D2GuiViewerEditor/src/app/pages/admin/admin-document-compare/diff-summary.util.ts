@@ -1,50 +1,32 @@
 import { DifferenceKind, DocumentComparisonReport, DocumentDifference } from '../../../services/document-compare.service';
 import type { DifferenceBucket } from './diff-assessment.util';
 
-/** Najczęstsza para wartości w grupie (np. `24 → 28`, 12×) — dla zmian atrybutów i tekstu. */
 export interface ValueSample {
   left: string | null;
   right: string | null;
   count: number;
 }
 
-/**
- * Grupa różnic o tej samej przyczynie: ten sam rodzaj, część pakietu, element (ostatni segment ścieżki
- * bez indeksu) i nazwa atrybutu/elementu. 3494 literalnych różnic z jednego zapisu edytora zwykle
- * składa się z kilkunastu takich grup („433× w:rFonts tylko w prawym w w:rPr”), a to grupa, nie
- * pojedynczy wiersz, mówi programiście, co writer robi inaczej niż Word.
- */
 export interface DifferenceGroup {
   key: string;
   kind: DifferenceKind;
   partPath: string;
   category: string;
-  /** Element, którego dotyczy różnica (dla atrybutu: właściciel atrybutu), np. `w:rPr`. */
   element: string | null;
-  /** Nazwa atrybutu lub elementu z raportu (np. `w:val`), gdy backend ją podał. */
   name: string | null;
   count: number;
   sampleLeftPath: string | null;
   sampleRightPath: string | null;
   sampleContext: string | null;
   valueSamples: ValueSample[];
-  /** Liczniki ocen różnic w grupie (klucz = werdykt); puste, gdy grupowano bez oceny. */
   verdictCounts: Record<string, number>;
-  /** Najgorszy werdykt w grupie wg kolejności `verdictOrder` (bad → suspect → review → ok); null bez oceny. */
   dominantVerdict: string | null;
-  /** Uzasadnienie pierwszej różnicy o dominującym werdykcie — jedno zdanie na kafel. */
   dominantReason: string | null;
-  /** Najczęstsza przyczyna z analizy backendu (nazwa `DifferenceCause`); null, gdy raport nie ma analizy. */
   dominantCause: string | null;
-  /** Najpoważniejszy skutek z analizy backendu (nazwa `DifferenceImpact`) wg kolejności DataLoss → None; null bez analizy. */
   worstImpact: string | null;
-  /** Kubełek grupy (najczęstszy wśród różnic; remis rozstrzyga fix → review → noise); null, gdy grupowano bez kubełków. */
   bucket: DifferenceBucket | null;
-  /** Liczniki kubełków różnic w grupie. */
   bucketCounts: Record<string, number>;
-  /** Pierwszy wskaźnik do kodu z analizy backendu — „gdzie w naszym kodzie to naprawić”. */
   codePointer: string | null;
-  /** Pierwszy klucz konstrukcji z rejestru możliwości edytora. */
   featureKey: string | null;
 }
 
@@ -53,7 +35,6 @@ const BUCKET_SEVERITY: DifferenceBucket[] = ['fix', 'review', 'noise'];
 
 const MAX_VALUE_SAMPLES = 3;
 
-/** Pozycja skutku od najpoważniejszego (0 = utrata danych); brak analizy = na końcu. */
 export function impactRank(impact: string | null | undefined): number {
   const index = impact ? IMPACT_SEVERITY.indexOf(impact) : -1;
   return index === -1 ? IMPACT_SEVERITY.length : index;
@@ -62,11 +43,9 @@ export function impactRank(impact: string | null | undefined): number {
 export interface GroupingOptions {
   assess?: (difference: DocumentDifference) => { verdict: string; reason: string };
   verdictOrder?: readonly string[];
-  /** Kubełek różnicy — dostaje ocenę z `assess` (albo neutralną, gdy `assess` nie podano). */
   bucket?: (difference: DocumentDifference, assessment: { verdict: string; reason: string }) => DifferenceBucket;
 }
 
-/** Ostatni segment ścieżki pozycyjnej bez indeksu: `/w:document[1]/w:body[1]/w:p[3]/w:rPr[1]` → `w:rPr`. */
 export function elementNameOf(difference: DocumentDifference): string | null {
   const path = difference.rightPath ?? difference.leftPath;
 
@@ -189,7 +168,6 @@ export function groupDifferences(differences: readonly DocumentDifference[], opt
     .sort((a, b) => b.count - a.count || a.partPath.localeCompare(b.partPath) || a.key.localeCompare(b.key));
 }
 
-/** Strona pakietu, której dotyczy grupa/różnica: co zginęło z oryginału, co dodał zapis, co zmieniło się po obu stronach. */
 export type DifferenceSide = 'original' | 'compared' | 'changed';
 
 export function sideOf(kind: DifferenceKind): DifferenceSide {
@@ -231,7 +209,6 @@ const PART_LABELS: [RegExp, string][] = [
   [/^customXml\/.*$/i, 'Dane customXml'],
 ];
 
-/** Ludzka nazwa części pakietu — ścieżka techniczna zostaje obok w monospace. */
 export function describePart(path: string): string {
   for (const [pattern, label] of PART_LABELS) {
     if (pattern.test(path)) {
@@ -242,7 +219,6 @@ export function describePart(path: string): string {
   return path;
 }
 
-/** Jedno zdanie po polsku: co konkretnie się różni — zamiast kodu rodzaju i surowych ścieżek. */
 export function describeDifference(difference: DocumentDifference): string {
   const element = elementNameOf(difference);
   const name = difference.name;
@@ -279,10 +255,6 @@ export function describeDifference(difference: DocumentDifference): string {
   }
 }
 
-/**
- * Tytuł grupy — jedno krótkie zdanie „co się stało”, bez ścieżek i bez nazwy części (ta idzie osobno):
- * „Po zapisie brak: w:compat”, „Zapis dodał atrybut w:hint na w:rFonts”, „Inna wartość w:sz/@w:val: 24 → 28”.
- */
 export function describeGroup(group: DifferenceGroup): string {
   const element = group.element ?? group.name ?? '?';
   const attribute = group.name ?? '?';
@@ -320,7 +292,6 @@ export function describeGroup(group: DifferenceGroup): string {
   }
 }
 
-/** Etykieta grupy: `w:rPr/@w:val` albo `w:rFonts`, albo sama nazwa części, gdy różnica dotyczy całej części. */
 export function groupTarget(group: DifferenceGroup): string {
   if (group.element && group.name && group.name !== group.element) {
     return `${group.element}/@${group.name}`;
@@ -335,11 +306,6 @@ const NOTE_BUCKET_TITLES: Record<DifferenceBucket, string> = {
   noise: 'Nieistotne',
 };
 
-/**
- * Notatka dla programisty (Markdown): grupy różnic w kubełkach (do naprawy u nas → do sprawdzenia →
- * nieistotne), a w kubełku od najliczniejszych, z przykładową ścieżką, kontekstem akapitu i najczęstszymi
- * parami wartości. Bez pojedynczych wierszy — te są w JSON-ie. Grupy bez kubełka lądują w jednej sekcji.
- */
 export function buildCompareNote(
   report: DocumentComparisonReport,
   groups: readonly DifferenceGroup[],

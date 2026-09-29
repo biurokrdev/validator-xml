@@ -3,11 +3,6 @@ using D2ViewerEditor.Domain.Models;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentCompare;
 
-/// <summary>Różnica na poziomie drzewa XML — referencje do elementów obu stron (mapowane na raport później).</summary>
-/// <param name="Counterpart">
-/// Dla różnic jednostronnych: SPAROWANY rodzic po drugiej stronie (np. prawy `w:p`, gdy run istnieje tylko po lewej) —
-/// pozwala podać kontekst akapitu obu stron i odróżnić podział runów od utraty tekstu.
-/// </param>
 public sealed record XmlDifference(
     DifferenceKind Kind,
     XElement? Left,
@@ -23,13 +18,6 @@ public sealed record XmlDiffResult(
     bool Truncated,
     int IgnoredAttributeCount);
 
-/// <summary>
-/// Literalny diff dwóch drzew XML. Dla pary elementów: nazwa, potem każdy atrybut (tylko w lewym /
-/// tylko w prawym / inna wartość), potem tekst bezpośredni, potem dzieci. Listy dzieci są wyrównywane
-/// dwustopniowo: najpierw po haszu poddrzewa (identyczne poddrzewa = kotwice, pomijane bez schodzenia
-/// w głąb), a w lukach między kotwicami po nazwie elementu (pary tej samej nazwy są porównywane
-/// rekurencyjnie, reszta to wstawienia/usunięcia z wycinkiem całego obiektu).
-/// </summary>
 public sealed class XmlTreeDiffer
 {
     private readonly DocumentCompareOptions _options;
@@ -158,13 +146,6 @@ public sealed class XmlTreeDiffer
             return result;
         }
 
-        /// <summary>
-        /// Cztery stopnie: (A) pary po kluczu tożsamości niezależnie od pozycji (relationship po Id, styl po
-        /// styleId, akapit po paraId…), (B) kotwice = identyczne poddrzewa w kolejności (LCS), (C) identyczne
-        /// poddrzewa poza kolejnością = element PRZENIESIONY, (D) w lukach między kotwicami pary tej samej
-        /// nazwy w kolejności; reszta = tylko po jednej stronie. Dzięki A i C zmiana kolejności nie udaje
-        /// zmiany treści, a przeniesiony akapit nie udaje usuniętego.
-        /// </summary>
         private void AlignChildren(List<XElement> left, List<XElement> right, XElement leftParent, XElement rightParent)
         {
             if (left.Count == 0 && right.Count == 0)
@@ -243,7 +224,6 @@ public sealed class XmlTreeDiffer
             return result;
         }
 
-        /// <summary>Pary o unikalnym (po obu stronach) kluczu tożsamości są porównywane w głąb i usuwane z list.</summary>
         private void PairByKey(List<XElement> left, List<XElement> right, Func<XElement, string?> selector)
         {
             var leftKeys = UniqueKeys(left, selector);
@@ -301,7 +281,6 @@ public sealed class XmlTreeDiffer
             return byKey;
         }
 
-        /// <summary>Luka między kotwicami: pary tej samej nazwy porównujemy w głąb, reszta = wstawione/usunięte obiekty.</summary>
         private void HandleGap(List<XElement> left, List<XElement> right, XElement leftParent, XElement rightParent)
         {
             if (left.Count == 0 && right.Count == 0)

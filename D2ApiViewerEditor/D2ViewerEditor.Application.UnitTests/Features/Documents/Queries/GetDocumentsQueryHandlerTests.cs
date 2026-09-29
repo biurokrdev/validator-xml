@@ -63,7 +63,6 @@ public class GetDocumentsQueryHandlerTests
     [Test]
     public async Task Handle_ReturnsEveryEntry_WithoutTruncation()
     {
-        // Regresja: dawny limit `take = 200` obcinał listę admina do 20 stron po 10 wierszy.
         var entries = Enumerable.Range(0, 1234).Select(_ => Entry()).ToList();
         _repo.ListAsync(Arg.Any<CancellationToken>()).Returns(entries);
 

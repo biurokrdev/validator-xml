@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { buildCompareNote, describeDifference, describeGroup, describePart, elementNameOf, groupDifferences, groupTarget, impactRank, sideOf } from './diff-summary.util';
 import { DocumentComparisonReport, DocumentDifference } from '../../../services/document-compare.service';
 
-/**
- * Grupowanie ma zamienić tysiące literalnych różnic w kilkanaście przyczyn: ten sam rodzaj + część +
- * element + nazwa = jedna grupa z licznikiem, przykładową ścieżką i najczęstszymi parami wartości.
- */
 function difference(overrides: Partial<DocumentDifference>): DocumentDifference {
   return {
     kind: 'AttributeOnlyInRight',
@@ -98,7 +94,6 @@ describe('diff-summary.util', () => {
     expect(note).toContain('- 1× `24` → `28`');
     expect(note).toContain('- Akapit: „Pierwszy akapit”');
     expect(note).toContain('- 1× `— brak —` → `default`');
-    // Bez kubełków (grupowano bez opcji `bucket`) notatka nie ma sekcji kubełków.
     expect(note).not.toContain('## Do naprawy u nas');
   });
 
@@ -115,7 +110,6 @@ describe('diff-summary.util', () => {
       { bucket: (item) => item.analysis?.cause === 'WordNoise' ? 'noise' : item.analysis?.cause === 'UserEditOrLoss' ? 'review' : 'fix' },
     );
 
-    // Równe liczniki → kolejność po części (document.xml przed settings.xml), potem po kluczu.
     expect(groups.map((group) => [group.bucket, describeGroup(group)])).toEqual([
       ['noise', 'Zapis dodał atrybut w:rsidR na w:r = 00A1'],
       ['review', 'Inny tekst: najmu → sprzedaży'],

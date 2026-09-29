@@ -2,10 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { assessDifference, bucketOf } from './diff-assessment.util';
 import { DocumentDifference } from '../../../services/document-compare.service';
 
-/**
- * Ocena różnic to heurystyki „oryginał z Worda ↔ zapis z edytora”: szum Worda i identyfikatory są
- * nieszkodliwe, dodatki writera podejrzane, straty z oryginału złe, zmiany treści do oceny.
- */
 function difference(overrides: Partial<DocumentDifference>): DocumentDifference {
   return {
     kind: 'ElementOnlyInLeft',

@@ -1,18 +1,6 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { WysiwygEditorComponent } from './wysiwyg-editor';
 
-/**
- * Regresja (2026-09-27): „toolbar wszędzie pokazuje Calibri".
- *
- * Listener `selectionchange` na `document` był zakładany raz, z flagą boolean na document,
- * i wiązał `this` PIERWSZEJ instancji edytora na zawsze. Po nawigacji w SPA (admin → edytor,
- * otwarcie innego dokumentu) nowa instancja nie dostawała żadnego selectionchange, więc
- * `updateFormattingState` nigdy nie liczyło formatowania spod karetki — toolbar tkwił
- * w fallbacku z pierwszego runu dokumentu (Calibri 28 + bold tytułu), gdziekolwiek kliknięto.
- *
- * Kontrakt: jedyny listener na document należy do BIEŻĄCEJ instancji, a zniszczenie
- * instancji go zdejmuje.
- */
 describe('WysiwygEditorComponent — listener selectionchange należy do bieżącej instancji', () => {
   const fixtures: ComponentFixture<WysiwygEditorComponent>[] = [];
 

@@ -23,13 +23,11 @@ export const IMPACT_LABELS: Record<DifferenceImpact, string> = {
   None: 'bez skutku',
 };
 
-/** Kolejność przyczyn od najbardziej „naszych” (do naprawy w kodzie) do szumu. */
 export const CAUSE_ORDER: DifferenceCause[] = [
   'PipelineUnsupported', 'PipelinePartial', 'PipelineRegenerated', 'UserEditOrLoss', 'Unknown',
   'WriterNormalization', 'UserEdit', 'IdentifierRewrite', 'PairingArtifact', 'WordNoise',
 ];
 
-/** Werdykt z analizy backendu: skutek decyduje, ale „użytkownik albo my” zawsze wymaga człowieka. */
 export function verdictFromAnalysis(cause: DifferenceCause, impact: DifferenceImpact): DifferenceVerdict {
   if (cause === 'UserEditOrLoss' || cause === 'UserEdit' || cause === 'Unknown') {
     return 'review';
@@ -49,15 +47,6 @@ export function verdictFromAnalysis(cause: DifferenceCause, impact: DifferenceIm
   }
 }
 
-/**
- * Ocena różnicy z perspektywy „oryginał (Word) ↔ porównywany (zapis z naszego edytora)”:
- * - `ok`      — nieszkodliwa: identyfikatory, metadane, szum sesji Worda, zaokrąglenia jednostek, kolejność w zbiorach nieuporządkowanych;
- * - `suspect` — podejrzana: nasz writer dodał lub zmienił coś, czego Word by nie zapisał (zapieczone formatowanie, brak części metadanych);
- *               plik otworzy się, ale odbiega od tego, co zrobiłby Word;
- * - `bad`     — zła: coś z oryginału zginęło albo zmieniła się struktura/kolejność treści — strata danych lub ryzyko dla Worda;
- * - `review`  — do oceny przez człowieka: zmiana treści lub wartości, o której reguły nie potrafią rozstrzygnąć (celowa edycja czy błąd?).
- * Reguły są heurystykami zweryfikowanymi na realnych parach v1↔v2; każda ma jednozdaniowe uzasadnienie pokazywane w GUI.
- */
 export type DifferenceVerdict = 'ok' | 'suspect' | 'bad' | 'review';
 
 export interface DifferenceAssessment {
@@ -74,13 +63,6 @@ export const VERDICT_LABELS: Record<DifferenceVerdict, string> = {
 
 export const VERDICT_ORDER: DifferenceVerdict[] = ['bad', 'suspect', 'review', 'ok'];
 
-/**
- * Trzy kubełki, w których człowiek czyta wynik porównania — zamiast czterech ocen, dziesięciu przyczyn
- * i sześciu skutków naraz (zgłoszenie „strasznie nieczytelny i chaotyczny”):
- * - `fix`    — do naprawy u nas: nasz reader/edytor/writer gubi lub zmienia coś, czego użytkownik nie dotykał;
- * - `review` — do sprawdzenia: treść/wartość inna, a reguły nie wiedzą, czy to celowa edycja, czy strata;
- * - `noise`  — nieistotne: identyfikatory, sesje Worda, kolejność zbiorów nieuporządkowanych, zaokrąglenia.
- */
 export type DifferenceBucket = 'fix' | 'review' | 'noise';
 
 export const BUCKET_ORDER: DifferenceBucket[] = ['fix', 'review', 'noise'];
@@ -97,7 +79,6 @@ export const BUCKET_HINTS: Record<DifferenceBucket, string> = {
   noise: 'Identyfikatory, sesje Worda, kolejność w zbiorach nieuporządkowanych, zaokrąglenia jednostek. Bez wpływu na dokument.',
 };
 
-/** Kubełek różnicy: analiza backendu (przyczyna × skutek) ma pierwszeństwo, heurystyczna ocena GUI jest zapasem. */
 export function bucketOf(difference: DocumentDifference, assessment: DifferenceAssessment): DifferenceBucket {
   const analysis = difference.analysis;
 
@@ -105,11 +86,9 @@ export function bucketOf(difference: DocumentDifference, assessment: DifferenceA
     switch (analysis.cause) {
       case 'PipelineUnsupported':
       case 'PipelinePartial':
-        // Realna strata konstrukcji — nawet „kosmetyczna” (w:lang, w:kern) to zadanie dla programisty.
         return analysis.impact === 'None' ? 'noise' : 'fix';
       case 'PipelineRegenerated':
       case 'WriterNormalization':
-        // Ten sam dokument zapisany inaczej — do naprawy dopiero, gdy zmienia układ/PDF/otwarcie w Wordzie.
         return analysis.impact === 'None' || analysis.impact === 'Cosmetic' ? 'noise' : 'fix';
       case 'UserEditOrLoss':
       case 'UserEdit':
@@ -134,13 +113,11 @@ export function bucketOf(difference: DocumentDifference, assessment: DifferenceA
 const CONTENT_PART = /^word\/(document|header\d*|footer\d*|footnotes|endnotes|comments|glossary\/document)\.xml$/i;
 const UNORDERED_PART = /(^|\/)_rels\/|\[Content_Types\]\.xml$|^word\/(styles|numbering|fontTable|settings|webSettings)\.xml$|^docProps\//i;
 
-/** Elementy, które Word dopisuje lub usuwa bez znaczenia dla treści (korekta, sesje, znaczniki renderowania). */
 const NOISE_ELEMENTS = new Set([
   'w:proofErr', 'w:lastRenderedPageBreak', 'w:noProof', 'w:lang', 'w:rsid', 'w:rsids', 'w:rsidRoot',
-  'w:bookmarkStart', 'w:bookmarkEnd', // tylko _GoBack — sprawdzane niżej po nazwie
+  'w:bookmarkStart', 'w:bookmarkEnd',
 ]);
 
-/** Formatowanie, które nasz writer zapieka inline (ze stylu / obliczone), a Word trzymał w stylu lub domyślnych. */
 const BAKED_FORMATTING = new Set([
   'w:rFonts', 'w:sz', 'w:szCs', 'w:color', 'w:spacing', 'w:jc', 'w:ind', 'w:kern', 'w:lang',
   'w:tblGrid', 'w:gridCol', 'w:tcW', 'w:tblW', 'w:tblLook', 'w:tblInd', 'w:tblCellMar', 'w:tblLayout',
@@ -148,15 +125,12 @@ const BAKED_FORMATTING = new Set([
   'w:trHeight', 'w:tabs', 'w:tab', 'w:b', 'w:bCs', 'w:i', 'w:iCs',
 ]);
 
-/** Atrybuty-szum: sesje edycji Worda, identyfikatory akapitów/tekstu, deklaracje ignorowalne. */
 const NOISE_ATTRIBUTES = /^(w:rsid\w*|w14:paraId|w14:textId|mc:Ignorable|xml:space|w:hint|w:eastAsia|w:cs|w:bidi|w:val\.durableId|w:durableId)$/;
 
-/** Atrybuty w twipach/EMU/półpunktach — różnica o kilka jednostek to zaokrąglenie px↔twips (R-13). */
 const UNIT_ATTRIBUTES = /^(w:w|w:h|w:left|w:right|w:top|w:bottom|w:start|w:end|w:hanging|w:firstLine|w:before|w:after|w:line|w:pos|w:sz|w:space|w:val|w:tblpX|w:tblpY|w:leftChars|cx|cy|x|y)$/;
 const UNIT_TOLERANCE = 2;
 
 export function assessDifference(difference: DocumentDifference): DifferenceAssessment {
-  // Analiza z backendu (rejestr możliwości edytora + wiedza o writerze) ma pierwszeństwo przed heurystyką GUI.
   if (difference.analysis) {
     return {
       verdict: verdictFromAnalysis(difference.analysis.cause, difference.analysis.impact),

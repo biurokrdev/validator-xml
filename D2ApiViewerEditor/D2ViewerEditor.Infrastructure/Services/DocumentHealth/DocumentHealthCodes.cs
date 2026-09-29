@@ -1,12 +1,7 @@
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>
-/// Stabilne kody ustaleń diagnostyki „Kondycja dokumentu". Kody etapu Pakiet OPC pochodzą
-/// z <see cref="StructureInspection.StructureIssueCodes"/> (ten sam analizator), pozostałe są własne.
-/// </summary>
 public static class DocumentHealthCodes
 {
-    // ── Plik / kontener ───────────────────────────────────────────────────────
     public const string FileEmpty = "FILE_EMPTY";
     public const string FileTooLarge = "FILE_TOO_LARGE";
     public const string FileNotOoxmlPackage = "FILE_NOT_OOXML_PACKAGE";
@@ -27,7 +22,6 @@ public static class DocumentHealthCodes
     public const string ZipTotalSizeExceeded = "ZIP_TOTAL_SIZE_EXCEEDED";
     public const string ZipCompressionRatioSuspicious = "ZIP_COMPRESSION_RATIO_SUSPICIOUS";
 
-    // ── Pakiet OPC (własne, uzupełniające analizator OPC) ─────────────────────
     public const string ContentTypesPartMissing = "OPC_CONTENT_TYPES_PART_MISSING";
     public const string RootRelationshipsPartMissing = "OPC_ROOT_RELATIONSHIPS_PART_MISSING";
     public const string PackageAnalysisFailed = "OPC_ANALYSIS_FAILED";
@@ -37,7 +31,6 @@ public static class DocumentHealthCodes
     public const string SignedPackage = "OPC_SIGNED_PACKAGE";
     public const string OptionalPartMissing = "OPC_OPTIONAL_PART_MISSING";
 
-    // ── XML ───────────────────────────────────────────────────────────────────
     public const string XmlEmpty = "XML_PART_EMPTY";
     public const string XmlNotWellFormed = "XML_NOT_WELL_FORMED";
     public const string XmlDtdPresent = "XML_DTD_PRESENT";
@@ -45,7 +38,6 @@ public static class DocumentHealthCodes
     public const string XmlIgnorablePrefixUndeclared = "XML_MC_IGNORABLE_PREFIX_UNDECLARED";
     public const string XmlStrictNamespaces = "XML_STRICT_OOXML";
 
-    // ── Struktura WordprocessingML ────────────────────────────────────────────
     public const string BodyMissing = "DOC_BODY_MISSING";
     public const string BodyEmpty = "DOC_BODY_EMPTY";
     public const string SectionPropertiesMisplaced = "DOC_SECTPR_MISPLACED";
@@ -99,7 +91,6 @@ public static class DocumentHealthCodes
     public const string EmbeddedFontObfuscated = "DOC_EMBEDDED_FONT_OBFUSCATED";
     public const string DocumentVeryLarge = "DOC_VERY_LARGE";
 
-    // ── Próby konwersji ───────────────────────────────────────────────────────
     public const string SdkOpenFailed = "PROBE_SDK_OPEN_FAILED";
     public const string SchemaErrors = "PROBE_SCHEMA_ERRORS";
     public const string UploadGateRejected = "PROBE_UPLOAD_GATE_REJECTED";
@@ -110,7 +101,6 @@ public static class DocumentHealthCodes
     public const string RoundTripFailed = "PROBE_ROUND_TRIP_FAILED";
     public const string RoundTripFallback = "PROBE_ROUND_TRIP_FALLBACK";
 
-    // ── Nasza implementacja (luki pipeline'u reader → edytor → writer) ───────
     public const string AppFeatureUnsupported = "APP_FEATURE_UNSUPPORTED";
     public const string AppFeaturePartial = "APP_FEATURE_PARTIAL";
     public const string AppFeaturePassThrough = "APP_FEATURE_PASS_THROUGH";
@@ -119,6 +109,5 @@ public static class DocumentHealthCodes
     public const string AppRoundTripIntroducedIssue = "APP_ROUND_TRIP_INTRODUCED_ISSUE";
     public const string AppRoundTripSchemaErrors = "APP_ROUND_TRIP_SCHEMA_ERRORS";
 
-    // ── Narzędzie ─────────────────────────────────────────────────────────────
     public const string StageFailed = "TOOL_STAGE_FAILED";
 }

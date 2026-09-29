@@ -4,12 +4,6 @@ using System.Xml.Linq;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentCompare;
 
-/// <summary>
-/// Hasz Merkle poddrzewa XML: nazwa + posortowane atrybuty (bez pomijanych) + tekst bezpośredni +
-/// hasze dzieci. Identyczny hasz = identyczne poddrzewo (z dokładnością do pomijanych atrybutów
-/// i elementów), więc wyrównanie list dzieci może pomijać całe niezmienione akapity i tabele bez
-/// schodzenia w głąb. Wynik memoizowany per element (tożsamość referencyjna).
-/// </summary>
 public sealed class XmlSubtreeHasher
 {
     private readonly Dictionary<XElement, string> _cache = new(ReferenceEqualityComparer.Instance);
@@ -22,7 +16,6 @@ public sealed class XmlSubtreeHasher
         _ignoredElements = ignoredElements;
     }
 
-    /// <summary>Ile atrybutów pominięto przy haszowaniu (każdy element haszowany raz, więc licznik = liczba wystąpień w drzewie).</summary>
     public int IgnoredAttributeCount { get; private set; }
 
     public bool IsIgnoredAttribute(XName name) => _ignoredAttributes.Contains(name);
@@ -63,7 +56,6 @@ public sealed class XmlSubtreeHasher
         return hash;
     }
 
-    /// <summary>Tekst bezpośredni elementu (bez tekstu dzieci) — w OOXML niesie go tylko liść (w:t, w:instrText…).</summary>
     public static string DirectText(XElement element) =>
         string.Concat(element.Nodes().OfType<XText>().Select(text => text.Value));
 }

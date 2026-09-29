@@ -1,6 +1,5 @@
 namespace D2ViewerEditor.Application.Features.DocumentCompare.Common;
 
-/// <summary>Raport porównania dwóch pakietów DOCX; enumy jako nazwy (stabilny kontrakt dla GUI).</summary>
 public record DocumentComparisonReportDto(
     ComparedFileDto Left,
     ComparedFileDto Right,
@@ -50,7 +49,6 @@ public record DocumentDifferenceDto(
     string? RightContext,
     DifferenceAnalysisDto? Analysis);
 
-/// <summary>Dlaczego różnica istnieje (przyczyna), co z niej wynika (skutek), wyjaśnienie i wskaźnik do kodu/rejestru.</summary>
 public record DifferenceAnalysisDto(
     string Cause,
     string Impact,

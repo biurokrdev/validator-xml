@@ -19,7 +19,6 @@ export type DifferenceKind =
 
 export type ComparedPartStatus = 'Identical' | 'Changed' | 'OnlyInLeft' | 'OnlyInRight' | 'Unreadable';
 
-/** Dlaczego różnica istnieje (perspektywa: oryginał ↔ kopia zapisana z naszego edytora). */
 export type DifferenceCause =
   | 'Unknown'
   | 'WordNoise'
@@ -32,7 +31,6 @@ export type DifferenceCause =
   | 'UserEdit'
   | 'UserEditOrLoss';
 
-/** Skutek różnicy dla użytkownika końcowego. */
 export type DifferenceImpact = 'None' | 'Cosmetic' | 'Layout' | 'PdfDifference' | 'WordRepair' | 'DataLoss';
 
 export interface DifferenceAnalysis {
@@ -59,7 +57,6 @@ export interface DocumentDifference {
   excerptTruncated: boolean;
   leftContext: string | null;
   rightContext: string | null;
-  /** Analiza przyczyny i skutku z backendu (rejestr możliwości edytora); null w starszych raportach. */
   analysis?: DifferenceAnalysis | null;
 }
 
@@ -107,7 +104,6 @@ export interface CompareOptions {
   ignoreDocumentProperties: boolean;
 }
 
-/** Klient API narzędzia „Porównanie dokumentów": dwa pliki w jednym multipart, jeden raport w odpowiedzi. */
 @Injectable({ providedIn: 'root' })
 export class DocumentCompareService {
   private readonly http = inject(HttpClient);

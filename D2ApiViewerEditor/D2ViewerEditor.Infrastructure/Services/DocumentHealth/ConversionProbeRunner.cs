@@ -11,16 +11,8 @@ using Microsoft.Extensions.Options;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>Wynik etapu prób: lista prób + (opcjonalnie) pakiet DOCX z round-tripu edytora do dalszej analizy.</summary>
 public sealed record ConversionProbeOutcome(IReadOnlyList<ConversionProbeResult> Probes, byte[]? RoundTripPackage);
 
-/// <summary>
-/// Etap „Próby przetworzenia": dokument przechodzi przez TE SAME komponenty, które obsługują go
-/// w aplikacji — Open XML SDK, bramkę uploadu, konwerter DOCX→HTML edytora, writer HTML→DOCX
-/// (round-trip ścieżką pass-through jak autosave) i zarejestrowanego klienta usługi DOCX→PDF —
-/// oraz opcjonalnie przez LibreOffice. Wynik każdej próby to fakt („konwerter zwrócił: …"),
-/// a nie przewidywanie; komunikaty wyjątków są zachowane dosłownie.
-/// </summary>
 public sealed class ConversionProbeRunner
 {
     public const string SdkOpenProbe = "sdk-open";
@@ -200,8 +192,6 @@ public sealed class ConversionProbeRunner
                     "Brak błędów schematu.", null), result);
             }
 
-            // Pełny materiał do analizy: najpierw grupy (ten sam kod + opis = jedna przyczyna w generatorze),
-            // potem KAŻDY błąd z częścią, węzłem i ścieżką — raport ma wystarczyć bez otwierania walidatora.
             var groups = result.Issues
                 .GroupBy(issue => (issue.Code, issue.NodeName, issue.Description))
                 .OrderByDescending(group => group.Count())
@@ -250,11 +240,6 @@ public sealed class ConversionProbeRunner
         }
     }
 
-    /// <summary>
-    /// Walidacja schematu WYNIKU round-tripu: grupy błędów (kod + węzeł + opis), których nie było w źródle
-    /// albo których przybyło, wprowadza nasz writer — to on generuje XML, a nie dokument użytkownika.
-    /// Przykład z produkcji: 309× „unexpected child element rFonts" w w:rPr (zła kolejność dzieci).
-    /// </summary>
     private void CompareRoundTripSchema(
         byte[] roundTripPackage,
         SchemaValidationResult? sourceSchema,
@@ -402,13 +387,6 @@ public sealed class ConversionProbeRunner
         }
     }
 
-    /// <summary>
-    /// Round-trip DOCX→HTML→DOCX tą samą ścieżką co autosave istniejącego dokumentu
-    /// (<c>ConvertPreservingPackage</c> z oryginalnym pakietem). Bez edytora w przeglądarce — HTML
-    /// readera idzie prosto do writera, więc wynik mierzy wierność readera+writera, nie GUI.
-    /// Gdy pass-through zawiedzie, aplikacja po cichu regeneruje pakiet od zera — tu robimy to samo,
-    /// ale głośno (status Warning), bo to strata stylów/theme/fontów, o której użytkownik nie wie.
-    /// </summary>
     private async Task<(ConversionProbeResult Probe, byte[]? Package)> RunRoundTripAsync(
         byte[] documentBytes,
         DocumentContent? content,
@@ -441,8 +419,6 @@ public sealed class ConversionProbeRunner
                 throw new InvalidOperationException("Writer zwrócił pusty pakiet.");
             }
 
-            // ConvertPreservingPackage łapie awarię pass-through i PO CICHU zwraca pakiet zregenerowany
-            // od zera — z zewnątrz widać to tylko po tym, że styles.xml oryginału nie ma w wyniku.
             if (!PassThroughApplied(documentBytes, package))
             {
                 findings.Add(DocumentHealthCodes.RoundTripFallback, StructureIssueSeverity.Warning, HealthStage.Conversion,
@@ -497,11 +473,6 @@ public sealed class ConversionProbeRunner
             content.Margins, content.PageSize, content.SectionHeadersFooters, content.Footnotes, content.Endnotes,
             content.FootnoteNumberFormat, content.EndnoteNumberFormat);
 
-    /// <summary>
-    /// Pass-through uznajemy za zastosowany, gdy bajty oryginalnego <c>word/styles*.xml</c> występują
-    /// w wyniku (writer wstrzykuje je FeedData 1:1). Oryginał bez części stylów = nie ma czego sprawdzać.
-    /// Każdy problem z odczytem archiwum = „nie wiemy" → nie zgłaszamy fałszywego fallbacku.
-    /// </summary>
     private static bool PassThroughApplied(byte[] original, byte[] roundTrip)
     {
         try

@@ -4,10 +4,6 @@ using FluentAssertions;
 
 namespace D2ViewerEditor.Api.IntegrationTests;
 
-/// <summary>
-/// Kontrola dostępu do „Porównania dokumentów” (<c>api/documentcompare</c>): endpoint wymaga polityki
-/// RequireAppAdmin — samo uwierzytelnienie ani rola Operator nie wystarczają.
-/// </summary>
 [TestFixture]
 public class DocumentCompareAuthorizationTests
 {

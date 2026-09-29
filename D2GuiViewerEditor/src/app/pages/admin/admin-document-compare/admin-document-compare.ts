@@ -38,8 +38,6 @@ import {
 
 const PAGE_SIZE = 50;
 
-// „Lewy/prawy” nic nie mówi o roli pliku; w praktyce porównujemy ORYGINAŁ (v1, wejście) z wersją
-// PORÓWNYWANĄ (zapis z edytora, v2, inny szablon). Backend nadal mówi Left/Right — to tylko etykiety.
 const KIND_LABELS: Record<DifferenceKind, string> = {
   PartOnlyInLeft: 'Część tylko w oryginale',
   PartOnlyInRight: 'Część tylko w porównywanym',
@@ -60,18 +58,11 @@ interface ValueDiff {
   right: DiffSegment[];
 }
 
-/** Różnica razem z jej indeksem w raporcie (indeks = klucz rozwiniętych wycinków XML). */
 export interface IndexedDifference {
   index: number;
   difference: DocumentDifference;
 }
 
-/**
- * Narzędzie administracyjne „Porównanie dokumentów": oryginał (z Worda) ↔ ten sam dokument po zapisie
- * z naszego edytora. Backend porównuje literalnie (pakiet, XML, tekst) i analizuje przyczynę oraz skutek;
- * ekran odpowiada na trzy pytania po kolei: czy to to samo → co jest do naprawy u nas / do sprawdzenia /
- * nieistotne → gdzie dokładnie i dlaczego (rozwijane wystąpienia z wartościami i wycinkiem XML).
- */
 @Component({
   selector: 'd2-admin-document-compare',
   standalone: true,
@@ -97,7 +88,6 @@ export class AdminDocumentCompareComponent {
 
   readonly buckets = BUCKET_ORDER;
 
-  /** Wybrany kubełek; null = pierwszy niepusty (do naprawy u nas → do sprawdzenia → nieistotne). */
   readonly bucket = signal<DifferenceBucket | null>(null);
   readonly search = signal('');
 
@@ -109,10 +99,8 @@ export class AdminDocumentCompareComponent {
 
   readonly canCompare = computed(() => !!this.leftFileName() && !!this.rightFileName() && !this.isComparing());
 
-  /** Ocena każdej różnicy (indeks = pozycja w raporcie) — liczona raz per raport. */
   readonly assessments = computed<DifferenceAssessment[]>(() => (this.report()?.differences ?? []).map(assessDifference));
 
-  /** Różnice zgrupowane wg przyczyny (rodzaj + część + element + nazwa), z kubełkiem, przyczyną i skutkiem. */
   readonly groups = computed<DifferenceGroup[]>(() =>
     groupDifferences(this.report()?.differences ?? [], {
       assess: assessDifference,
@@ -121,7 +109,6 @@ export class AdminDocumentCompareComponent {
     }),
   );
 
-  /** Wystąpienia per grupa, z indeksem w raporcie. */
   readonly differencesByGroup = computed<ReadonlyMap<string, IndexedDifference[]>>(() => {
     const map = new Map<string, IndexedDifference[]>();
 
@@ -139,7 +126,6 @@ export class AdminDocumentCompareComponent {
     return map;
   });
 
-  /** Liczba RÓŻNIC w każdym kubełku (po różnicach, nie po grupach). */
   readonly bucketCounts = computed<Record<DifferenceBucket, number>>(() => {
     const counts: Record<DifferenceBucket, number> = { fix: 0, review: 0, noise: 0 };
     const differences = this.report()?.differences ?? [];
@@ -152,7 +138,6 @@ export class AdminDocumentCompareComponent {
     return counts;
   });
 
-  /** Liczba GRUP (przyczyn) w każdym kubełku. */
   readonly bucketGroupCounts = computed<Record<DifferenceBucket, number>>(() => {
     const counts: Record<DifferenceBucket, number> = { fix: 0, review: 0, noise: 0 };
 
@@ -165,7 +150,6 @@ export class AdminDocumentCompareComponent {
     return counts;
   });
 
-  /** Dopowiedzenie do liczby różnic — jedno zdanie, które mówi, czy jest co robić. */
   readonly headline = computed<string>(() => {
     const counts = this.bucketCounts();
 
@@ -184,7 +168,6 @@ export class AdminDocumentCompareComponent {
     () => this.bucket() ?? BUCKET_ORDER.find((bucket) => this.bucketGroupCounts()[bucket] > 0) ?? 'fix',
   );
 
-  /** Grupy aktywnego kubełka po wyszukiwaniu: najpoważniejszy skutek pierwszy, potem najliczniejsze. */
   readonly visibleGroups = computed<DifferenceGroup[]>(() => {
     const bucket = this.activeBucket();
     const needle = this.search().trim().toLowerCase();
@@ -200,7 +183,6 @@ export class AdminDocumentCompareComponent {
     (this.report()?.parts ?? []).filter((part) => part.status !== 'Identical'),
   );
 
-  // ── Pliki i porównanie ─────────────────────────────────────────────────────
 
   onFileSelected(side: 'left' | 'right', event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -260,7 +242,6 @@ export class AdminDocumentCompareComponent {
       });
   }
 
-  // ── Kubełki, wyszukiwanie, grupy ───────────────────────────────────────────
 
   selectBucket(bucket: DifferenceBucket): void {
     this.bucket.set(bucket);
@@ -286,7 +267,6 @@ export class AdminDocumentCompareComponent {
     this.expandedGroups.set(next);
   }
 
-  /** Wystąpienia grupy do pokazania (stronicowane per grupa). */
   itemsOf(group: DifferenceGroup): IndexedDifference[] {
     const all = this.differencesByGroup().get(group.key) ?? [];
     return all.slice(0, this.groupLimits()[group.key] ?? PAGE_SIZE);
@@ -321,7 +301,6 @@ export class AdminDocumentCompareComponent {
     this.expandedExcerpts.set(next);
   }
 
-  /** Podświetlenie zmienionych słów w wartościach (tekst, atrybut); dla jednostronnych — bez podświetlenia. */
   valueDiff(difference: DocumentDifference): ValueDiff | null {
     if (difference.leftValue === null || difference.rightValue === null) {
       return null;
@@ -335,7 +314,6 @@ export class AdminDocumentCompareComponent {
     return difference.leftValue !== null || difference.rightValue !== null;
   }
 
-  // ── Kopiowanie ─────────────────────────────────────────────────────────────
 
   async copyReport(): Promise<void> {
     const report = this.report();
@@ -347,7 +325,6 @@ export class AdminDocumentCompareComponent {
     await this.copyToClipboard(JSON.stringify(report, null, 2), this.copied);
   }
 
-  /** Notatka Markdown: kubełki → grupy z przyczyną, skutkiem, wskaźnikiem do kodu i przykładami. */
   async copySummary(): Promise<void> {
     const report = this.report();
 
@@ -368,7 +345,6 @@ export class AdminDocumentCompareComponent {
     }
   }
 
-  // ── Etykiety ───────────────────────────────────────────────────────────────
 
   bucketLabel(bucket: DifferenceBucket): string {
     return BUCKET_LABELS[bucket];

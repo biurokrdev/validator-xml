@@ -9,11 +9,6 @@ using NUnit.Framework;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services.DocumentHealth;
 
-/// <summary>
-/// „Kondycja dokumentu”: każde uszkodzenie z korpusu ma dać ustalenie o stabilnym kodzie i
-/// właściwy werdykt (Word: otworzy / naprawi / nie otworzy; PDF: ok / ryzyko / prawdopodobny
-/// błąd / blokada). Narzędzie nigdy nie rzuca — uszkodzony plik jest wynikiem, nie wyjątkiem.
-/// </summary>
 [TestFixture]
 public class DocumentHealthInspectorTests
 {
@@ -91,7 +86,6 @@ public class DocumentHealthInspectorTests
         report.Has(DocumentHealthCodes.FileNotOoxmlPackage).Should().BeTrue();
         report.Verdict.Should().Be(HealthVerdict.Corrupt);
         report.PdfConversion.Should().Be(PdfConversionVerdict.Blocked);
-        // Word rozpoznaje RTF/HTML po treści — to nie jest „nie otworzy”, tylko „to nie DOCX”.
         report.First(DocumentHealthCodes.FileNotOoxmlPackage).WordImpact.Should().Be(WordOpenImpact.None);
     }
 
@@ -194,7 +188,6 @@ public class DocumentHealthInspectorTests
     {
         var report = await DocumentHealthTestHost.Inspect(DocumentHealthCorpus.UnbalancedField());
 
-        // begin bez end (1) + end bez begin (1: drugi end po zamknięciu pierwszego).
         report.Findings.Count(finding => finding.Code == DocumentHealthCodes.FieldUnbalanced).Should().Be(1);
         report.Findings.Where(finding => finding.Code == DocumentHealthCodes.FieldUnbalanced)
             .Should().OnlyContain(finding => finding.PdfImpact == PdfConversionImpact.Likely);
@@ -341,7 +334,6 @@ public class DocumentHealthInspectorTests
         report.Has(DocumentHealthCodes.PdfOutputInvalid).Should().BeTrue();
     }
 
-    // ── Etap „Aplikacja”: pokrycie przez naszą implementację ──────────────────
 
     [Test]
     public async Task FeatureRich_CoverageIsClassifiedByRegistry_AndIdentityRoundTripPreservesAll()
@@ -358,7 +350,6 @@ public class DocumentHealthInspectorTests
         report.Coverage(FeatureKeys.HiddenText).CodePointer.Should().Contain("DocxToHtmlConverter");
         report.Coverage(FeatureKeys.MailMerge).Status.Should().Be(CoverageStatus.Unsupported);
 
-        // Luki wracają też jako ustalenia etapu Aplikacja — ostrzeżenie dla utraty treści, informacja dla strat nieszkodliwych.
         var unsupported = report.Findings.Where(finding => finding.Code == DocumentHealthCodes.AppFeatureUnsupported).ToList();
         unsupported.Should().Contain(finding => finding.Title.Contains("Komentarze") && finding.Severity == StructureIssueSeverity.Warning);
         unsupported.Should().Contain(finding => finding.Title.Contains("Równania") && finding.Severity == StructureIssueSeverity.Warning);
@@ -387,7 +378,6 @@ public class DocumentHealthInspectorTests
         report.Coverage(FeatureKeys.Tables).RoundTrip.Should().Be(RoundTripOutcome.Preserved, "2 tabele po zapisie ≥ 1 w źródle");
         report.Coverage(FeatureKeys.Comments).Status.Should().Be(CoverageStatus.Unsupported, "utrata zadeklarowana w rejestrze nie jest niespodzianką");
 
-        // Formant (obsługa częściowa) też zniknął z wyniku — to również nieoczekiwana strata, bo rejestr nie deklaruje braku obsługi.
         report.Coverage(FeatureKeys.ContentControls).Status.Should().Be(CoverageStatus.UnexpectedLoss);
         var losses = report.Findings.Where(finding => finding.Code == DocumentHealthCodes.AppRoundTripLoss).ToList();
         losses.Select(finding => finding.Title).Should().BeEquivalentTo(
@@ -419,7 +409,6 @@ public class DocumentHealthInspectorTests
     [Test]
     public async Task SilentPassThroughFallback_IsDetectedByMissingOriginalStyles()
     {
-        // Źródło ma styles.xml; „writer” zwraca pakiet bez tej części — tak wygląda wynik cichego fallbacku ConvertPreservingPackage.
         var inspector = DocumentHealthTestHost.Create(
             docxWriter: DocumentHealthTestHost.WriterReturning(DocumentHealthCorpus.FeatureRichAfterLossyRoundTrip()));
 
@@ -464,7 +453,6 @@ public class DocumentHealthInspectorTests
         report.Coverage(FeatureKeys.AltChunk).Status.Should().Be(CoverageStatus.Unsupported);
         report.First(DocumentHealthCodes.UpdateFieldsOnOpen).AppSupport.Should().Be(AppSupportLevel.Full);
 
-        // Kody bez wpisu w mapie pozostają „nieznane” bez notatki — nie zmyślamy zachowania aplikacji.
         report.Findings.Where(finding => finding.AppSupport == AppSupportLevel.Unknown)
             .Should().OnlyContain(finding => finding.AppNote == null || finding.Stage == HealthStage.Application);
     }

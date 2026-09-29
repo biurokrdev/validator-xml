@@ -25,15 +25,8 @@ const LEVEL_SHORT: Record<AppSupportLevel, string> = {
 
 const GAP_ORDER: CoverageStatus[] = ['UnexpectedLoss', 'Unsupported', 'Unverified', 'PassThrough', 'Partial'];
 
-/** Limit linii szczegółów jednej próby w notatce — 500 błędów schematu (limit backendu) mieści się w całości. */
 const MAX_PROBE_DETAIL_LINES = 1200;
 
-/**
- * Notatka dla programisty (człowieka albo agenta AI) w Markdownie: co w NASZEJ implementacji jest
- * brakiem, co jest źle obsłużone i czego nie robimy dla tego konkretnego dokumentu — z kodami,
- * lokalizacjami i wskaźnikami do miejsc w kodzie. Pomija to, co działa, żeby nie zalewać czytelnika;
- * pełne dane są w JSON-ie raportu.
- */
 export function buildDeveloperNote(report: DocumentHealthReport): string {
   const lines: string[] = [];
   const gaps = report.coverage.filter((item) => item.status !== 'Supported');
@@ -108,8 +101,6 @@ export function buildDeveloperNote(report: DocumentHealthReport): string {
       lines.push(`- **${probe.name}** [${probe.status}]: ${probe.message ?? '—'}`);
 
       if (probe.details) {
-        // Szczegóły w całości (do limitu): lista błędów schematu albo stderr konwertera to materiał do analizy,
-        // a nie ozdobnik — ucięta lista wymagałaby ponownego uruchomienia narzędzia.
         const detailLines = probe.details.split('\n');
         lines.push('  ```');
         lines.push(...detailLines.slice(0, MAX_PROBE_DETAIL_LINES).map((line) => `  ${line}`));

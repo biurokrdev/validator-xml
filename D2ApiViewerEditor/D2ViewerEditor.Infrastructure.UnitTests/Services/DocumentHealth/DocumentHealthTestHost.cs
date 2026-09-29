@@ -10,11 +10,6 @@ using NSubstitute;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services.DocumentHealth;
 
-/// <summary>
-/// Składa inspektor „Kondycja dokumentu” z prawdziwych etapów (kontener, OPC, XML, struktura,
-/// bramka uploadu, SDK, atrapa konwertera PDF) i podstawianego konwertera DOCX→HTML. LibreOffice
-/// jest wyłączony — testy nie mogą zależeć od binarki spoza repo.
-/// </summary>
 internal static class DocumentHealthTestHost
 {
     public static DocumentHealthInspector Create(
@@ -59,10 +54,6 @@ internal static class DocumentHealthTestHost
         return converter;
     }
 
-    /// <summary>
-    /// Writer „tożsamościowy”: zwraca ORYGINALNY pakiet przekazany jako strumień pass-through —
-    /// round-trip niczego nie gubi, więc testy reguł nie zależą od prawdziwego HtmlToDocxConverter.
-    /// </summary>
     public static IHtmlToDocxConverter IdentityWriter()
     {
         var writer = Substitute.For<IHtmlToDocxConverter>();
@@ -87,7 +78,6 @@ internal static class DocumentHealthTestHost
         return writer;
     }
 
-    /// <summary>Writer zwracający zawsze ten sam, z góry ustalony pakiet — do testów „co round-trip zgubił”.</summary>
     public static IHtmlToDocxConverter WriterReturning(byte[] package)
     {
         var writer = Substitute.For<IHtmlToDocxConverter>();

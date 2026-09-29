@@ -3,12 +3,6 @@ using D2ViewerEditor.Infrastructure.Services.StructureInspection;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>
-/// Jak NASZA aplikacja radzi sobie z konkretnym problemem dokumentu: czy go naprawia (jak Word),
-/// obchodzi, ignoruje, czy pogłębia. Mapa kod ustalenia → (poziom, notatka) — uzupełnienie
-/// ogólnego opisu reguły o zachowanie readera/edytora/writera zweryfikowane w kodzie. Kod bez
-/// wpisu zostaje <see cref="AppSupportLevel.Unknown"/> bez notatki (GUI nic nie pokazuje).
-/// </summary>
 public static class FindingAppHandling
 {
     private const AppSupportLevel Full = AppSupportLevel.Full;
@@ -23,7 +17,6 @@ public static class FindingAppHandling
     private static readonly IReadOnlyDictionary<string, (AppSupportLevel Level, string Note)> Map =
         new Dictionary<string, (AppSupportLevel, string)>(StringComparer.Ordinal)
         {
-            // Plik / kontener
             [DocumentHealthCodes.FileLegacyBinaryDoc] = (Partial,
                 "Własny konwerter binarnego .doc (LegacyDocBinaryConverter, ADR-0074): tekst, akapity i formatowanie znaków z CHPX; brak tabel złożonych, grafik i pól — zapis zawsze jako .docx."),
             [DocumentHealthCodes.FileEncryptedPackage] = (Partial,
@@ -33,7 +26,6 @@ public static class FindingAppHandling
             [DocumentHealthCodes.FileZipUnreadable] = (Unsupported, SdkImportNote),
             [DocumentHealthCodes.ZipEntryCrcMismatch] = (Unsupported, SdkImportNote),
 
-            // Pakiet OPC
             [DocumentHealthCodes.MacrosPresent] = (Unsupported,
                 "Bramka uploadu odrzuca projekt VBA (UploadSecurity:RejectDocxMacros) — plik nie wejdzie do edytora; to polityka bezpieczeństwa, nie luka."),
             [DocumentHealthCodes.MacroEnabledDocument] = (Unsupported,
@@ -47,14 +39,12 @@ public static class FindingAppHandling
             [StructureIssueCodes.RelationshipTargetMissing] = (Partial,
                 "Reader pomija obraz/część bez celu relationshipu (log ostrzeżenia) — element znika z edytora i z v2, import się nie wywraca."),
 
-            // XML
             [DocumentHealthCodes.XmlNotWellFormed] = (Unsupported, SdkImportNote),
             [DocumentHealthCodes.XmlEmpty] = (Unsupported, SdkImportNote),
             [DocumentHealthCodes.XmlDtdPresent] = (Unsupported, SdkImportNote),
             [DocumentHealthCodes.XmlRootUnexpected] = (Unsupported, SdkImportNote),
             [DocumentHealthCodes.XmlIgnorablePrefixUndeclared] = (Unsupported, SdkImportNote),
 
-            // Struktura
             [DocumentHealthCodes.BodyEmpty] = (Full,
                 "Import kończy się stałym kodem DOCUMENT_CONTENT_EMPTY (backend) z jednym źródłem komunikatu w GUI — świadome odrzucenie, nie awaria."),
             [DocumentHealthCodes.SectionPropertiesMissing] = (Full,
@@ -154,7 +144,6 @@ public static class FindingAppHandling
             [DocumentHealthCodes.DocumentVeryLarge] = (Partial,
                 "Paginacja edytora biegnie w przeglądarce po każdym keystroke (gorąca pętla, ADR-0085/0108) — bardzo duże dokumenty spowalniają edycję i autosave."),
 
-            // Próby
             [DocumentHealthCodes.SchemaErrors] = (Partial,
                 "Reader nie waliduje schematu — toleruje niezgodności tak jak Word. Jeśli plik pochodzi z NASZEGO edytora (zapis v2), błędy generuje HtmlToDocxConverter — patrz ustalenie APP_ROUND_TRIP_SCHEMA_ERRORS z próbami; strażnik writera: GeneratedPackageValidityTests."),
             [DocumentHealthCodes.SdkOpenFailed] = (Unsupported,

@@ -3,10 +3,6 @@ using MediatR;
 
 namespace D2ViewerEditor.Application.Features.Documents.Queries.GetDocuments;
 
-/// <summary>
-/// Lista WSZYSTKICH dokumentów dla panelu administratora (bez limitu, bez paginacji po stronie serwera —
-/// grid stronicuje lokalnie). Wiersz niesie tylko kolumny gridu; szczegóły (wersje) doładowuje się osobno.
-/// </summary>
 public record GetDocumentsQuery : IRequest<Result<List<DocumentListItemDto>>>;
 
 public record DocumentListItemDto(

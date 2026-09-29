@@ -2,11 +2,6 @@ using D2ViewerEditor.Domain.Models;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>
-/// Zbiera ustalenia z ograniczeniem liczby powtórzeń tej samej reguły — dokument z 3 000
-/// niedomkniętych zakładek ma dać jedno czytelne ustalenie z licznikiem, a nie 3 000 wierszy.
-/// Liczniki poziomów są pełne niezależnie od przycięcia listy.
-/// </summary>
 public sealed class HealthFindingCollector
 {
     private readonly List<HealthFinding> _findings = [];
@@ -31,13 +26,8 @@ public sealed class HealthFindingCollector
 
     public int Count(string code) => _countsByCode.GetValueOrDefault(code);
 
-    /// <summary>Kody wszystkich zebranych ustaleń (także tych przyciętych z listy) — do porównań „przed/po”.</summary>
     public IReadOnlyCollection<string> Codes => _countsByCode.Keys;
 
-    /// <summary>
-    /// Dopisuje do każdego ustalenia dane spoza reguły, która je wytworzyła (np. jak radzi sobie
-    /// z nim nasza aplikacja). Liczniki i kolejność pozostają bez zmian.
-    /// </summary>
     public void Transform(Func<HealthFinding, HealthFinding> transform)
     {
         for (var index = 0; index < _findings.Count; index++)
@@ -89,10 +79,6 @@ public sealed class HealthFindingCollector
         _findings.Add(finding);
     }
 
-    /// <summary>
-    /// Dopisuje do opisu pierwszego ustalenia danego kodu informację o pominiętych powtórzeniach,
-    /// żeby przycięcie było widoczne przy regule, której dotyczy.
-    /// </summary>
     public void AnnotateRepetitions()
     {
         foreach (var (code, count) in _countsByCode)

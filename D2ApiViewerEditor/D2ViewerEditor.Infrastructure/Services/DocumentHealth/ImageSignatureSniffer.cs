@@ -2,11 +2,6 @@ using System.Text;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>
-/// Rozpoznanie formatu obrazu po sygnaturze bajtów. Zadeklarowany content type części bywa
-/// kłamstwem (bajty JPEG w części image/png) — Word to toleruje, część konwerterów DOCX→PDF nie
-/// dekoduje takiego obrazu albo przerywa konwersję.
-/// </summary>
 public static class ImageSignatureSniffer
 {
     public static string? Sniff(ReadOnlySpan<byte> b)
@@ -43,7 +38,6 @@ public static class ImageSignatureSniffer
         return null;
     }
 
-    /// <summary>Typy, dla których brak rozpoznanej sygnatury nie jest podejrzany (kontenery, metapliki spakowane).</summary>
     public static bool IsOpaqueContentType(string? contentType) =>
         contentType is null ||
         contentType.Contains("gzip", StringComparison.OrdinalIgnoreCase) ||

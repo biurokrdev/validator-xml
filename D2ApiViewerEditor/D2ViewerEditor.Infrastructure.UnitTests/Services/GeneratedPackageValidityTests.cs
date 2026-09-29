@@ -11,12 +11,6 @@ using DomainEndnote = D2ViewerEditor.Domain.Models.Endnote;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services;
 
-/// <summary>
-/// Strażnik „Word: odnalazł zawartość, której nie może odczytać": jeden pakiet przechodzący
-/// naraz przez wszystkie świeżo zmieniane ścieżki writera (tcBorders nil, kolory markerów,
-/// bodyPr textboxa, kotwice wewnętrzne, pola PAGE, przypisy dolne/końcowe + formaty
-/// numeracji w settings.xml) musi być schema-valid.
-/// </summary>
 [TestFixture]
 public class GeneratedPackageValidityTests
 {
@@ -66,11 +60,6 @@ public class GeneratedPackageValidityTests
     [Test]
     public void Convert_RichDocument_IsSchemaValid() => AssertSchemaValid(ConvertRich());
 
-    /// <summary>
-    /// Kondycja dokumentu na pliku z edytora: 309× „unexpected child element rFonts" w w:rPr —
-    /// writer dopisywał rFonts PO b/sz (kolejność parsowania CSS), a schemat wymaga go zaraz po rStyle.
-    /// Każda kombinacja właściwości znaku ma dać rPr w porządku schematu, także w nagłówku i przypisie.
-    /// </summary>
     [Test]
     public void Convert_RunPropertiesInAnyCssOrder_AreSchemaOrdered()
     {
@@ -95,8 +84,6 @@ public class GeneratedPackageValidityTests
     [Test]
     public void Convert_WritesStandardCorePropertiesPart_NotOpcPsmdcp()
     {
-        // PackageProperties tworzyło część *.psmdcp zamiast docProps/core.xml — nietypowy
-        // układ flagowany przy diagnostyce „nieczytelnej zawartości".
         var bytes = _writer.Convert("<p>Treść</p>",
             new DocumentMetadata { Title = "Tytuł testowy", Author = "Autor" });
 
@@ -115,9 +102,6 @@ public class GeneratedPackageValidityTests
     [Test]
     public void Write_SdtProps_DropDanglingPlaceholderAndDataBinding()
     {
-        // Odtwarzany 1:1 sdtPr niósł w:placeholder (docPart z glosariusza oryginału)
-        // i w:dataBinding (customXml) — części, których regenerowany pakiet nie ma;
-        // wiszące odwołania = tryb naprawy Worda.
         var sourceProps = new SdtProperties(
             new SdtPlaceholder(new DocPartReference { Val = "DefaultPlaceholder_-1854013440" }),
             new DataBinding { XPath = "/root/x", StoreItemId = "{11111111-2222-3333-4444-555555555555}" },

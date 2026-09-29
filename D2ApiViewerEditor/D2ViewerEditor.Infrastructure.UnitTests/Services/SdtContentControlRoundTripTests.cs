@@ -10,12 +10,6 @@ using W14 = DocumentFormat.OpenXml.Office2010.Word;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services;
 
-/// <summary>
-/// Formanty (SDT / Content Controls / „obszary specjalne" Worda) muszą zachować TYP i
-/// właściwości przez round-trip DOCX→HTML→DOCX. Wcześniej writer odtwarzał tylko tag/alias,
-/// więc dropdown/date/checkbox degradowały do generycznego formantu przy 1. eksporcie/autosave.
-/// Reader niesie pełne `w:sdtPr` w `data-sdt-props` (base64), writer odtwarza je 1:1.
-/// </summary>
 [TestFixture]
 public class SdtContentControlRoundTripTests
 {
@@ -166,7 +160,6 @@ public class SdtContentControlRoundTripTests
 
         using var ms = DocxWith(para);
         var html = _reader.Convert(ms).Html;
-        // Klik w edytorze: data-checked 0 → 1 (glif w HTML nie ma znaczenia dla zapisu).
         html = html.Replace("data-checked=\"0\"", "data-checked=\"1\"");
 
         var bytes = _writer.Convert(html);
@@ -189,7 +182,6 @@ public class SdtContentControlRoundTripTests
     [TestCase("tick", "2714", "Segoe UI Symbol", "✔")]
     public void CheckBox_MarkChosenInEditor_DefinesCheckedStateAndSurvivesRoundTrip(string mark, string hex, string font, string glyph)
     {
-        // Menu „Pola wyboru" → „Znak zaznaczenia": GUI ustawia data-checked-mark; writer buduje z niego w14:checkedState.
         var html =
             "<p><span class=\"sdt-inline sdt-checkbox\" contenteditable=\"false\" data-sdt-checkbox=\"1\""
             + $" data-checked=\"1\" data-checked-mark=\"{mark}\" data-checked-glyph=\"{glyph}\" data-unchecked-glyph=\"☐\">{glyph}</span> Zgoda</p>";
@@ -205,7 +197,6 @@ public class SdtContentControlRoundTripTests
         outSdt.Descendants<Text>().Single().Text.Should().Be(glyph);
         outSdt.Descendants<Run>().Single().RunProperties!.RunFonts!.Ascii!.Value.Should().Be(font);
 
-        // Po ponownym odczycie definicja wraca z dokumentu (data-sdt-props) — glif ten sam bez data-checked-mark.
         var reread = _reader.Convert(new MemoryStream(bytes)).Html;
         reread.Should().Contain($"data-checked-glyph=\"{glyph}\"").And.Contain("data-checked=\"1\"");
         var again = _writer.Convert(reread);
@@ -233,7 +224,6 @@ public class SdtContentControlRoundTripTests
         outSdt.Descendants<Run>().Single().RunProperties!.RunFonts!.Ascii!.Value.Should().Be("MS Gothic");
         body.InnerText.Should().Contain("Punkt");
 
-        // Ponowny odczyt oddaje ten sam kontrakt (stan przeżywa pełny round-trip).
         var reread = _reader.Convert(new MemoryStream(bytes)).Html;
         reread.Should().Contain("data-sdt-checkbox=\"1\"").And.Contain("data-checked=\"1\"");
     }

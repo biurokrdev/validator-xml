@@ -2,20 +2,10 @@ using D2ViewerEditor.Domain.Models;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>Statyczna analiza wyniku round-tripu: inwentarz konstrukcji + ustalenia etapów Plik→Struktura na WYNIKU zapisu.</summary>
 public sealed record RoundTripAnalysis(DocumentFeatureInventory Inventory, HealthFindingCollector Findings);
 
-/// <summary>Pokrycie + ustalenia etapu „Aplikacja” wyprowadzone z inwentarza, rejestru i round-tripu.</summary>
 public sealed record ImplementationCoverage(IReadOnlyList<ImplementationCoverageItem> Items, string Summary);
 
-/// <summary>
-/// Łączy trzy źródła w jedną odpowiedź na pytanie „co NASZA implementacja robi z tym dokumentem":
-/// inwentarz (co dokument zawiera), rejestr możliwości (co deklarujemy, że umiemy) i round-trip
-/// (co faktycznie przeżyło zapis). Rozbieżność rejestr↔round-trip jest osobnym statusem —
-/// to najcenniejszy sygnał dla programisty: albo regresja w kodzie, albo kłamstwo w rejestrze.
-/// Dodatkowo ustalenia, które kondycja znajduje na WYNIKU zapisu, a których nie było w źródle,
-/// są raportowane jako błędy wprowadzone przez nasz writer.
-/// </summary>
 public static class ImplementationCoverageBuilder
 {
     public static ImplementationCoverage Build(
@@ -148,10 +138,6 @@ public static class ImplementationCoverageBuilder
         }
     }
 
-    /// <summary>
-    /// Ustalenia etapów Plik→Struktura na WYNIKU round-tripu, których kod nie wystąpił w źródle:
-    /// nasz writer wprowadził błąd, którego w dokumencie wejściowym nie było.
-    /// </summary>
     private static void AddIntroducedIssues(
         HealthFindingCollector findings,
         HealthFindingCollector roundTripFindings,

@@ -3,19 +3,10 @@ import { WysiwygEditorComponent } from './wysiwyg-editor';
 import { ensureBulletMarkers, bulletGlyphFromContract } from '../../core/utils/list-label.util';
 import { CheckboxMarkService } from '../../services/checkbox-mark.service';
 
-const PUA_UNCHECKED = String.fromCharCode(0xf071); // Wingdings „q" = ❑ (pusty checkbox Worda)
-const PUA_CHECKED = String.fromCharCode(0xf0fd);   // Wingdings „ý" = ☒ (domyślny znak zaznaczenia)
-const PUA_CHECKED_TICKBOX = String.fromCharCode(0xf0fe); // Wingdings „þ" = ☑
+const PUA_UNCHECKED = String.fromCharCode(0xf071);
+const PUA_CHECKED = String.fromCharCode(0xf0fd);
+const PUA_CHECKED_TICKBOX = String.fromCharCode(0xf0fe);
 
-/**
- * Punktory-checkboxy (zgłoszenie: „nie ma możliwości zmiany punktora z pustego na odhaczony"):
- *  - toggleCheckboxBullet wydziela BIEŻĄCY li do własnego fragmentu listy
- *    (nowy data-num-id + data-lvl-override="1" → writer emituje osobną instancję
- *    z pełnym w:lvlOverride) i przełącza data-lvl-text ☐/❑ ↔ ☑ w kodowaniu źródła (PUA),
- *  - reszta listy zostaje przy oryginalnym punktorze,
- *  - ensureBulletMarkers umie zsyntetyzować marker z kontraktu, gdy w kontenerze
- *    nie ma wzorca do sklonowania (dotąd: wszystkie punktory zostawały puste).
- */
 describe('WysiwygEditorComponent — punktory-checkboxy', () => {
   let fixture: ComponentFixture<WysiwygEditorComponent>;
   let component: WysiwygEditorComponent;
@@ -64,7 +55,7 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     component.toggleCheckboxBullet();
 
     const lists = Array.from(editor.querySelectorAll('ul'));
-    expect(lists.length).toBe(3); // głowa (a) + solo (b) + ogon (c)
+    expect(lists.length).toBe(3);
 
     const solo = editor.querySelector('#b')!.parentElement!;
     expect(solo.getAttribute('data-lvl-text')).toBe(PUA_CHECKED);
@@ -73,7 +64,6 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     expect(solo.getAttribute('data-num-id')).not.toBe('5');
     expect(editor.querySelector('#b .list-marker')!.textContent).toBe('☒');
 
-    // Głowa i ogon: oryginalna definicja i tożsamość (ogon skleja się z głową w zapisie).
     const head = editor.querySelector('#a')!.parentElement!;
     const tail = editor.querySelector('#c')!.parentElement!;
     expect(head.getAttribute('data-num-id')).toBe('5');
@@ -133,7 +123,7 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     expect(editor.querySelector('#b')!.parentElement).toBe(soloA);
     expect(soloA.getAttribute('data-lvl-text')).toBe(PUA_CHECKED);
     expect(soloA.getAttribute('data-lvl-override')).toBe('1');
-    expect(editor.querySelectorAll('ul').length).toBe(2); // odhaczone (a+b) + ogon (c)
+    expect(editor.querySelectorAll('ul').length).toBe(2);
     expect(editor.querySelector('#c')!.parentElement!.getAttribute('data-num-id')).toBe('5');
     expect(editor.querySelector('#c .list-marker')!.textContent).toBe('❑');
   });
@@ -199,14 +189,14 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
 
     const ul = editor.querySelector('ul')!;
     expect(ul.getAttribute('data-num-id')).not.toBe('9');
-    expect(ul.getAttribute('data-abstract-num-id')).toMatch(/^chk-abs-/); // nie abstrakt oryginału
+    expect(ul.getAttribute('data-abstract-num-id')).toMatch(/^chk-abs-/);
     expect(editor.querySelector('#a .list-marker')!.textContent).toBe('☐');
   });
 
   it('Enter w pustym punkcie wychodzi z listy (akapit za listą, punkt usunięty)', () => {
     checkboxList();
     const li = editor.querySelector('#c')!;
-    li.lastChild!.remove(); // zostaje sam marker
+    li.lastChild!.remove();
     const range = document.createRange();
     range.selectNodeContents(li);
     range.collapse(false);
@@ -224,11 +214,10 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
   it('Enter po odhaczonym punkcie: nowy punkt startuje jako pusty ☐', () => {
     checkboxList();
     caretInLi('c');
-    component.toggleCheckboxBullet(); // c odhaczony (własny fragment)
+    component.toggleCheckboxBullet();
     caretInLi('c');
-    expect((component as any)._handleChecklistEnter()).toBe(false); // niepusty → domyślny podział
+    expect((component as any)._handleChecklistEnter()).toBe(false);
 
-    // Symulacja podziału przeglądarki: nowy li w TYM SAMYM (odhaczonym) kontenerze.
     const solo = editor.querySelector('#c')!.parentElement!;
     const fresh = document.createElement('li');
     fresh.id = 'd';
@@ -249,7 +238,6 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     expect(editor.querySelector('#c .list-marker')!.textContent).toBe('☒');
   });
 
-  // ---------- poziomy listy (Tab / Shift+Tab / przyciski wcięć) ----------
 
   function guiChecklist(): void {
     editor.innerHTML = '<ul><li id="a">Alfa</li><li id="b">Beta</li><li id="c">Gamma</li></ul>';
@@ -279,7 +267,7 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     const nested = editor.querySelector('#b')!.parentElement!;
     const tail = editor.querySelector('#c')!.parentElement!;
     expect(nested).not.toBe(head);
-    expect(nested.parentElement).toBe(editor); // model płaski — bez ul w li / ul w ul
+    expect(nested.parentElement).toBe(editor);
     expect(nested.getAttribute('data-ilvl')).toBe('1');
     expect(nested.getAttribute('data-ind-left-tw')).toBe('1440');
     expect(nested.style.paddingLeft).toBe('96px');
@@ -288,13 +276,12 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     expect(tail.getAttribute('data-ilvl')).toBe('0');
     expect(tail.getAttribute('data-num-id')).toBe(head.getAttribute('data-num-id'));
     expect(editor.querySelector('#b .list-marker')!.textContent).toBe('☐');
-    // selekcja przeżywa przenosiny li
     expect(window.getSelection()!.getRangeAt(0).startContainer.parentElement!.id).toBe('b');
   });
 
   it('Tab w ŚRODKU tekstu punktu nie zmienia poziomu (wołający wstawi tabulator)', () => {
     guiChecklist();
-    caretInLi('b'); // offset 1
+    caretInLi('b');
 
     expect((component as any)._handleChecklistTab(false)).toBe(false);
     expect(editor.querySelectorAll('ul').length).toBe(1);
@@ -366,13 +353,10 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
 
     const top = editor.querySelector(':scope > ul')!;
     expect(Array.from(top.children).map(li => li.id)).toEqual(['a', 'b']);
-    expect(editor.querySelector('#c')!.parentElement!.closest('li')!.id).toBe('b'); // kolejne punkty = dzieci podniesionego
+    expect(editor.querySelector('#c')!.parentElement!.closest('li')!.id).toBe('b');
     expect(editor.querySelector('#a ul')).toBeNull();
   });
 
-  // ---------- Backspace/Delete przy znaczniku punktora ----------
-  // Zgłoszenie: „kasuję punkt, a on po chwili wraca; po nastu Backspace'ach znika, ale lista się
-  // urywa". Chrome kasował SAM znacznik (contenteditable=false), ensureBulletMarkers go odtwarzał.
 
   it('Backspace na początku punktu zdejmuje punktor: punkt → akapit, lista ZA nim trwa (ta sama tożsamość)', () => {
     checkboxList();
@@ -390,7 +374,6 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     expect(editor.querySelector('p .list-marker')).toBeNull();
     const [head, tail] = Array.from(editor.querySelectorAll('ul'));
     expect(tail.getAttribute('data-num-id')).toBe(head.getAttribute('data-num-id'));
-    // karetka na początku treści nowego akapitu
     const r = window.getSelection()!.getRangeAt(0);
     expect(r.startContainer.textContent).toBe('Beta');
     expect(r.startOffset).toBe(0);
@@ -398,7 +381,7 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
 
   it('Backspace w ŚRODKU tekstu punktu i w liście bez znacznika zostaje przy przeglądarce', () => {
     checkboxList();
-    caretInLi('b'); // offset 1
+    caretInLi('b');
     expect((component as any)._handleListMarkerDeletion(false)).toBe(false);
 
     editor.innerHTML = '<ol><li id="n">Numer</li></ol>';
@@ -426,7 +409,7 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     const p = editor.querySelector('p')!;
     expect(editor.querySelector('ul')).toBeNull();
     expect(p.textContent).toBe('Alfa');
-    expect(p.style.marginBottom).toBe('8pt'); // formatowanie akapitu punktu zostaje
+    expect(p.style.marginBottom).toBe('8pt');
     expect(p.style.textIndent).toBe('');
     expect(p.getAttribute('data-style-id')).toBe('ListParagraph');
   });
@@ -434,10 +417,10 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
   it('Delete na końcu punktu dociąga treść następnego (także z sąsiedniego fragmentu), bez kasowania znacznika', () => {
     checkboxList();
     caretInLi('c');
-    component.toggleCheckboxBullet(); // c → własny fragment (☑)
+    component.toggleCheckboxBullet();
     const b = editor.querySelector('#b')!;
     const range = document.createRange();
-    range.setStart(b.lastChild!, 4); // koniec „Beta"
+    range.setStart(b.lastChild!, 4);
     range.collapse(true);
     window.getSelection()!.removeAllRanges();
     window.getSelection()!.addRange(range);
@@ -447,16 +430,15 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     expect(editor.querySelector('#c')).toBeNull();
     expect(b.textContent).toBe('❑BetaGamma');
     expect(b.querySelectorAll('.list-marker').length).toBe(1);
-    expect(editor.querySelectorAll('ul').length).toBe(1); // opróżniony fragment znika
+    expect(editor.querySelectorAll('ul').length).toBe(1);
   });
 
   it('Delete w środku tekstu punktu zostaje przy przeglądarce', () => {
     checkboxList();
-    caretInLi('a'); // offset 1 z 4
+    caretInLi('a');
     expect((component as any)._handleListMarkerDeletion(true)).toBe(false);
   });
 
-  // ---------- wklejka z MS Word przez sanitizer schowka ----------
 
   it('schowek Worda: akapity mso-list → lista; kontrakt pól wyboru przeżywa allowlistę sanitizera', () => {
     const item = (t: string) =>
@@ -476,16 +458,13 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     const markers = Array.from(ul.querySelectorAll('li > span.list-marker'));
     expect(markers.map(m => m.textContent)).toEqual(['☐', '☐']);
     expect(markers[0].getAttribute('contenteditable')).toBe('false');
-    // treść punktu nadal przechodzi zwykłą sanitizację (mso-* precz, kolor zostaje)
     const span = ul.querySelector('li span:not(.list-marker)') as HTMLElement;
     expect(span.getAttribute('style')).toBe('color:red;');
-    expect((component as any)._checkboxBulletState(ul)).not.toBeNull(); // klik-toggle zadziała
+    expect((component as any)._checkboxBulletState(ul)).not.toBeNull();
   });
 
-  // ---------- lista w akapicie (Chrome: insertUnorderedList na <p>) ----------
 
   it('hoist: lista zostawiona przez przeglądarkę W <p> wychodzi na poziom bloku, selekcja przeżywa', () => {
-    // Parser HTML zamyka <p> przed <ul> — strukturę Chrome'a po execCommand składamy przez DOM.
     editor.innerHTML = '<p id="p1"></p><p id="p2">Dalej</p>';
     const p1 = editor.querySelector('#p1')!;
     const ul = document.createElement('ul');
@@ -496,7 +475,7 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     (component as any)._hoistListsOutOfParagraphs(editor);
 
     expect(ul.parentElement).toBe(editor);
-    expect(editor.querySelector('#p1')).toBeNull(); // pusty akapit-opakowanie znika
+    expect(editor.querySelector('#p1')).toBeNull();
     expect(editor.querySelector('p ul')).toBeNull();
     const r = window.getSelection()!.getRangeAt(0);
     expect(r.startContainer.parentElement!.id).toBe('a');
@@ -516,7 +495,6 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     expect(Array.from(editor.children).map(e => `${e.tagName}:${e.textContent}`)).toEqual(['P:przed', 'UL:punkt', 'P:za']);
   });
 
-  // ---------- formant „pole wyboru" (w14:checkbox → span.sdt-checkbox) ----------
 
   const SDT_BOX =
     '<span class="sdt-inline sdt-checkbox" contenteditable="false" data-sdt-checkbox="1"' +
@@ -571,7 +549,6 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
   });
 
   it('raportuje stan pola pod karetką dla toolbara: punkt listy, formant w akapicie, brak pola', () => {
-    // jsdom nie implementuje queryCommandState — ścieżka selekcji updateFormattingState musi przeżyć.
     if (typeof (document as any).queryCommandState !== 'function') {
       (document as any).queryCommandState = () => false;
     }
@@ -610,7 +587,6 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     expect(editor.querySelector('#a')!.parentElement!.getAttribute('data-lvl-text')).toBe(PUA_CHECKED);
     expect(editor.querySelector('#a .list-marker')!.textContent).toBe('☒');
 
-    // Zmiana znaku: odhaczony punkt pod kursorem dostaje go od razu, pusty punkt zostaje pusty.
     marks.set('check');
     caretInLi('a');
     component.applyCheckboxMark();
@@ -618,7 +594,6 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     expect(editor.querySelector('#a .list-marker')!.textContent).toBe('☑');
     expect(editor.querySelector('#b .list-marker')!.textContent).toBe('❑');
 
-    // Kolejne odhaczenie używa wybranego znaku; odznaczenie wraca do pustego znaku listy.
     caretInLi('c');
     component.toggleCheckboxBullet();
     expect(editor.querySelector('#c .list-marker')!.textContent).toBe('☑');
@@ -650,7 +625,6 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     const first = editor.querySelector('#p .sdt-checkbox')!;
     expect(first.getAttribute('data-checked-mark')).toBe('cross');
     expect(first.textContent).toBe('☒');
-    // Pole w innym akapicie (poza kursorem) zostaje przy definicji z dokumentu.
     const second = editor.querySelector('#q .sdt-checkbox')!;
     expect(second.hasAttribute('data-checked-mark')).toBe(false);
     expect(second.getAttribute('data-checked-glyph')).toBe('☑');
@@ -675,7 +649,6 @@ describe('WysiwygEditorComponent — punktory-checkboxy', () => {
     expect(bulletGlyphFromContract(PUA_CHECKED_TICKBOX, null)).toBe('☑');
     expect(bulletGlyphFromContract(String.fromCharCode(0xf0a8), 'Wingdings')).toBe('☐');
     expect(bulletGlyphFromContract('▪', 'Arial')).toBe('▪');
-    // nieznany kod PUA — bezpieczna kropka zamiast pustki
     expect(bulletGlyphFromContract(String.fromCharCode(0xf099), null)).toBe('•');
   });
 });

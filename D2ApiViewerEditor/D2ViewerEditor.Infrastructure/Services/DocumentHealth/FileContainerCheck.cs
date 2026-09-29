@@ -6,7 +6,6 @@ using OpenMcdf;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>Wpis archiwum odczytany łagodnie: bajty albo powód, dla którego ich nie ma.</summary>
 public sealed class LenientPackageEntry
 {
     public required string Path { get; init; }
@@ -20,10 +19,6 @@ public sealed class LenientPackageEntry
         Path.EndsWith(".rels", StringComparison.OrdinalIgnoreCase);
 }
 
-/// <summary>
-/// Zawartość archiwum ZIP odczytana bez przerywania na pierwszym błędzie — każdy wpis niesie
-/// albo bajty, albo opis problemu. Odczyt zatrzymuje się tylko na limitach bezpieczeństwa.
-/// </summary>
 public sealed class LenientPackage
 {
     private readonly Dictionary<string, LenientPackageEntry> _byPath = new(StringComparer.OrdinalIgnoreCase);
@@ -43,7 +38,6 @@ public sealed class LenientPackage
 
     public bool Contains(string path) => _byPath.ContainsKey(path);
 
-    /// <summary>Tekst części XML (UTF-8/UTF-16 po BOM); <c>null</c>, gdy wpisu nie ma albo nie dało się go odczytać.</summary>
     public string? ReadText(string path)
     {
         var entry = Find(path);
@@ -60,11 +54,6 @@ public sealed class LenientPackage
     }
 }
 
-/// <summary>
-/// Etap „Plik": co to za bajty (sygnatura, nie rozszerzenie), czy archiwum ZIP da się odczytać,
-/// czy każdy wpis rozpakowuje się do zadeklarowanego rozmiaru i zgadza z sumą CRC-32. To warstwa,
-/// na której Word mówi „plik jest uszkodzony" jeszcze przed zajrzeniem do XML.
-/// </summary>
 public sealed class FileContainerCheck
 {
     private static readonly byte[] ZipLocalHeader = [0x50, 0x4B, 0x03, 0x04];
@@ -78,7 +67,6 @@ public sealed class FileContainerCheck
         _options = options.Value;
     }
 
-    /// <summary>Zwraca odczytane archiwum albo <c>null</c>, gdy plik nie jest pakietem ZIP (format opisany w ustaleniach).</summary>
     public LenientPackage? Run(byte[] bytes, HealthFindingCollector findings, out string detectedFormat)
     {
         detectedFormat = "unknown";
@@ -437,7 +425,6 @@ public sealed class FileContainerCheck
         }
         catch
         {
-            // Kontener CFB nieczytelny — opis poniżej jako nierozpoznany OLE.
         }
 
         if (encrypted)

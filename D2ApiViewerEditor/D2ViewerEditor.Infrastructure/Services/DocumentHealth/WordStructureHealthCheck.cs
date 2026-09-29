@@ -6,18 +6,11 @@ using Microsoft.Extensions.Options;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>
-/// Etap „Struktura": reguły WordprocessingML, których Word wymaga, żeby otworzyć dokument bez
-/// komunikatu o naprawie, oraz konstrukcje znane z tego, że wywracają konwertery DOCX→PDF inne niż
-/// Word (altChunk, niedomknięte pola, obrazy bez części, korespondencja seryjna w settings.xml).
-/// Reguły działają na surowym XML (System.Xml.Linq), nie na modelu SDK — mają działać właśnie
-/// wtedy, gdy SDK odmawia współpracy.
-/// </summary>
 public sealed class WordStructureHealthCheck
 {
-    private const long MaxExtentEmu = 20_116_800; // 22 cale — maksimum Worda dla wymiaru obiektu.
-    private const int MinPageTwips = 144;         // 0,1 cala
-    private const int MaxPageTwips = 31_680;      // 22 cale
+    private const long MaxExtentEmu = 20_116_800;
+    private const int MinPageTwips = 144;
+    private const int MaxPageTwips = 31_680;
 
     private static readonly XNamespace Mc = OoxmlNamespaces.MarkupCompatibility;
 
@@ -117,7 +110,6 @@ public sealed class WordStructureHealthCheck
         return stats.ToStatistics(context);
     }
 
-    // ── Zbieranie kontekstu ───────────────────────────────────────────────────
 
     private static List<(string Path, XDocument Document)> CollectStoryParts(
         HealthPackageContext context,
@@ -275,7 +267,6 @@ public sealed class WordStructureHealthCheck
         return new StyleIndex(ids, PartMissing: false);
     }
 
-    // ── Reguły ────────────────────────────────────────────────────────────────
 
     private static void CheckBody(StoryScope story)
     {
@@ -812,7 +803,6 @@ public sealed class WordStructureHealthCheck
 
         if (relationship.Status != StructureRelationshipStatus.Resolved || relationship.ResolvedTarget is null)
         {
-            // Brak części docelowej i cele zewnętrzne raportuje warstwa pakietu OPC.
             return;
         }
 
@@ -1205,12 +1195,7 @@ public sealed class WordStructureHealthCheck
         }
     }
 
-    // ── Pomocnicze ────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Dzieci-treść kontenera: rozwija w:sdt → w:sdtContent i w:customXml, pomija właściwości
-    /// i znaczniki zakresów (zakładki, komentarze, proofErr), które Word dopuszcza w dowolnym miejscu.
-    /// </summary>
     private static IEnumerable<XElement> ContentChildren(XElement container)
     {
         foreach (var child in container.Elements())
@@ -1320,7 +1305,6 @@ public sealed class WordStructureHealthCheck
             EmbeddedFonts);
     }
 
-    /// <summary>Zakres jednej „opowieści" (część XML): kontekst pakietu, ścieżka, korzeń, kolektor i liczniki.</summary>
     private sealed class StoryScope
     {
         public StoryScope(HealthPackageContext context, string partPath, XElement root, HealthFindingCollector findings, Counters stats)

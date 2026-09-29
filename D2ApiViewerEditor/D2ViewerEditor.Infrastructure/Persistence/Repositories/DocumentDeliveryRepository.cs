@@ -4,10 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace D2ViewerEditor.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Repozytorium zadań wysyłki. Claim batcha realizowany surowym SQL-em
-/// (FOR UPDATE SKIP LOCKED + lease), bezpiecznym dla wielu instancji workera.
-/// </summary>
 public class DocumentDeliveryRepository : IDocumentDeliveryRepository
 {
     private static readonly DeliveryStatus[] ActiveStatuses =
@@ -43,9 +39,6 @@ public class DocumentDeliveryRepository : IDocumentDeliveryRepository
     public async Task<IReadOnlyList<DocumentDelivery>> ClaimDueBatchAsync(
         int batchSize, TimeSpan lease, string workerId, CancellationToken cancellationToken = default)
     {
-        // CTE wybiera gotowe (next_attempt_at <= now) ORAZ zawieszone (Sending z wygasłym lease),
-        // blokuje wiersze (FOR UPDATE SKIP LOCKED — inne instancje pomijają zajęte) i atomowo
-        // przestawia je w Sending z nowym lease + inkrementacją attempt_count.
         const string sql = @"
             WITH due AS (
                 SELECT id FROM document_deliveries
@@ -73,8 +66,6 @@ public class DocumentDeliveryRepository : IDocumentDeliveryRepository
             .ToListAsync(cancellationToken);
     }
 
-    // Listy admina: bez OFFSET/LIMIT — grid stronicuje lokalnie. Sortowanie pokryte indeksami
-    // ix_document_deliveries_created_at / ix_document_deliveries_status_created_at (SQL 012).
     public async Task<IReadOnlyList<DocumentDelivery>> GetByStatusAsync(
         DeliveryStatus status, CancellationToken cancellationToken = default)
     {
@@ -86,7 +77,6 @@ public class DocumentDeliveryRepository : IDocumentDeliveryRepository
         return await BuildListQuery(_context, status: null).ToListAsync(cancellationToken);
     }
 
-    /// <summary>Zapytanie listy admina (wydzielone, aby test mógł sprawdzić wygenerowany SQL bez bazy).</summary>
     internal static IQueryable<DocumentDelivery> BuildListQuery(DocumentDbContext context, DeliveryStatus? status)
     {
         IQueryable<DocumentDelivery> query = context.DocumentDeliveries.AsNoTracking();

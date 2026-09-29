@@ -7,7 +7,6 @@
     </p>
   </header>
 
-  <!-- Krok 1: pliki -->
   <section class="upload-bar">
     <label class="file-picker">
       <input type="file" accept=".docx,.docm,.dotx,.dotm" (change)="onFileSelected('left', $event)" />
@@ -71,7 +70,6 @@
   }
 
   @if (report(); as current) {
-    <!-- Krok 2: wynik w jednym zdaniu + trzy kubełki -->
     <section class="summary" [attr.data-level]="current.identical ? 'identical' : (bucketCounts().fix > 0 ? 'fix' : (bucketCounts().review > 0 ? 'review' : 'noise'))">
       <div class="summary-head">
         <div class="summary-verdict">
@@ -146,7 +144,6 @@
       }
     </section>
 
-    <!-- Krok 3: przyczyny w wybranym kubełku, każda rozwijana do wystąpień -->
     @if (!current.identical) {
       <section class="problems" [attr.data-bucket]="activeBucket()">
         <header class="problems-head">

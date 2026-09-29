@@ -7,11 +7,6 @@ using NUnit.Framework;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Persistence;
 
-/// <summary>
-/// Listy panelu administratora muszą zwracać KOMPLET wierszy (regresja: dawne <c>take = 200</c>/<c>100</c>
-/// obcinało grid do 20 stron) i czytać z bazy tylko to, co grid pokazuje. Tłumaczenie LINQ → SQL sprawdzane
-/// providerem Npgsql bez otwierania połączenia (<see cref="EntityFrameworkQueryableExtensions.ToQueryString"/>).
-/// </summary>
 [TestFixture]
 public class AdminListQueryTranslationTests
 {
@@ -35,7 +30,6 @@ public class AdminListQueryTranslationTests
         var sql = DocumentRepository.BuildListQuery(_context).ToQueryString();
         TestContext.Out.WriteLine(sql);
 
-        // Zewnętrzne zapytanie (od `FROM documents`) — bez LIMIT/OFFSET: grid dostaje komplet.
         var outer = sql.Substring(sql.LastIndexOf("FROM documents", StringComparison.Ordinal));
         outer.Should().NotContainEquivalentOf("LIMIT").And.NotContainEquivalentOf("OFFSET");
         outer.Should().Contain("is_deleted").And.Contain("ORDER BY").And.Contain("created_at");
@@ -43,7 +37,6 @@ public class AdminListQueryTranslationTests
         sql.Should().NotContain("metadata", "grid nie pokazuje metadanych — kolumna JSON nie może jechać z każdym wierszem");
         sql.Should().Contain("is_active", "aktywna wersja wyznaczana w SQL, nie przez materializację kolekcji wersji");
         sql.Should().Contain("version_number");
-        // Projekcja: skorelowane podzapytania `LIMIT 1` (FirstOrDefault) zamiast JOIN-a ładującego całą kolekcję wersji.
         sql.Should().NotContainEquivalentOf("JOIN");
         sql.Split("LIMIT 1").Should().HaveCount(3, "dokładnie dwa podzapytania o aktywną wersję (id, version_number)");
     }

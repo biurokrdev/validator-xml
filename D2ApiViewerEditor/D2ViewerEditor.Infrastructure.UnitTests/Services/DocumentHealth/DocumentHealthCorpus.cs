@@ -5,11 +5,6 @@ using OpenMcdf;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services.DocumentHealth;
 
-/// <summary>
-/// Korpus „chorych” plików: każdy izoluje jedno uszkodzenie, które narzędzie ma nazwać po imieniu.
-/// Uszkodzenia kontenera są wytwarzane na bajtach (ucięcie, przekłamanie, duplikat wpisu) — tego
-/// nie da się zapisać żadnym builderem pakietów.
-/// </summary>
 internal static class DocumentHealthCorpus
 {
     private const string DocumentNamespaces =
@@ -28,14 +23,12 @@ internal static class DocumentHealthCorpus
 
     public static byte[] Healthy() => StructureInspectionCorpus.Normal();
 
-    /// <summary>Plik ucięty w połowie — brak rekordu końca katalogu centralnego.</summary>
     public static byte[] Truncated()
     {
         var bytes = Healthy();
         return bytes[..(bytes.Length / 2)];
     }
 
-    /// <summary>Wpisy bez kompresji, potem jeden bajt treści głównej części przekłamany → CRC się nie zgadza.</summary>
     public static byte[] CrcMismatch()
     {
         var repacked = Repack(Healthy(), CompressionLevel.NoCompression);
@@ -51,7 +44,6 @@ internal static class DocumentHealthCorpus
         return repacked;
     }
 
-    /// <summary>Dwa wpisy o tej samej ścieżce w archiwum.</summary>
     public static byte[] DuplicateEntry()
     {
         using var buffer = new MemoryStream();
@@ -77,7 +69,6 @@ internal static class DocumentHealthCorpus
 
     public static byte[] Html() => Encoding.UTF8.GetBytes("<!DOCTYPE html><html><head><title>Sign in</title></head><body>Login</body></html>");
 
-    /// <summary>Kontener CFB ze strumieniem WordDocument — binarny .doc.</summary>
     public static byte[] LegacyDoc()
     {
         using var buffer = new MemoryStream();
@@ -91,7 +82,6 @@ internal static class DocumentHealthCorpus
         return buffer.ToArray();
     }
 
-    /// <summary>Kontener CFB z EncryptionInfo + EncryptedPackage — DOCX zaszyfrowany hasłem.</summary>
     public static byte[] EncryptedPackage()
     {
         using var buffer = new MemoryStream();
@@ -214,11 +204,6 @@ internal static class DocumentHealthCorpus
             .Build();
     }
 
-    /// <summary>
-    /// Dokument „bogaty” w konstrukcje o różnym poziomie obsługi w naszej implementacji: tabela
-    /// (pełna), przypis dolny (pełna), formant (częściowa), równanie OMML i tekst ukryty (brak),
-    /// komentarz w części comments.xml (brak) oraz ustawienia korespondencji seryjnej (brak, nieszkodliwe).
-    /// </summary>
     public static byte[] FeatureRich()
     {
         const string body =
@@ -255,7 +240,6 @@ internal static class DocumentHealthCorpus
             .Build();
     }
 
-    /// <summary>Wynik „zapisu”, który zgubił tabelę i przypis (regresja) i wprowadził komórkę bez akapitu.</summary>
     public static byte[] FeatureRichAfterLossyRoundTrip()
     {
         const string body =
@@ -267,7 +251,6 @@ internal static class DocumentHealthCorpus
         return new OoxmlTestPackageBuilder().WithMainDocument(Document(body)).Build();
     }
 
-    /// <summary>Pakiet poprawny dla Worda, ale z powtarzalnymi błędami schematu: nieznany element w rPr i zła wartość w:jc (×3).</summary>
     public static byte[] SchemaViolations()
     {
         const string paragraph =

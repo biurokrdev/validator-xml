@@ -5,9 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace D2ViewerEditor.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// Implementacja repozytorium dokumentów z użyciem Entity Framework Core
-/// </summary>
 public class DocumentRepository : IDocumentRepository
 {
     private readonly DocumentDbContext _context;
@@ -31,17 +28,11 @@ public class DocumentRepository : IDocumentRepository
             .FirstOrDefaultAsync(d => d.Id == id && !d.IsDeleted, cancellationToken);
     }
 
-    /// <summary>
-    /// Projekcja do kolumn gridu: jedno zapytanie SQL z podzapytaniem o aktywną wersję
-    /// (pokryte unikalnym indeksem częściowym <c>idx_document_versions_unique_active</c>).
-    /// Kolumna <c>metadata</c> nie jest czytana; bez LIMIT — grid pokazuje komplet.
-    /// </summary>
     public async Task<IReadOnlyList<DocumentListEntry>> ListAsync(CancellationToken cancellationToken = default)
     {
         return await BuildListQuery(_context).ToListAsync(cancellationToken);
     }
 
-    /// <summary>Zapytanie listy admina (wydzielone, aby test mógł sprawdzić wygenerowany SQL bez bazy).</summary>
     internal static IQueryable<DocumentListEntry> BuildListQuery(DocumentDbContext context)
     {
         return context.Documents

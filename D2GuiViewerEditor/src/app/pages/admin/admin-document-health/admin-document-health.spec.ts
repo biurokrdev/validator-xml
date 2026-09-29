@@ -9,10 +9,6 @@ import {
   HealthFinding,
 } from '../../../services/document-health.service';
 
-/**
- * „Kondycja dokumentu": raport ma dać się przefiltrować po poziomie, etapie i wpływie (Word/PDF),
- * flaga prób konwersji musi dotrzeć do API, a błąd backendu ma pokazać komunikat, nie pustą stronę.
- */
 function finding(overrides: Partial<HealthFinding>): HealthFinding {
   return {
     code: 'X',

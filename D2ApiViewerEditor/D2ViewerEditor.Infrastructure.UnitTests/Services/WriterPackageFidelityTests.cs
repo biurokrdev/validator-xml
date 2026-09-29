@@ -12,13 +12,6 @@ using Ap = DocumentFormat.OpenXml.ExtendedProperties;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services;
 
-/// <summary>
-/// Porównanie realnego oryginału Worda z zapisem z edytora (2026-09-27) pokazało, co writer psuł mimo
-/// identycznej treści: settings.xml bez compatibilityMode (Tryb zgodności), „Nagwek1" → „Heading1",
-/// numbering.xml z nowymi numId przy starych odwołaniach w stylach, utracone lang/kern/szCs/znak akapitu,
-/// dryf wcięć przez px, odległości nagłówka z powietrza, obrazy w /media i Default xml = typ głównej części.
-/// Te testy pilnują każdego z tych punktów (P1–P5).
-/// </summary>
 [TestFixture]
 public class WriterPackageFidelityTests
 {
@@ -168,7 +161,6 @@ public class WriterPackageFidelityTests
         var main = doc.MainDocumentPart!;
         var body = main.Document.Body!;
 
-        // P1 — settings.xml oryginału z nałożonymi elementami edytora; relacje (attachedTemplate) usunięte.
         var settings = main.DocumentSettingsPart!.Settings!;
         settings.GetFirstChild<Compatibility>()!.Elements<CompatibilitySetting>()
             .Should().Contain(c => c.Name!.Value == CompatSettingNameValues.CompatibilityMode && c.Val!.Value == "15");
@@ -179,12 +171,10 @@ public class WriterPackageFidelityTests
         settings.GetFirstChild<AttachedTemplate>().Should().BeNull("element z relacją do nieistniejącej części uszkodziłby pakiet");
         settings.Elements().Select(e => e.LocalName).Should().ContainInOrder("zoom", "defaultTabStop", "characterSpacingControl", "compat", "themeFontLang");
 
-        // P2 — nagłówek wskazuje oryginalny styl, który istnieje w zachowanym styles.xml.
         var headingStyle = body.Elements<Paragraph>().First().ParagraphProperties!.ParagraphStyleId!.Val!.Value;
         headingStyle.Should().Be("Nagwek1");
         main.StyleDefinitionsPart!.Styles!.Elements<Style>().Should().Contain(s => s.StyleId!.Value == "Nagwek1");
 
-        // P3 — numbering.xml oryginału zostaje (styl „Listanumerowana" → numId 2 → decimal), listy edytora dopisane pod nowymi id.
         var numbering = main.NumberingDefinitionsPart!.Numbering!;
         var num2 = numbering.Elements<NumberingInstance>().Single(n => n.NumberID!.Value == 2);
         var abstract0 = numbering.Elements<AbstractNum>().Single(a => a.AbstractNumberId!.Value == num2.AbstractNumId!.Val!.Value);
@@ -195,7 +185,6 @@ public class WriterPackageFidelityTests
         referencedNumIds.Should().OnlyContain(id => numbering.Elements<NumberingInstance>().Any(n => n.NumberID!.Value == id),
             "każde w:numId w treści musi wskazywać istniejący w:num po przepisaniu identyfikatorów");
 
-        // P4 — app.xml oryginału, odległości nagłówka/stopki i w:cols z oryginalnego sectPr.
         var appProps = doc.ExtendedFilePropertiesPart!.Properties!;
         appProps.Pages!.Text.Should().Be("7");
         appProps.Application!.Text.Should().Be("Doc2 D2Tools");
@@ -205,7 +194,6 @@ public class WriterPackageFidelityTests
         pgMar.Gutter!.Value.Should().Be(0U);
         body.Elements<SectionProperties>().Last().GetFirstChild<Columns>().Should().NotBeNull();
 
-        // P5 — właściwości runu i akapitu spoza CSS wracają; wcięcia w dokładnych twipsach.
         var headingRun = body.Elements<Paragraph>().First().Elements<Run>().First().RunProperties!;
         headingRun.Languages!.Val!.Value.Should().Be("en-US");
         headingRun.Kern!.Val!.Value.Should().Be(28U);
@@ -224,8 +212,6 @@ public class WriterPackageFidelityTests
     [Test]
     public void ConvertPreservingPackage_BandDistances_ComeBackFromOriginalUnlessUserResizedTheBand()
     {
-        // dokument_tabele_orginal.docx: margines 964, odległości 720/720, tylko stopka. Writer liczył odległość z wysokości
-        // pasma (przyciętej do 0,8 cm / domyślnej 0,5") i zapisywał header=244, footer=511 — stopka lądowała wyżej w Wordzie.
         const string FooterXml =
             """<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Stopka</w:t></w:r></w:p></w:ftr>""";
         var body = """<w:p><w:r><w:t>Treść</w:t></w:r></w:p>"""
@@ -253,7 +239,7 @@ public class WriterPackageFidelityTests
         unchanged.Header!.Value.Should().Be(720u, "pakiet nie ma nagłówka — odległość wraca z oryginału");
         unchanged.Footer!.Value.Should().Be(720u, "pasmo stopki nie było zmieniane — odległość wraca z oryginału");
 
-        content.Footer!.Height = 0.3 + content.Footer.Height; // użytkownik powiększył pasmo stopki w edytorze
+        content.Footer!.Height = 0.3 + content.Footer.Height;
         var resized = MarginsOf(Save());
         resized.Footer!.Value.Should().NotBe(720u, "zmiana pasma w edytorze ma pierwszeństwo przed oryginałem");
         resized.Header!.Value.Should().Be(720u);
@@ -262,8 +248,6 @@ public class WriterPackageFidelityTests
     [Test]
     public void RoundTrip_ExplicitBoldAndItalicOff_SurviveReaderAndWriter()
     {
-        // dokument_tabele_orginal.docx: 146× <w:b w:val="0"/> znikało w round-tripie — reader nie emitował font-weight:normal,
-        // więc tekst w stylu pogrubionym (np. wiersz nagłówkowy tabeli) po zapisie znów był pogrubiony.
         var body = """<w:p><w:r><w:rPr><w:b w:val="0"/><w:i w:val="0"/><w:sz w:val="18"/></w:rPr><w:t>Reference</w:t></w:r></w:p>"""
                    + UnitTests.Services.DocumentHealth.DocumentHealthCorpus.SectionA4;
         var original = new UnitTests.Fixtures.OoxmlTestPackageBuilder()
@@ -287,8 +271,6 @@ public class WriterPackageFidelityTests
     {
         var original = BuildWordLikeOriginal();
         var content = _reader.Convert(new MemoryStream(original));
-        // Symulacja edycji w GUI: użytkownik zmienił krój nagłówka na Arial (CSS), a atrybuty readera zostały
-        // (fixture nie ma motywu, więc reader nie rozwiązał nazwy — dopisujemy ją jak przy realnym dokumencie).
         const string themeAttr = "data-rfonts-theme=\"ascii:minorHAnsi;hAnsi:minorHAnsi;cs:minorBidi\" style=\"";
         content.Html.Should().Contain(themeAttr);
         var html = content.Html.Replace(themeAttr, "data-rfonts-theme=\"ascii:minorHAnsi;hAnsi:minorHAnsi;cs:minorBidi\" data-font-resolved=\"Calibri\" style=\"font-family:'Arial';");

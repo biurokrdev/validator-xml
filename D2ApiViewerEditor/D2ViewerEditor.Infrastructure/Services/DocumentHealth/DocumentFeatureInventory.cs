@@ -4,7 +4,6 @@ using D2ViewerEditor.Infrastructure.Services.StructureInspection;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>Stabilne klucze konstrukcji DOCX rozpoznawanych przez inwentarz (te same w rejestrze możliwości i w GUI).</summary>
 public static class FeatureKeys
 {
     public const string Tables = "tables";
@@ -62,16 +61,8 @@ public static class FeatureKeys
     public const string DigitalSignature = "digital-signature";
 }
 
-/// <summary>Wystąpienia jednej konstrukcji: liczba i lokalizacja pierwszego wystąpienia (część:linia — ścieżka).</summary>
 public sealed record FeatureOccurrence(string Key, int Count, string? SampleLocation);
 
-/// <summary>
-/// Inwentarz konstrukcji DOCX użytych w dokumencie — liczony na surowym XML (System.Xml.Linq), więc
-/// działa też tam, gdzie SDK odmawia. Ten sam skaner biegnie na dokumencie źródłowym i na wyniku
-/// round-tripu edytora; różnica liczników mówi, co nasz pipeline zgubił. Liczniki są celowo
-/// „konstrukcyjne" (ile w:tbl, ile w:footnoteReference), nie treściowe — treść porównuje
-/// narzędzie „Porównanie dokumentów".
-/// </summary>
 public sealed class DocumentFeatureInventory
 {
     private const string WpsNamespace = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
@@ -132,7 +123,6 @@ public sealed class DocumentFeatureInventory
         return inventory;
     }
 
-    // ── Części treści ─────────────────────────────────────────────────────────
 
     private void ScanStory(HealthPackageContext context, string path, XElement root)
     {
@@ -371,7 +361,6 @@ public sealed class DocumentFeatureInventory
         }
     }
 
-    // ── Pakiet ────────────────────────────────────────────────────────────────
 
     private void ScanPackage(HealthPackageContext context, IReadOnlyDictionary<string, XDocument> parts)
     {
@@ -481,7 +470,6 @@ public sealed class DocumentFeatureInventory
         }
     }
 
-    // ── Pomocnicze ────────────────────────────────────────────────────────────
 
     private static IEnumerable<(string Path, XDocument Document)> StoryParts(
         HealthPackageContext context,

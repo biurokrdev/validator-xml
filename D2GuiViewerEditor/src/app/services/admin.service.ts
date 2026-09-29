@@ -10,9 +10,7 @@ export interface DocumentListItem {
   createdAt: string;
   activeVersionId: string;
   versionNumber: number;
-  /** Lifecycle status: Saved | Editing | Sending | DeliveryFailed | Sent */
   status: string;
-  /** CorporateKey of the user who last modified the file (Entra ID `corpKey` claim); null until first editor save. */
   lastModifiedBy?: string | null;
 }
 
@@ -45,7 +43,6 @@ export class AdminService {
   private readonly http = inject(HttpClient);
   private readonly apiUrl = `${environment.apiUrl}/documentstorage`;
 
-  /** KOMPLET dokumentów (backend bez limitu; wiersz = tylko kolumny gridu, wersje doładowywane po rozwinięciu). */
   getAllDocuments(): Observable<DocumentListItem[]> {
     return this.http.get<DocumentListItem[]>(`${this.apiUrl}`);
   }
@@ -54,8 +51,6 @@ export class AdminService {
     return this.http.get<DocumentVersionListItem[]>(`${this.apiUrl}/${masterId}/versions`);
   }
 
-  /** TRWAŁE usunięcie dokumentu (admin): bloby wszystkich wersji z GCS + wpis z bazy
-   *  (wersje i zadania wysyłki kaskadą). 409, gdy wysyłka w toku (Queued/Sending). */
   deleteDocument(masterId: string): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${masterId}`);
   }

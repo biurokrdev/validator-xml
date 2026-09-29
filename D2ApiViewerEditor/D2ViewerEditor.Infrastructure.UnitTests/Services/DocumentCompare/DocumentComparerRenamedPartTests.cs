@@ -10,11 +10,6 @@ using NUnit.Framework;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services.DocumentCompare;
 
-/// <summary>
-/// Writer zapisuje obrazy pod własnymi nazwami (<c>word/media/image1.png</c> → <c>media/image.png</c>); identyczne bajty pod
-/// inną ścieżką mają być JEDNĄ różnicą „część pod inną ścieżką”, a nie parą „zginął obraz” + „nowy obraz” — inaczej raport
-/// obwinia oryginał o utratę, której nie było.
-/// </summary>
 [TestFixture]
 public class DocumentComparerRenamedPartTests
 {

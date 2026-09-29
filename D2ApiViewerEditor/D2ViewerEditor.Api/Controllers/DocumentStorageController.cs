@@ -26,19 +26,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace D2ViewerEditor.Api.Controllers;
 
-/// <summary>
-/// Kontroler do zarządzania dokumentami i wersjami. Cały cykl życia dokumentu (upload, zapis/nadpisanie
-/// wersji, restore, finish&amp;send, pobrania) wymaga roli aplikacyjnej (Operator lub Administrator) —
-/// samo uwierzytelnienie nie wystarcza. Endpointy administracyjne dokładają <see cref="AuthorizationPolicies.RequireAppAdmin"/>
-/// (kombinacja atrybutów = wymagany Administrator). Backend = źródło prawdy.
-/// </summary>
 [Authorize(Policy = AuthorizationPolicies.RequireAppOperator)]
 public class DocumentStorageController : BaseApiController
 {
-    /// <summary>
-    /// Pobranie listy wszystkich dokumentów (dla administracji)
-    /// </summary>
-    /// <returns>Lista dokumentów bez contentu</returns>
     [HttpGet]
     [Authorize(Policy = AuthorizationPolicies.RequireAppAdmin)]
     [ProducesResponseType(typeof(List<DocumentListItemDto>), StatusCodes.Status200OK)]
@@ -51,11 +41,6 @@ public class DocumentStorageController : BaseApiController
             : BadRequest(result.Error);
     }
 
-    /// <summary>
-    /// TRWAŁE usunięcie dokumentu przez administratora: bloby wszystkich wersji z magazynu (GCS)
-    /// + wpis z bazy (wersje i zadania wysyłki kaskadą). Zablokowane w stanach pipeline'u
-    /// wysyłki (Queued/Sending) — 409; najpierw przerwij/anuluj wysyłkę.
-    /// </summary>
     [HttpDelete("{masterId:guid}")]
     [Authorize(Policy = AuthorizationPolicies.RequireAppAdmin)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -72,11 +57,6 @@ public class DocumentStorageController : BaseApiController
         return Conflict(new { error = result.Error });
     }
 
-    /// <summary>
-    /// Upload nowego dokumentu (pierwszy zapis)
-    /// </summary>
-    /// <param name="request">Dane dokumentu z contentem</param>
-    /// <returns>GUID mastera i GUID wersji</returns>
     [HttpPost("upload")]
     [ProducesResponseType(typeof(UploadDocumentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -96,12 +76,6 @@ public class DocumentStorageController : BaseApiController
             : BadRequest(result.Error);
     }
 
-    /// <summary>
-    /// Zapis nowej wersji dokumentu (każde zapisanie z GUI)
-    /// </summary>
-    /// <param name="masterId">GUID mastera dokumentu</param>
-    /// <param name="request">Nowa zawartość dokumentu</param>
-    /// <returns>GUID nowej wersji</returns>
     [HttpPost("{masterId:guid}/save")]
     [ProducesResponseType(typeof(SaveDocumentVersionResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -123,14 +97,6 @@ public class DocumentStorageController : BaseApiController
                 : BadRequest(result.Error);
     }
 
-    /// <summary>
-    /// Nadpisanie istniejącej wersji w miejscu (auto-save edytora).
-    /// Podmienia plik w GCS pod tym samym versionId — nie tworzy nowych wersji.
-    /// Wersja oryginalna (v1) jest nietykalna (zwraca 400).
-    /// </summary>
-    /// <param name="masterId">GUID mastera dokumentu</param>
-    /// <param name="versionId">GUID wersji do nadpisania (edytowalna)</param>
-    /// <param name="request">Nowa zawartość dokumentu</param>
     [HttpPut("{masterId:guid}/versions/{versionId:guid}")]
     [ProducesResponseType(typeof(UpdateDocumentVersionResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -153,10 +119,6 @@ public class DocumentStorageController : BaseApiController
                 : BadRequest(new { error = result.Error });
     }
 
-    /// <summary>
-    /// Pobranie metadanych dokumentu przysłanych przez aplikację zewnętrzną (returnUrl, classification).
-    /// </summary>
-    /// <param name="masterId">GUID mastera dokumentu</param>
     [HttpGet("{masterId:guid}/metadata")]
     [ProducesResponseType(typeof(DocumentMetadataDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -173,11 +135,6 @@ public class DocumentStorageController : BaseApiController
             : NotFound(new { error = result.Error });
     }
 
-    /// <summary>
-    /// Pobranie aktywnej wersji dokumentu (dla GUI)
-    /// </summary>
-    /// <param name="masterId">GUID mastera dokumentu</param>
-    /// <returns>Dokument z aktywną wersją</returns>
     [HttpGet("{masterId:guid}")]
     [ProducesResponseType(typeof(DocumentDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -194,11 +151,6 @@ public class DocumentStorageController : BaseApiController
             : NotFound(new { error = result.Error });
     }
 
-    /// <summary>
-    /// Pobranie listy wszystkich wersji dokumentu (dla historii)
-    /// </summary>
-    /// <param name="masterId">GUID mastera dokumentu</param>
-    /// <returns>Lista wersji (metadane bez contentu)</returns>
     [HttpGet("{masterId:guid}/versions")]
     [ProducesResponseType(typeof(List<DocumentVersionDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -212,11 +164,6 @@ public class DocumentStorageController : BaseApiController
             : NotFound(new { error = result.Error });
     }
 
-    /// <summary>
-    /// Pobranie bazowego (oryginalnego) pliku dokumentu — pierwsza wersja po uploadzie
-    /// </summary>
-    /// <param name="masterId">GUID mastera dokumentu</param>
-    /// <returns>Oryginalny plik z właściwym Content-Type</returns>
     [HttpGet("{masterId:guid}/download")]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -234,12 +181,6 @@ public class DocumentStorageController : BaseApiController
         return File(dto.Content, dto.MimeType, dto.FileName);
     }
 
-    /// <summary>
-    /// Pobranie fizycznego pliku konkretnej wersji dokumentu
-    /// </summary>
-    /// <param name="masterId">GUID mastera dokumentu</param>
-    /// <param name="versionId">GUID wersji do pobrania</param>
-    /// <returns>Fizyczny plik wersji dokumentu</returns>
     [HttpGet("{masterId:guid}/versions/{versionId:guid}/download")]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -257,12 +198,6 @@ public class DocumentStorageController : BaseApiController
         return File(dto.Content, dto.MimeType, dto.FileName);
     }
 
-    /// <summary>
-    /// Pobranie edytowanego pliku na komputer użytkownika ("Pobierz dokument"). Działa tylko,
-    /// gdy metadane dokumentu mają <c>userDownload == true</c> (lokalny upload ustawia tę flagę
-    /// automatycznie; dokumenty z aplikacji zewnętrznej muszą mieć ją jawnie). Pełne egzekwowanie
-    /// po stronie backendu — frontend dodatkowo ukrywa pozycję menu.
-    /// </summary>
     [HttpPost("{masterId:guid}/user-download")]
     [Consumes("application/json")]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
@@ -311,12 +246,6 @@ public class DocumentStorageController : BaseApiController
         return BadRequest(new { error = result.Error });
     }
 
-    /// <summary>
-    /// Przywrócenie wybranej wersji (cofnięcie się do poprzedniej wersji)
-    /// </summary>
-    /// <param name="masterId">GUID mastera dokumentu</param>
-    /// <param name="versionId">GUID wersji do przywrócenia</param>
-    /// <returns>Potwierdzenie operacji</returns>
     [HttpPost("{masterId:guid}/restore/{versionId:guid}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -337,15 +266,6 @@ public class DocumentStorageController : BaseApiController
                 : BadRequest(result.Error);
     }
 
-    /// <summary>
-    /// "Zakończ i wyślij": utrwala stan edytora, zamraża snapshot finalnego pliku, ustawia status
-    /// "Zlecono do wysyłki" i wykonuje SYNCHRONICZNĄ pierwszą próbę dostarczenia na returnUrl.
-    /// Sukces → "Wysłano"; błąd → "Błąd wysyłki" + zadanie czeka na decyzję użytkownika
-    /// ("Przerwij" / "Kontynuuj wysyłkę w tle"). Wielokrotne kliknięcie jest idempotentne.
-    /// </summary>
-    /// <param name="masterId">GUID mastera dokumentu</param>
-    /// <param name="versionId">GUID wersji edytowalnej do sfinalizowania</param>
-    /// <param name="request">Aktualna zawartość edytora</param>
     [HttpPost("{masterId:guid}/versions/{versionId:guid}/finish")]
     [ProducesResponseType(typeof(FinishAndSendResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -369,11 +289,6 @@ public class DocumentStorageController : BaseApiController
         return Ok(result.Value);
     }
 
-    /// <summary>
-    /// "Przerwij" po nieudanej pierwszej próbie wysyłki: anuluje zadanie (Cancelled) i ustawia
-    /// dokument na "UzytkownikPrzerwałWysyłkę". Dokument zostaje edytowalny, nic nie idzie w tle.
-    /// </summary>
-    /// <param name="masterId">GUID mastera dokumentu</param>
     [HttpPost("{masterId:guid}/abort-send")]
     [ProducesResponseType(typeof(AbortSendResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -389,11 +304,6 @@ public class DocumentStorageController : BaseApiController
                 : BadRequest(new { error = result.Error });
     }
 
-    /// <summary>
-    /// "Kontynuuj wysyłkę w tle" po nieudanej pierwszej próbie: przywraca zadanie do kolejki
-    /// i ustawia dokument na "Zlecono do wysyłki". Dalej dostarcza je worker w tle.
-    /// </summary>
-    /// <param name="masterId">GUID mastera dokumentu</param>
     [HttpPost("{masterId:guid}/continue-delivery")]
     [ProducesResponseType(typeof(ContinueDeliveryResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -409,10 +319,6 @@ public class DocumentStorageController : BaseApiController
                 : BadRequest(new { error = result.Error });
     }
 
-    /// <summary>
-    /// Status zadania wysyłki (polling z GUI).
-    /// </summary>
-    /// <param name="deliveryId">GUID zadania wysyłki</param>
     [HttpGet("deliveries/{deliveryId:guid}")]
     [ProducesResponseType(typeof(DeliveryStatusDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -425,12 +331,6 @@ public class DocumentStorageController : BaseApiController
             : NotFound(new { error = result.Error });
     }
 
-    /// <summary>
-    /// Pobranie pliku wysłanego (lub czekającego na wysyłkę) pod adres odbiorcy — niezmienny snapshot
-    /// zadania wysyłki zamrożony przy „Zakończ" (BR-012), z weryfikacją SHA-256. Panel admina:
-    /// „Pliki do wysłania" → „Pobierz plik". To NIE jest bieżąca v2 dokumentu.
-    /// </summary>
-    /// <param name="deliveryId">GUID zadania wysyłki</param>
     [HttpGet("deliveries/{deliveryId:guid}/download")]
     [Authorize(Policy = AuthorizationPolicies.RequireAppAdmin)]
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
@@ -450,10 +350,6 @@ public class DocumentStorageController : BaseApiController
         return File(dto.Content, dto.MimeType, dto.FileName);
     }
 
-    /// <summary>
-    /// Lista zadań wysyłki (monitoring / panel admina). Domyślnie zwraca WSZYSTKIE statusy; bez limitu liczności.
-    /// </summary>
-    /// <param name="status">Pusty / "all" = wszystkie. Albo: Pending | Sending | RetryScheduled | Sent | FailedPermanently | DeadLettered</param>
     [HttpGet("deliveries")]
     [Authorize(Policy = AuthorizationPolicies.RequireAppAdmin)]
     [ProducesResponseType(typeof(IReadOnlyList<DeliveryListItemDto>), StatusCodes.Status200OK)]
@@ -467,10 +363,6 @@ public class DocumentStorageController : BaseApiController
             : BadRequest(new { error = result.Error });
     }
 
-    /// <summary>
-    /// Ręczne ponowienie nieudanego zadania wysyłki (DeadLettered / FailedPermanently).
-    /// </summary>
-    /// <param name="deliveryId">GUID zadania wysyłki</param>
     [HttpPost("deliveries/{deliveryId:guid}/retry")]
     [Authorize(Policy = AuthorizationPolicies.RequireAppAdmin)]
     [ProducesResponseType(typeof(RequeueDeliveryResult), StatusCodes.Status200OK)]
@@ -487,11 +379,6 @@ public class DocumentStorageController : BaseApiController
                 : BadRequest(new { error = result.Error });
     }
 
-    /// <summary>
-    /// Ręczne anulowanie zadania wysyłki ("Anuluj") — dla zadań oczekujących/zaplanowanych
-    /// (Pending / RetryScheduled). Przechodzi w stan końcowy Cancelled.
-    /// </summary>
-    /// <param name="deliveryId">GUID zadania wysyłki</param>
     [HttpPost("deliveries/{deliveryId:guid}/cancel")]
     [ProducesResponseType(typeof(CancelDeliveryResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -507,11 +394,6 @@ public class DocumentStorageController : BaseApiController
                 : BadRequest(new { error = result.Error });
     }
 
-    /// <summary>
-    /// Zmiana adresu odbiorcy (returnUrl/recipientUrl) zadania wysyłki — panel admina.
-    /// Dozwolone dla zadań niewysłanych i nie w trakcie wysyłki.
-    /// </summary>
-    /// <param name="deliveryId">GUID zadania wysyłki</param>
     [HttpPut("deliveries/{deliveryId:guid}/recipient-url")]
     [ProducesResponseType(typeof(UpdateDeliveryRecipientUrlResult), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -530,7 +412,6 @@ public class DocumentStorageController : BaseApiController
     }
 }
 
-// Request DTOs
 public record UploadDocumentRequest(string Name, string MimeType, byte[] Content, string? CreatedBy);
 public record SaveDocumentVersionRequest(byte[] Content, string? CreatedBy);
 public record UpdateDeliveryRecipientUrlRequest(string RecipientUrl);

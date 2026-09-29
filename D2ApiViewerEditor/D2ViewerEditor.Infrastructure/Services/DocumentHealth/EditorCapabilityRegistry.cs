@@ -2,12 +2,6 @@ using D2ViewerEditor.Domain.Models;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
-/// <summary>
-/// Zadeklarowany poziom obsługi jednej konstrukcji DOCX przez trzy komponenty naszego pipeline'u.
-/// <c>Note</c> mówi, CO konkretnie ginie lub jest przybliżane; <c>CodePointer</c> wskazuje miejsce
-/// w kodzie, od którego zaczyna się naprawa. <c>LossIsBenign</c> = utrata jest zamierzona albo
-/// nieszkodliwa (np. ustawienia korespondencji seryjnej) — raportujemy jako informację, nie ostrzeżenie.
-/// </summary>
 public sealed record EditorCapability(
     string Key,
     string Label,
@@ -18,7 +12,6 @@ public sealed record EditorCapability(
     string? CodePointer,
     bool LossIsBenign = false)
 {
-    /// <summary>Najsłabsze ogniwo decyduje o tym, co użytkownik dostanie w v2.</summary>
     public AppSupportLevel Effective
     {
         get
@@ -35,14 +28,6 @@ public sealed record EditorCapability(
     }
 }
 
-/// <summary>
-/// Rejestr możliwości NASZEJ implementacji (DocxToHtmlConverter → edytor Angular → HtmlToDocxConverter)
-/// zweryfikowany w kodzie i w <c>DOCX_CONVERSION.md</c>, <c>COMPLIANCE_MATRIX.md</c>,
-/// <c>AUDIT_WORD_COMPATIBILITY.md</c> §9 oraz ADR-ach. Każdy wpis to twierdzenie o kodzie —
-/// gdy round-trip mu przeczy, raport oznacza pozycję jako „nieoczekiwana utrata" i to jest sygnał,
-/// żeby poprawić kod ALBO ten rejestr. Wpis bez pewności dostaje <see cref="AppSupportLevel.Unknown"/>,
-/// nie zgadujemy.
-/// </summary>
 public static class EditorCapabilityRegistry
 {
     private const AppSupportLevel Full = AppSupportLevel.Full;
@@ -218,7 +203,6 @@ public static class EditorCapabilityRegistry
 
     public static EditorCapability? Find(string key) => Entries.GetValueOrDefault(key);
 
-    /// <summary>Konstrukcja z inwentarza, dla której rejestr nie ma wpisu — raportowana jako niezweryfikowana, nigdy pomijana.</summary>
     public static EditorCapability Unregistered(string key) => new(
         key, key, Unknown, Unknown, Unknown,
         "Konstrukcja wykryta przez inwentarz, ale rejestr możliwości edytora nie ma dla niej wpisu — uzupełnij EditorCapabilityRegistry po sprawdzeniu kodu.",

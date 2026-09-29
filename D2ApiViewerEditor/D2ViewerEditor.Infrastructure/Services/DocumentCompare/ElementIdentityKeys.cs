@@ -2,24 +2,10 @@ using System.Xml.Linq;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentCompare;
 
-/// <summary>
-/// Klucze tożsamości elementów OOXML: para elementów o tej samej nazwie i tym samym kluczu to TEN SAM
-/// obiekt niezależnie od pozycji na liście (relationship po Id, styl po styleId, przypis po w:id,
-/// akapit po w14:paraId…). Bez tego zmiana kolejności w kolekcji nieuporządkowanej (.rels,
-/// [Content_Types].xml, styles.xml) wyglądałaby jak seria zmian atrybutów w „trzecim elemencie".
-/// Klucz zapasowy (np. Type+Target relationshipu) działa, gdy identyfikatory zostały przenumerowane.
-/// </summary>
 public static class ElementIdentityKeys
 {
     public static readonly IReadOnlyList<Func<XElement, string?>> Selectors = [Primary, Secondary, PropertyChild];
 
-    /// <summary>
-    /// Kontenery właściwości OOXML: każde dziecko występuje najwyżej raz i znaczy to samo niezależnie od pozycji
-    /// (schemat narzuca kolejność, Word czyta dowolną). Dziecko takiego kontenera jest parowane PO NAZWIE
-    /// niezależnie od pozycji — inaczej `w:shd` przesunięte za `w:tcMar` (writer pisze kolejność ze schematu,
-    /// generator oryginału inną) wyglądało jak „shd tylko w oryginale” + „shd tylko po zapisie”.
-    /// `w:tabs` (wiele `w:tab`) i `w:rPrChange`-podobne kontenery listowe celowo poza listą.
-    /// </summary>
     private static readonly HashSet<string> PropertyContainers = new(StringComparer.Ordinal)
     {
         "rPr", "pPr", "tcPr", "trPr", "tblPr", "tblPrEx", "sectPr", "tblCellMar", "tcMar", "tblBorders", "tcBorders",

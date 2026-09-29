@@ -6,11 +6,6 @@ using NUnit.Framework;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services.DocumentCompare;
 
-/// <summary>
-/// Analiza przyczyn odpowiada na pytanie „czemu w kopii z edytora tego nie ma”: nasz pipeline nie obsługuje
-/// (rejestr możliwości), writer generuje od nowa, szum Worda, identyfikator przepisany, artefakt parowania —
-/// a gdy nie da się rozstrzygnąć (treść zniknęła mimo deklarowanej obsługi), mówi to wprost.
-/// </summary>
 [TestFixture]
 public class DifferenceCauseAnalyzerTests
 {
@@ -135,7 +130,6 @@ public class DifferenceCauseAnalyzerTests
     [Test]
     public void RealFilePatterns_FromEditorRoundTrip_AreExplained()
     {
-        // Wzorce z porównania dokument_orginal.docx ↔ dokument_z_edytora.docx (2026-09-27).
         var compat = DifferenceCauseAnalyzer.Analyze(Difference(DifferenceKind.ElementOnlyInLeft, part: "word/settings.xml", leftPath: "/w:settings[1]/w:compat[1]"));
         compat.Cause.Should().Be(DifferenceCause.PipelineRegenerated);
         compat.Impact.Should().Be(DifferenceImpact.PdfDifference);
@@ -195,8 +189,6 @@ public class DifferenceCauseAnalyzerTests
     [Test]
     public void RelationshipTypeOrTargetChange_BetweenDifferentRelationships_IsPairingArtifact()
     {
-        // Realny wzorzec (v1↔v2 2026-09-27): Id-y różne (rId+n vs R+hex) → relacje z luk parują się pozycyjnie
-        // i „zmiana Target: media/image4.png → /word/styles.xml” lądowała w „do naprawy u nas”.
         var target = DifferenceCauseAnalyzer.Analyze(Difference(DifferenceKind.AttributeValueChanged,
             part: "word/_rels/document.xml.rels",
             leftPath: "/Relationships[1]/Relationship[7]", rightPath: "/Relationships[1]/Relationship[7]",
@@ -220,7 +212,6 @@ public class DifferenceCauseAnalyzerTests
     [Test]
     public void TableGridColumnWidthChange_IsWordLayoutCache_NotALoss()
     {
-        // dokument_tabele_orginal.docx T20–22: grid 1800/3000/2400, tcW 3×3437 — Word po układzie ma 3×3437 (COM).
         var analysis = DifferenceCauseAnalyzer.Analyze(Difference(DifferenceKind.AttributeValueChanged,
             leftPath: "/w:document[1]/w:body[1]/w:tbl[20]/w:tblGrid[1]/w:gridCol[1]", rightPath: "/w:document[1]/w:body[1]/w:tbl[20]/w:tblGrid[1]/w:gridCol[1]",
             name: "w:w", leftValue: "1800", rightValue: "3437"));
@@ -275,7 +266,6 @@ public class DifferenceCauseAnalyzerTests
     [Test]
     public void ElementMovedWithinSamePropertyContainer_IsSchemaOrdering_NotContentMove()
     {
-        // Oryginał z generatora: tcMar PRZED noWrap; writer (schemat CT_TcPr): noWrap przed tcMar.
         var moved = DifferenceCauseAnalyzer.Analyze(Difference(DifferenceKind.ElementMoved,
             leftPath: "/w:document[1]/w:body[1]/w:tbl[29]/w:tr[1]/w:tc[2]/w:tcPr[1]/w:tcMar[1]",
             rightPath: "/w:document[1]/w:body[1]/w:tbl[29]/w:tr[1]/w:tc[2]/w:tcPr[1]/w:tcMar[1]"));

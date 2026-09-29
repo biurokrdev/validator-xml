@@ -5,11 +5,6 @@ using MediatR;
 
 namespace D2ViewerEditor.Application.Features.Documents.Queries.GetDeliveriesByStatus;
 
-/// <summary>
-/// Lista zadań wysyłki (monitoring / panel admina). `Status` puste/null lub "all"
-/// (case-insensitive) = wszystkie statusy; w przeciwnym razie filtr po konkretnym statusie.
-/// Zwraca KOMPLET pasujących zadań (bez limitu) — grid stronicuje lokalnie.
-/// </summary>
 public record GetDeliveriesByStatusQuery(string? Status = null)
     : IRequest<Result<IReadOnlyList<DeliveryListItemDto>>>;
 

@@ -5,15 +5,6 @@ using D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentCompare;
 
-/// <summary>
-/// Odpowiada na pytanie operacyjne porównywarki: „w oryginale to jest, w kopii z edytora nie ma — DLACZEGO
-/// i co z tego wynika?”. Trzy źródła prawdy: (1) rejestr możliwości edytora (<see cref="EditorCapabilityRegistry"/>)
-/// — czy konstrukcję w ogóle obsługujemy; (2) wiedza o writerze — co generuje od nowa, co zapieka inline,
-/// co przepisuje (identyfikatory); (3) szum Worda — co Word dopisuje bez znaczenia. Gdy element treści
-/// (akapit, run, tabela, obraz) zniknął, a rejestr deklaruje obsługę, przyczyny nie da się rozstrzygnąć
-/// automatycznie: albo użytkownik usunął, albo reader pominął — raport mówi to wprost zamiast zgadywać.
-/// Perspektywa: lewy = oryginał (v1), prawy = kopia zapisana z edytora (v2).
-/// </summary>
 public static class DifferenceCauseAnalyzer
 {
     private const int UnitTolerance = 2;
@@ -22,7 +13,6 @@ public static class DifferenceCauseAnalyzer
         @"^(w:rsid\w*|w14:paraId|w14:textId|w16cid:durableId|w16du:dateUtc|mc:Ignorable|xml:space|w:hint|wp14:anchorId|wp14:editId|distT|distB|distL|distR|bwMode|rotWithShape)$",
         RegexOptions.Compiled);
 
-    /// <summary>Atrybuty-odwołania do relacji i generowane nazwy/id obiektów graficznych — przepisywane spójnie przy zapisie.</summary>
     private static readonly Regex RelationshipOrGeneratedIdAttribute = new(@"^(r:embed|r:id|r:link|r:pict)$", RegexOptions.Compiled);
 
     private static readonly Regex UnitAttribute = new(
@@ -38,12 +28,10 @@ public static class DifferenceCauseAnalyzer
         "w:proofErr", "w:lastRenderedPageBreak", "w:noProof", "w:rsid", "w:rsids", "w:rsidRoot", "w:bookmarkEnd"
     };
 
-    /// <summary>Atrybuty w twipach: 1 px edytora = 15 twips, więc dryf ≤ 15 to zaokrąglenie twips→px→twips, nie edycja.</summary>
     private const int PixelRoundingTwips = 15;
 
     private static readonly Regex ThemeFontAttribute = new(@"^w:(ascii|hAnsi|eastAsia|cs)[Tt]heme$", RegexOptions.Compiled);
 
-    /// <summary>Elementy formatowania, które writer zapieka inline (ze stylu / obliczone) — Word trzymał je w stylu lub domyślnych.</summary>
     private static readonly HashSet<string> BakedFormatting = new(StringComparer.Ordinal)
     {
         "w:rFonts", "w:sz", "w:szCs", "w:color", "w:spacing", "w:jc", "w:ind", "w:kern", "w:b", "w:bCs", "w:i", "w:iCs",
@@ -53,7 +41,6 @@ public static class DifferenceCauseAnalyzer
         "w:tblpPr", "w:tblStyle", "w:rStyle", "w:pStyle", "w:u", "w:strike", "w:caps", "w:smallCaps", "w:vertAlign", "w:highlight"
     };
 
-    /// <summary>Element/atrybut → klucz konstrukcji z rejestru możliwości edytora (po nazwie kwalifikowanej ostatniego segmentu ścieżki).</summary>
     private static readonly Dictionary<string, string> FeatureByName = new(StringComparer.Ordinal)
     {
         ["w:commentReference"] = FeatureKeys.Comments, ["w:commentRangeStart"] = FeatureKeys.Comments, ["w:commentRangeEnd"] = FeatureKeys.Comments,
@@ -130,7 +117,6 @@ public static class DifferenceCauseAnalyzer
         };
     }
 
-    // ── Części pakietu ────────────────────────────────────────────────────────
 
     private static DifferenceAnalysis MissingPart(string part)
     {
@@ -229,29 +215,23 @@ public static class DifferenceCauseAnalyzer
             "Zmieniła się część binarna spoza obrazów (font, OLE, podpis) — nasz zapis nie powinien jej dotykać.", null, null);
     }
 
-    // ── Elementy ──────────────────────────────────────────────────────────────
 
-    /// <summary>Kontenery właściwości, w których kolejność dzieci narzuca schemat (a Word toleruje dowolną).</summary>
     private static readonly HashSet<string> PropertyContainers = new(StringComparer.Ordinal)
     {
         "w:rPr", "w:pPr", "w:tcPr", "w:trPr", "w:tblPr", "w:tblPrEx", "w:sectPr", "w:tblCellMar", "w:tcMar", "w:tblBorders",
         "w:tcBorders", "w:pBdr", "w:numPr", "w:tabs", "w:tblLook", "w:framePr", "w:pgMar", "w:pgSz", "w:cols",
     };
 
-    /// <summary>Kontenery marginesów/obramowań, w których `w:start`/`w:end` (zapis dwukierunkowy) znaczą to samo co `w:left`/`w:right` dla LTR.</summary>
     private static readonly HashSet<string> BidiSideContainers = new(StringComparer.Ordinal)
     {
         "w:tblCellMar", "w:tcMar", "w:tblBorders", "w:tcBorders", "w:pBdr", "w:ind",
     };
 
-    /// <summary>Samozamykający się element bez atrybutów (poza deklaracjami przestrzeni nazw), np. `&lt;w:trPr/&gt;`.</summary>
     private static readonly Regex EmptyElementExcerpt = new(@"^\s*<[\w:.-]+(\s+xmlns(:\w+)?=""[^""]*"")*\s*/>\s*$", RegexOptions.Compiled);
 
-    /// <summary>Kontekst akapitu (tekst) znany i identyczny po obu stronach — komparator podaje go także dla różnic jednostronnych.</summary>
     private static bool SameParagraphText(DocumentDifference difference) =>
         !string.IsNullOrEmpty(difference.LeftContext) && string.Equals(difference.LeftContext, difference.RightContext, StringComparison.Ordinal);
 
-    /// <summary>Nazwa rodzica z pozycyjnej ścieżki XML: `/w:tbl[1]/w:tblPr[1]/w:tblCellMar[1]/w:start[1]` → `w:tblCellMar`.</summary>
     private static string? ParentElementOf(string? path)
     {
         if (string.IsNullOrEmpty(path))
@@ -270,8 +250,6 @@ public static class DifferenceCauseAnalyzer
         var leftContainer = difference.LeftPath is { } lp ? lp[..lp.LastIndexOf('/')] : null;
         var rightContainer = difference.RightPath is { } rp ? rp[..rp.LastIndexOf('/')] : null;
 
-        // Ten sam kontener właściwości po obu stronach, inna pozycja dziecka: writer pisze dzieci w kolejności ze schematu
-        // (np. CT_TcPr: noWrap PRZED tcMar), oryginał z generatora miał inną — Word czyta obie. To nie przeniesienie treści.
         if (leftParent is not null && leftParent == rightParent && leftContainer == rightContainer && PropertyContainers.Contains(leftParent))
         {
             return new DifferenceAnalysis(DifferenceCause.WriterNormalization, DifferenceImpact.None,
@@ -293,29 +271,24 @@ public static class DifferenceCauseAnalyzer
                 $"{element} to znacznik pomocniczy Worda (korekta, sesja, podział strony z renderowania) — jego brak nie zmienia dokumentu.", null, null);
         }
 
-        // Pusty kontener (<w:trPr/>, <w:rPr/>): writer nie zapisuje pustych kontenerów właściwości — bez skutku.
         if (element is not null && PropertyContainers.Contains(element) && EmptyElementExcerpt.IsMatch(difference.LeftExcerpt ?? string.Empty))
         {
             return new DifferenceAnalysis(DifferenceCause.WriterNormalization, DifferenceImpact.None,
                 $"Pusty {element} z oryginału (bez dzieci) nie jest zapisywany przez writer — kontener bez właściwości niczego nie zmienia.", null, null);
         }
 
-        // w:start/w:end (zapis dwukierunkowy) w marginesach/obramowaniach: writer zapisuje w:left/w:right — dla LTR to ta sama wartość.
         if (element is "w:start" or "w:end" && ParentElementOf(difference.LeftPath) is { } sideParent && BidiSideContainers.Contains(sideParent))
         {
             return new DifferenceAnalysis(DifferenceCause.WriterNormalization, DifferenceImpact.None,
                 $"{sideParent}/{element} (zapis dwukierunkowy start/end) writer zapisuje jako {(element == "w:start" ? "w:left" : "w:right")} — dla tekstu od lewej to ta sama wartość, Word czyta obie formy (patrz dodany w:left/w:right w tym samym kontenerze).", null, null);
         }
 
-        // Pusty run (<w:r/>) — bez tekstu i właściwości; writer go nie zapisuje.
         if (element == "w:r" && EmptyElementExcerpt.IsMatch(difference.LeftExcerpt ?? string.Empty))
         {
             return new DifferenceAnalysis(DifferenceCause.WriterNormalization, DifferenceImpact.None,
                 "Pusty run (w:r bez tekstu i właściwości) z oryginału nie jest zapisywany — niczego nie zmienia.", null, null);
         }
 
-        // Podział runów: ten sam tekst akapitu po obu stronach, a run/tekst/podział wiersza „zniknął” tylko jako węzeł —
-        // writer zapisuje każdy <br>/span jako osobny run (oryginał: <w:r><w:t/><w:br/><w:t/></w:r>).
         if (element is "w:r" or "w:t" or "w:br" or "w:tab" && SameParagraphText(difference))
         {
             return new DifferenceAnalysis(DifferenceCause.WriterNormalization, DifferenceImpact.None,
@@ -481,14 +454,12 @@ public static class DifferenceCauseAnalyzer
             return new DifferenceAnalysis(DifferenceCause.WordNoise, DifferenceImpact.None, $"{element} to znacznik pomocniczy bez wpływu na treść.", null, null);
         }
 
-        // Lustro podziału runów: dodany run/tekst/podział wiersza przy identycznym tekście akapitu.
         if (element is "w:r" or "w:t" or "w:br" or "w:tab" && SameParagraphText(difference))
         {
             return new DifferenceAnalysis(DifferenceCause.WriterNormalization, DifferenceImpact.None,
                 $"Dodatkowy węzeł {element} przy identycznym tekście akapitu („{difference.RightContext}”) — writer dzieli run na osobne runy (per <br>/<span>); treść bez zmian.", null, "HtmlToDocxConverter (runy per <br>/<span>)");
         }
 
-        // Lustro reguły start/end: writer zapisał w:left/w:right tam, gdzie oryginał miał w:start/w:end.
         if (element is "w:left" or "w:right" && ParentElementOf(difference.RightPath) is { } sideParent && BidiSideContainers.Contains(sideParent))
         {
             return new DifferenceAnalysis(DifferenceCause.WriterNormalization, DifferenceImpact.None,
@@ -531,7 +502,6 @@ public static class DifferenceCauseAnalyzer
             $"Writer dodał element {element}, którego nie było w oryginale — sprawdź w wycinku, czy to celowa normalizacja, czy artefakt.", null, null);
     }
 
-    // ── Atrybuty ──────────────────────────────────────────────────────────────
 
     private static DifferenceAnalysis LostAttribute(string? element, string name, bool inContent, string part)
     {
@@ -552,7 +522,6 @@ public static class DifferenceCauseAnalyzer
                 "w:shd bez w:color=\"auto\" — atrybut domyślny, Word traktuje brak jak auto.", null, null);
         }
 
-        // Poza treścią (numbering/settings/styles) decyduje to, że writer generuje część od nowa — ważniejsze niż klucz konstrukcji.
         if (!inContent)
         {
             return OutsideContentLoss(part, $"{element}/@{name}");
@@ -580,10 +549,6 @@ public static class DifferenceCauseAnalyzer
             $"Writer dodał atrybut {name} na {element} — jawny zapis wartości, którą Word trzymał domyślnie; wygląd bez zmian.", null, "HtmlToDocxConverter");
     }
 
-    /// <summary>
-    /// Ścieżka celu relacji sprowadzona do postaci bezwzględnej w pakiecie: dla części `word/_rels/document.xml.rels`
-    /// cel `media/image1.png` i `/word/media/image1.png` to ta sama część. Cele zewnętrzne (http…) zostają bez zmian.
-    /// </summary>
     private static string NormalizeRelationshipTarget(string target, string relsPart)
     {
         if (target.Length == 0 || target.Contains("://", StringComparison.Ordinal))
@@ -596,7 +561,6 @@ public static class DifferenceCauseAnalyzer
             return target.TrimStart('/').ToLowerInvariant();
         }
 
-        // word/_rels/document.xml.rels → katalog bazowy „word/”; _rels/.rels → katalog główny.
         var relsDirectory = relsPart.Replace('\\', '/');
         var relsIndex = relsDirectory.IndexOf("_rels/", StringComparison.OrdinalIgnoreCase);
         var baseDirectory = relsIndex <= 0 ? string.Empty : relsDirectory[..relsIndex];
@@ -637,10 +601,6 @@ public static class DifferenceCauseAnalyzer
                 "Identyfikator relacji jest dowolny: Word nadaje rId+n, Open XML SDK R+hex — odwołania w treści są przepisane spójnie.", null, null);
         }
 
-        // Type/Target relacji: gdy Id-y się różnią (rId+n vs R+hex), relacje z luk parują się POZYCYJNIE i „zmiana Type”
-        // albo „zmiana Target” to dwie różne relacje obok siebie, nie realna różnica (v1↔v2 2026-09-27: 10× Target
-        // media/image4.png → /word/styles.xml lądowało w „do naprawy u nas”). Ta sama część pod ścieżką względną
-        // i bezwzględną (media/x.png ↔ /word/media/x.png) to normalizacja zapisu bez skutku.
         if (Regex.IsMatch(part, @"(^|/)_rels/", RegexOptions.IgnoreCase) && name is "Type" or "Target")
         {
             var leftType = name == "Type" ? left : Regex.Match(difference.LeftExcerpt ?? string.Empty, "Type=\"([^\"]+)\"").Groups[1].Value;
@@ -664,17 +624,12 @@ public static class DifferenceCauseAnalyzer
             return new DifferenceAnalysis(DifferenceCause.WordNoise, DifferenceImpact.None, $"Atrybut {name} to szum Worda — wartość bez znaczenia.", null, null);
         }
 
-        // Siatka tabeli: w:tblGrid to CACHE ostatniego układu Worda, nie źródło geometrii. Przy autofit Word układa kolumny
-        // po preferowanych szerokościach komórek (tcW) i treści, a przy zapisie sam przepisuje gridCol (Word COM na
-        // dokument_tabele_orginal.docx: grid 1800/3000/2400, tcW 3×3437 → po układzie 3×3437). Reader/writer robią to samo
-        // (ADR-0108 r.8). Zmiana użytkownika (resize kolumny) zmienia też w:tcW — wtedy są osobne wiersze dla tcW.
         if (element == "w:gridCol" && name == "w:w")
         {
             return new DifferenceAnalysis(DifferenceCause.WriterNormalization, DifferenceImpact.None,
                 $"Szerokość kolumny siatki (w:gridCol {left} → {right}) przepisana z preferowanych szerokości komórek — w:tblGrid to cache układu Worda, który Word i tak odświeża przy zapisie; układ tabeli ten sam. Jeśli w tej tabeli zmieniły się także w:tcW, to zmiana użytkownika (resize kolumny).", FeatureKeys.Tables, "DocxToHtmlConverter.ReadFirstRowPreferredColumnsPx (ADR-0108 r.8)");
         }
 
-        // Ten sam boolean w innym zapisie (ST_OnOff: 0/false/off, 1/true/on) — SDK serializuje „false”, Word „0”.
         if (IsOnOff(left) && IsOnOff(right) && OnOff(left) == OnOff(right))
         {
             return new DifferenceAnalysis(DifferenceCause.WriterNormalization, DifferenceImpact.None,
@@ -756,7 +711,6 @@ public static class DifferenceCauseAnalyzer
             $"Inna wartość {name} elementu {element} ({left} → {right}): celowa zmiana formatowania przez użytkownika ALBO reader/writer przekształca tę właściwość. Powtarzalność w wielu miejscach = nasz pipeline; pojedyncze wystąpienie = raczej edycja.", null, null);
     }
 
-    // ── Tekst ─────────────────────────────────────────────────────────────────
 
     private static DifferenceAnalysis ChangedText(DocumentDifference difference)
     {
@@ -785,7 +739,6 @@ public static class DifferenceCauseAnalyzer
             "Treść tekstu się różni — najpewniej edycja użytkownika w edytorze. Jeśli użytkownik NIE edytował tego akapitu, to błąd konwersji (np. utracone znaki specjalne, symbole, pola).", null, null);
     }
 
-    // ── Pomocnicze ────────────────────────────────────────────────────────────
 
     private static DifferenceAnalysis FromRegistry(string feature, bool lost, DifferenceImpact impact)
     {

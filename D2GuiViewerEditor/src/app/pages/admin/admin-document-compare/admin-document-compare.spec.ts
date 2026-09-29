@@ -9,11 +9,6 @@ import {
   DocumentDifference,
 } from '../../../services/document-compare.service';
 
-/**
- * „Porównanie dokumentów": dwa pliki muszą dotrzeć do API z flagami; wynik dzieli się na trzy kubełki
- * (do naprawy u nas / do sprawdzenia / nieistotne), w kubełku są przyczyny (grupy) od najpoważniejszego
- * skutku, każda rozwijana do stronicowanych wystąpień z podświetleniem zmienionych słów.
- */
 function difference(overrides: Partial<DocumentDifference>): DocumentDifference {
   return {
     kind: 'TextChanged',
@@ -53,13 +48,9 @@ const report: DocumentComparisonReport = {
     { path: '_rels/.rels', status: 'Identical', isXml: true, differenceCount: 0, leftSize: 100, rightSize: 100, leftElementCount: null, rightElementCount: null, note: null },
   ],
   differences: [
-    // do sprawdzenia: zmiana tekstu (heurystyka GUI: review)
     difference({}),
-    // do sprawdzenia: w:val 24 → 28 (> 2 jednostki → review)
     difference({ kind: 'AttributeValueChanged', category: 'Formatowanie znaku', name: 'w:val', leftValue: '24', rightValue: '28', leftContext: null, rightContext: null }),
-    // do naprawy u nas: część styles.xml tylko po zapisie (heurystyka: suspect → fix)
     difference({ kind: 'PartOnlyInRight', category: 'Style', partPath: 'word/styles.xml', leftPath: null, rightPath: null, leftValue: null, rightValue: '300 B', leftExcerpt: null, rightExcerpt: '<w:styles/>', leftContext: null, rightContext: null }),
-    // do naprawy u nas z analizą backendu: w:compat zgubione przez writer, skutek inny PDF, wskaźnik do kodu
     difference({
       kind: 'ElementOnlyInLeft', category: 'Ustawienia', partPath: 'word/settings.xml',
       leftPath: '/w:settings[1]/w:compat[1]', rightPath: null, leftValue: null, rightValue: null,
@@ -96,7 +87,6 @@ describe('AdminDocumentCompareComponent — kubełki i przyczyny', () => {
   it('w kubełku przyczyny idą od najpoważniejszego skutku, z tytułem po ludzku, częścią i wskaźnikiem do kodu', () => {
     const groups = component.visibleGroups();
 
-    // w:compat (inny PDF) przed styles.xml (bez analizy → na końcu).
     expect(groups.map((group) => group.partPath)).toEqual(['word/settings.xml', 'word/styles.xml']);
     expect(component.describeGroup(groups[0])).toBe('Po zapisie brak: w:compat');
     expect(component.describePart(groups[0].partPath)).toBe('Ustawienia dokumentu');

@@ -4,12 +4,6 @@ using Microsoft.Extensions.Options;
 
 namespace D2ViewerEditor.Infrastructure.Services.StructureInspection;
 
-/// <summary>
-/// Ładowanie XML z niezaufanego pakietu: DTD odrzucone, brak resolvera zewnętrznego, brak encji
-/// zewnętrznych, twardy limit znaków (XXE / entity expansion / zip bomb po dekompresji).
-/// Whitespace jest zachowywany — podgląd ma pokazywać XML taki, jaki jest w pakiecie —
-/// a informacja o linii pozwala przejść z elementu do jego miejsca w pełnym XML części.
-/// </summary>
 public sealed class SafeOoxmlXmlLoader
 {
     private readonly StructureInspectionOptions _options;
@@ -21,7 +15,6 @@ public sealed class SafeOoxmlXmlLoader
 
     public XDocument Load(string xml) => Load(xml, LoadOptions.PreserveWhitespace | LoadOptions.SetLineInfo);
 
-    /// <summary>Ten sam bezpieczny czytnik z jawnymi opcjami (np. bez zachowania whitespace — do porównań i formatowania wycinków).</summary>
     public XDocument Load(string xml, LoadOptions options)
     {
         var settings = new XmlReaderSettings

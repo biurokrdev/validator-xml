@@ -9,9 +9,6 @@
   min-height: 44px;
 }
 
-/* Wąskie okno: pasek ZAWIJA się na kolejne wiersze (flex-wrap wyżej) — żadne przyciski
-   nie znikają. Wcześniejsze chowanie grup tb-tier1/tb-tier2 media-queries zostawiało
-   użytkownika bez narzędzi po ukryciu przycisku „Więcej". */
 .toolbar-group {
   display: flex;
   align-items: center;
@@ -63,7 +60,6 @@
   flex-shrink: 0;
 }
 
-/* Select boxes */
 .toolbar-select {
   height: 32px;
   padding: 4px 8px;
@@ -94,7 +90,6 @@
   width: 120px;
 }
 
-/* Custom Style Dropdown */
 .style-dropdown {
   position: relative;
   display: inline-block;
@@ -129,8 +124,6 @@
 
 .selected-style-label {
   flex: 1;
-  /* Bez min-width:0 element flex z `overflow:hidden` może mieć szerokość 0
-     (intrinsic size = content) i tekst „Normalny" w ogóle się nie renderuje. */
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -190,7 +183,6 @@
   background: #bbdefb;
 }
 
-/* Pola wyboru: przycisk główny + strzałka menu (split button) */
 .checkbox-dropdown {
   position: relative;
   display: inline-flex;
@@ -222,7 +214,6 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-/* Nagłówek sekcji menu: „Wstaw” / „Pole pod kursorem” — mówi, czego dotyczą pozycje pod nim. */
 .checkbox-menu-section {
   padding: 4px 14px 2px;
   font-size: 11px;
@@ -251,7 +242,6 @@
   background: #f0f0f0;
 }
 
-/* Lista kontrolna włączona w miejscu kursora — ten sam język co „zaznaczona opcja” w innych menu. */
 .checkbox-option.selected {
   background: #e3f2fd;
 }
@@ -323,7 +313,6 @@
   background: #e0e0e0;
 }
 
-/* Ikona-glif (stan po kliknięciu „Zaznacz/Odznacz pole”) — ten sam znak, który trafi do dokumentu. */
 .checkbox-option-glyph {
   font-family: 'Segoe UI Symbol', 'Arial Unicode MS', sans-serif;
   font-size: 19px;
@@ -331,7 +320,6 @@
   text-align: center;
 }
 
-/* Wybór znaku zaznaczenia: zwykła lista „ikona + nazwa”, jeden pod drugim; wybrany oznaczony samym podświetleniem. */
 .checkbox-marks {
   display: flex;
   flex-direction: column;
@@ -383,8 +371,6 @@
   width: 140px;
 }
 
-/* Własny dropdown czcionek (zamiast natywnego datalist, którego nie da się ograniczyć
-   wysokością): przewijalna lista pod inputem, wybór na mousedown (przed blur). */
 .font-family-group {
   position: relative;
 }
@@ -437,7 +423,6 @@
   width: 65px;
 }
 
-/* Font size group with +/- buttons */
 .font-size-group {
   display: flex;
   align-items: center;
@@ -472,7 +457,6 @@
   border-color: #999;
 }
 
-/* Format painter active state */
 .toolbar-btn.active {
   background: #d0e8ff;
   color: #0066cc;
@@ -483,7 +467,6 @@
   color: #333;
 }
 
-/* Color picker */
 .color-picker-wrapper {
   position: relative;
   display: inline-flex;
@@ -512,7 +495,6 @@
   cursor: pointer;
 }
 
-/* Dialog */
 .dialog-overlay {
   position: fixed;
   top: 0;
@@ -629,7 +611,6 @@
 }
 
 
-/* Buttons */
 .btn {
   padding: 10px 20px;
   border: none;
@@ -658,7 +639,6 @@
   background: #e0e0e0;
 }
 
-/* Responsywność */
 @media (max-width: 768px) {
   .editor-toolbar {
     padding: 6px 8px;
@@ -693,7 +673,6 @@
   }
 }
 
-/* Search Bar */
 .search-bar {
   display: flex;
   flex-direction: column;
