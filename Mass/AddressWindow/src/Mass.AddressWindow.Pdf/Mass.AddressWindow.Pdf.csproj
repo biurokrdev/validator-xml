@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Mass.AddressWindow.Pdf</RootNamespace>
+    <AssemblyName>Mass.AddressWindow.Pdf</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Description>Walidacja okienka adresowego w plikach PDF z podglądem strony. PdfPig (Apache 2.0) do pozycji tekstu, PDFtoImage/PDFium (MIT/BSD) do renderowania. Działa na Linux bez zależności systemowych.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Mass.AddressWindow\Mass.AddressWindow.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+    <PackageReference Include="PDFtoImage" Version="5.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Fonts\LiberationSans-Regular.ttf" LogicalName="Mass.AddressWindow.Pdf.Fonts.LiberationSans-Regular.ttf" />
+    <None Include="Fonts\LICENSE-LiberationSans.txt" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Mass.AddressWindow.Pdf.Tests" />
+  </ItemGroup>
+
+</Project>

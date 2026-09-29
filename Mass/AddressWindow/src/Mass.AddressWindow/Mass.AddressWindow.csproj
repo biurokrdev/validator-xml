@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Mass.AddressWindow</RootNamespace>
+    <AssemblyName>Mass.AddressWindow</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Description>Walidacja okienka adresowego w dokumentach DOCX (koperty z jednym lub dwoma okienkami). Bez zależności zewnętrznych.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Mass.AddressWindow.Tests" />
+    <InternalsVisibleTo Include="Mass.AddressWindow.Pdf" />
+  </ItemGroup>
+
+</Project>
