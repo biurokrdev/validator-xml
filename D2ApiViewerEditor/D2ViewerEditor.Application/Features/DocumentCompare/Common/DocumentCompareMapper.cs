@@ -15,6 +15,8 @@ public static class DocumentCompareMapper
         report.IgnoredAttributeCount,
         report.CountsByKind,
         report.CountsByCategory,
+        report.CountsByCause,
+        report.CountsByImpact,
         report.Parts.Select(ToDto).ToArray(),
         report.Differences.Select(ToDto).ToArray(),
         report.ComparedAtUtc,
@@ -49,5 +51,13 @@ public static class DocumentCompareMapper
         difference.RightExcerpt,
         difference.ExcerptTruncated,
         difference.LeftContext,
-        difference.RightContext);
+        difference.RightContext,
+        difference.Analysis is null ? null : ToDto(difference.Analysis));
+
+    public static DifferenceAnalysisDto ToDto(DifferenceAnalysis analysis) => new(
+        analysis.Cause.ToString(),
+        analysis.Impact.ToString(),
+        analysis.Explanation,
+        analysis.FeatureKey,
+        analysis.CodePointer);
 }

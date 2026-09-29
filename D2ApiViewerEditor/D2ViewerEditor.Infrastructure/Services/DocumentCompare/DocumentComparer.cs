@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentCompare;
 
+/// <inheritdoc cref="IDocumentComparer"/>
 public sealed class DocumentComparer : IDocumentComparer
 {
     private static readonly string[] DocumentPropertyParts = ["docProps/core.xml", "docProps/app.xml", "docProps/custom.xml"];
@@ -54,6 +55,11 @@ public sealed class DocumentComparer : IDocumentComparer
                 ? new HashSet<XName> { XName.Get("rsids", OoxmlNamespaces.WordprocessingTransitional), XName.Get("rsids", OoxmlNamespaces.WordprocessingStrict) }
                 : new HashSet<XName>();
 
+            // Części binarne o identycznych bajtach pod inną ścieżką (writer zapisuje obrazy pod własnymi nazwami):
+            // jedna różnica „pod inną ścieżką” zamiast pary „tylko w oryginale” + „tylko w porównywanym”.
+            var renames = DetectRenamedBinaryParts(leftPackage, rightPackage);
+            var renameTargets = new HashSet<string>(renames.Values, StringComparer.OrdinalIgnoreCase);
+
             foreach (var path in UnionPaths(leftPackage, rightPackage, request.IgnoreDocumentProperties))
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -61,8 +67,27 @@ public sealed class DocumentComparer : IDocumentComparer
                 var left = leftPackage.Find(path);
                 var right = rightPackage.Find(path);
                 var partDifferences = new List<DocumentDifference>();
-                var part = ComparePart(path, left, right, ignoredAttributeNames, ignoredElementNames, partDifferences,
-                    ref total, ref ignoredAttributes, ref truncated, cancellationToken);
+                ComparedPart part;
+
+                if (renames.TryGetValue(path, out var renamedTo))
+                {
+                    total++;
+                    partDifferences.Add(new DocumentDifference(DifferenceKind.PartRenamed, CategoryOfPart(path), path, path, renamedTo,
+                        null, null, path, path, renamedTo, null, null, false, null, null));
+                    part = new ComparedPart(path, ComparedPartStatus.Changed, false, 1, left!.Length, rightPackage.Find(renamedTo)?.Length, null, null,
+                        $"Identyczna zawartość pod inną ścieżką: {renamedTo}");
+                }
+                else if (renameTargets.Contains(path))
+                {
+                    var renamedFrom = renames.First(pair => pair.Value.Equals(path, StringComparison.OrdinalIgnoreCase)).Key;
+                    part = new ComparedPart(path, ComparedPartStatus.Changed, false, 0, leftPackage.Find(renamedFrom)?.Length, right!.Length, null, null,
+                        $"Identyczna zawartość co {renamedFrom} w oryginale (zmiana ścieżki, bez utraty)");
+                }
+                else
+                {
+                    part = ComparePart(path, left, right, ignoredAttributeNames, ignoredElementNames, partDifferences,
+                        ref total, ref ignoredAttributes, ref truncated, cancellationToken);
+                }
 
                 parts.Add(part);
 
@@ -77,6 +102,13 @@ public sealed class DocumentComparer : IDocumentComparer
                     differences.Add(difference);
                 }
             }
+        }
+
+        // Analiza przyczyn: dlaczego różnica istnieje i co z niej wynika — liczona na każdej różnicy z listy
+        // (perspektywa: lewy = oryginał, prawy = kopia zapisana z edytora).
+        for (var index = 0; index < differences.Count; index++)
+        {
+            differences[index] = differences[index] with { Analysis = DifferenceCauseAnalyzer.Analyze(differences[index]) };
         }
 
         stopwatch.Stop();
@@ -95,6 +127,10 @@ public sealed class DocumentComparer : IDocumentComparer
             CountsByKind = differences.GroupBy(difference => difference.Kind.ToString())
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
             CountsByCategory = differences.GroupBy(difference => difference.Category)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
+            CountsByCause = differences.GroupBy(difference => (difference.Analysis?.Cause ?? DifferenceCause.Unknown).ToString())
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
+            CountsByImpact = differences.GroupBy(difference => (difference.Analysis?.Impact ?? DifferenceImpact.None).ToString())
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal),
             Parts = parts,
             Differences = differences,
@@ -122,6 +158,7 @@ public sealed class DocumentComparer : IDocumentComparer
         return (package, new ComparedFile(fileName, bytes.LongLength, RefineFormat(package, format), package?.Entries.Count ?? 0, notes));
     }
 
+    /// <summary>„ooxml” z czytnika kontenera doprecyzowane po typie głównej części z [Content_Types].xml.</summary>
     private static string RefineFormat(LenientPackage? package, string fallback)
     {
         if (package is null || package.DetectedFormat != "ooxml")
@@ -147,6 +184,47 @@ public sealed class DocumentComparer : IDocumentComparer
         };
     }
 
+    /// <summary>
+    /// Pary „część binarna tylko w lewym” ↔ „część binarna tylko w prawym” o identycznych bajtach (SHA-256 + porównanie
+    /// bajtów). Każda część paruje się najwyżej raz; XML nie jest parowany (różnice w XML są mierzone treścią).
+    /// </summary>
+    private static Dictionary<string, string> DetectRenamedBinaryParts(LenientPackage left, LenientPackage right)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var rightOnly = right.Entries
+            .Where(entry => !entry.IsXml && entry.Bytes is { Length: > 0 } && left.Find(entry.Path) is null)
+            .GroupBy(entry => Convert.ToHexString(SHA256.HashData(entry.Bytes!)), StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => new Queue<LenientPackageEntry>(group), StringComparer.Ordinal);
+
+        if (rightOnly.Count == 0)
+        {
+            return result;
+        }
+
+        foreach (var entry in left.Entries.Where(entry => !entry.IsXml && entry.Bytes is { Length: > 0 } && right.Find(entry.Path) is null))
+        {
+            var hash = Convert.ToHexString(SHA256.HashData(entry.Bytes!));
+
+            if (!rightOnly.TryGetValue(hash, out var candidates))
+            {
+                continue;
+            }
+
+            while (candidates.Count > 0)
+            {
+                var candidate = candidates.Dequeue();
+
+                if (candidate.Bytes!.AsSpan().SequenceEqual(entry.Bytes))
+                {
+                    result[entry.Path] = candidate.Path;
+                    break;
+                }
+            }
+        }
+
+        return result;
+    }
+
     private static IEnumerable<string> UnionPaths(LenientPackage left, LenientPackage right, bool ignoreDocumentProperties)
     {
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -161,6 +239,7 @@ public sealed class DocumentComparer : IDocumentComparer
             paths.Add(entry.Path);
         }
 
+        // Kolejność czytania: typy zawartości, relationshipy korzenia, treść główna, reszta alfabetycznie.
         return paths.OrderBy(Rank).ThenBy(path => path, StringComparer.OrdinalIgnoreCase);
 
         static int Rank(string path) => path switch
@@ -269,6 +348,7 @@ public sealed class DocumentComparer : IDocumentComparer
         using var stream = new MemoryStream(entry.Bytes!, writable: false);
         using var reader = new StreamReader(stream, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
 
+        // Bez PreserveWhitespace: białe znaki między elementami nie są treścią, a wycinki dostają wcięcia.
         return _xmlLoader.Load(reader.ReadToEnd(), LoadOptions.SetLineInfo);
     }
 
@@ -294,8 +374,10 @@ public sealed class DocumentComparer : IDocumentComparer
             excerptLeft,
             excerptRight,
             leftTruncated || rightTruncated,
-            Context(difference.Left),
-            Context(difference.Right));
+            // Różnica jednostronna dostaje kontekst akapitu także po drugiej stronie (ze sparowanego rodzica):
+            // „w:br tylko w oryginale” przy identycznym tekście akapitu to podział runów przez writer, nie strata.
+            Context(difference.Left ?? difference.Counterpart),
+            Context(difference.Right ?? difference.Counterpart));
     }
 
     private string Excerpt(XElement element, out bool truncated)
@@ -333,9 +415,17 @@ public sealed class DocumentComparer : IDocumentComparer
             return null;
         }
 
+        // Podział wiersza i tabulator są częścią „tekstu” akapitu (↵, ⇥): identyczny kontekst po obu stronach znaczy wtedy,
+        // że naprawdę nic nie zginęło — także w:br/w:tab przeniesione przez writer do osobnych runów.
         var text = string.Concat(paragraph.Descendants()
-            .Where(node => node.Name.LocalName == "t" && OoxmlNamespaces.IsWordprocessing(node.Name.NamespaceName))
-            .Select(node => node.Value)).Trim();
+            .Where(node => OoxmlNamespaces.IsWordprocessing(node.Name.NamespaceName))
+            .Select(node => node.Name.LocalName switch
+            {
+                "t" => node.Value,
+                "br" or "cr" => "↵",
+                "tab" when node.Parent?.Name.LocalName == "r" => "⇥",
+                _ => string.Empty,
+            })).Trim();
 
         if (text.Length == 0)
         {

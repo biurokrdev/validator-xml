@@ -3,6 +3,7 @@ using D2ViewerEditor.Infrastructure.Services.StructureInspection;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
+/// <summary>Kontekst pakietu po etapie OPC: surowe części, wynik analizatora OPC i odczytane wpisy.</summary>
 public sealed class HealthPackageContext
 {
     public required LenientPackage Package { get; init; }
@@ -16,12 +17,19 @@ public sealed class HealthPackageContext
     public bool IsMainPart(string path) =>
         path.Equals(MainDocumentPartPath, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Części o content type zawierającym dany fragment (np. <c>header+xml</c>).</summary>
     public IEnumerable<string> PartsOfType(string contentTypeFragment) =>
         Opc.ContentTypes
             .Where(pair => pair.Value.Contains(contentTypeFragment, StringComparison.OrdinalIgnoreCase))
             .Select(pair => pair.Key);
 }
 
+/// <summary>
+/// Etap „Pakiet OPC": ten sam analizator, którego używa Walidator struktury (typy zawartości,
+/// relationshipy, osiągalność części, główna część przez relationship), z dopisaną oceną wpływu
+/// każdego kodu na Worda i konwersję. Do tego rozpoznanie odmiany pakietu (docx/docm/dotx),
+/// makr, podpisów i brakujących części opcjonalnych.
+/// </summary>
 public sealed class PackageHealthCheck
 {
     private const string ContentTypesPath = "[Content_Types].xml";

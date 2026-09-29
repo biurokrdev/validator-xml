@@ -9,6 +9,11 @@ using NUnit.Framework;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services.DocumentHealth;
 
+/// <summary>
+/// „Kondycja dokumentu”: każde uszkodzenie z korpusu ma dać ustalenie o stabilnym kodzie i
+/// właściwy werdykt (Word: otworzy / naprawi / nie otworzy; PDF: ok / ryzyko / prawdopodobny
+/// błąd / blokada). Narzędzie nigdy nie rzuca — uszkodzony plik jest wynikiem, nie wyjątkiem.
+/// </summary>
 [TestFixture]
 public class DocumentHealthInspectorTests
 {
@@ -86,6 +91,7 @@ public class DocumentHealthInspectorTests
         report.Has(DocumentHealthCodes.FileNotOoxmlPackage).Should().BeTrue();
         report.Verdict.Should().Be(HealthVerdict.Corrupt);
         report.PdfConversion.Should().Be(PdfConversionVerdict.Blocked);
+        // Word rozpoznaje RTF/HTML po treści — to nie jest „nie otworzy”, tylko „to nie DOCX”.
         report.First(DocumentHealthCodes.FileNotOoxmlPackage).WordImpact.Should().Be(WordOpenImpact.None);
     }
 
@@ -188,6 +194,7 @@ public class DocumentHealthInspectorTests
     {
         var report = await DocumentHealthTestHost.Inspect(DocumentHealthCorpus.UnbalancedField());
 
+        // begin bez end (1) + end bez begin (1: drugi end po zamknięciu pierwszego).
         report.Findings.Count(finding => finding.Code == DocumentHealthCodes.FieldUnbalanced).Should().Be(1);
         report.Findings.Where(finding => finding.Code == DocumentHealthCodes.FieldUnbalanced)
             .Should().OnlyContain(finding => finding.PdfImpact == PdfConversionImpact.Likely);
@@ -332,6 +339,196 @@ public class DocumentHealthInspectorTests
 
         report.Probe(ConversionProbeRunner.PdfConversionProbe).Status.Should().Be(ProbeStatus.Warning);
         report.Has(DocumentHealthCodes.PdfOutputInvalid).Should().BeTrue();
+    }
+
+    // ── Etap „Aplikacja”: pokrycie przez naszą implementację ──────────────────
+
+    [Test]
+    public async Task FeatureRich_CoverageIsClassifiedByRegistry_AndIdentityRoundTripPreservesAll()
+    {
+        var report = await DocumentHealthTestHost.Inspect(DocumentHealthCorpus.FeatureRich());
+
+        report.Coverage(FeatureKeys.Tables).Status.Should().Be(CoverageStatus.Supported);
+        report.Coverage(FeatureKeys.Tables).RoundTrip.Should().Be(RoundTripOutcome.Preserved);
+        report.Coverage(FeatureKeys.Footnotes).Status.Should().Be(CoverageStatus.Supported);
+        report.Coverage(FeatureKeys.ContentControls).Status.Should().Be(CoverageStatus.Partial);
+        report.Coverage(FeatureKeys.Comments).Status.Should().Be(CoverageStatus.Unsupported);
+        report.Coverage(FeatureKeys.Math).Status.Should().Be(CoverageStatus.Unsupported);
+        report.Coverage(FeatureKeys.HiddenText).Status.Should().Be(CoverageStatus.Unsupported);
+        report.Coverage(FeatureKeys.HiddenText).CodePointer.Should().Contain("DocxToHtmlConverter");
+        report.Coverage(FeatureKeys.MailMerge).Status.Should().Be(CoverageStatus.Unsupported);
+
+        // Luki wracają też jako ustalenia etapu Aplikacja — ostrzeżenie dla utraty treści, informacja dla strat nieszkodliwych.
+        var unsupported = report.Findings.Where(finding => finding.Code == DocumentHealthCodes.AppFeatureUnsupported).ToList();
+        unsupported.Should().Contain(finding => finding.Title.Contains("Komentarze") && finding.Severity == StructureIssueSeverity.Warning);
+        unsupported.Should().Contain(finding => finding.Title.Contains("Równania") && finding.Severity == StructureIssueSeverity.Warning);
+        unsupported.Should().Contain(finding => finding.Title.Contains("Korespondencja") && finding.Severity == StructureIssueSeverity.Info);
+        unsupported.Should().OnlyContain(finding => finding.Stage == HealthStage.Application && finding.AppSupport == AppSupportLevel.Unsupported);
+        report.Findings.Should().Contain(finding => finding.Code == DocumentHealthCodes.AppFeaturePartial && finding.Title.Contains("Formanty"));
+
+        report.CoverageSummary.Should().Contain("nieobsługiwanych").And.Contain("Komentarze");
+        report.WordOpen.Should().Be(WordOpenVerdict.Ok, "luki naszej implementacji nie mówią nic o Wordzie");
+        report.Probe(ConversionProbeRunner.RoundTripProbe).Status.Should().Be(ProbeStatus.Passed);
+    }
+
+    [Test]
+    public async Task LossyRoundTrip_FlagsUnexpectedLossAndIssuesIntroducedByWriter()
+    {
+        var inspector = DocumentHealthTestHost.Create(
+            docxWriter: DocumentHealthTestHost.WriterReturning(DocumentHealthCorpus.FeatureRichAfterLossyRoundTrip()));
+
+        var report = await DocumentHealthTestHost.Inspect(DocumentHealthCorpus.FeatureRich(), inspector);
+
+        var footnotes = report.Coverage(FeatureKeys.Footnotes);
+        footnotes.RoundTrip.Should().Be(RoundTripOutcome.Lost);
+        footnotes.RoundTripCount.Should().Be(0);
+        footnotes.Status.Should().Be(CoverageStatus.UnexpectedLoss, "rejestr deklaruje pełną obsługę przypisów");
+        footnotes.Note.Should().Contain("ROUND-TRIP");
+        report.Coverage(FeatureKeys.Tables).RoundTrip.Should().Be(RoundTripOutcome.Preserved, "2 tabele po zapisie ≥ 1 w źródle");
+        report.Coverage(FeatureKeys.Comments).Status.Should().Be(CoverageStatus.Unsupported, "utrata zadeklarowana w rejestrze nie jest niespodzianką");
+
+        // Formant (obsługa częściowa) też zniknął z wyniku — to również nieoczekiwana strata, bo rejestr nie deklaruje braku obsługi.
+        report.Coverage(FeatureKeys.ContentControls).Status.Should().Be(CoverageStatus.UnexpectedLoss);
+        var losses = report.Findings.Where(finding => finding.Code == DocumentHealthCodes.AppRoundTripLoss).ToList();
+        losses.Select(finding => finding.Title).Should().BeEquivalentTo(
+            "Round-trip edytora gubi: Przypisy dolne", "Round-trip edytora gubi: Formanty (w:sdt)");
+        losses.Should().OnlyContain(finding => finding.Severity == StructureIssueSeverity.Warning);
+        losses.First(finding => finding.Title.Contains("Przypisy")).Remedy.Should().Contain("HtmlToDocxConverter");
+
+        var introduced = report.Findings.Where(finding => finding.Code == DocumentHealthCodes.AppRoundTripIntroducedIssue).ToList();
+        introduced.Select(finding => System.Text.RegularExpressions.Regex.Match(finding.Description, @"zgłasza ([A-Z_]+)").Groups[1].Value)
+            .Should().BeEquivalentTo([DocumentHealthCodes.TableCellWithoutParagraph], "tylko błędy WPROWADZONE przez zapis, bez szumu");
+        introduced[0].Remedy.Should().Contain("zażąda naprawy");
+        report.Coverage.Should().NotContain(item => item.FeatureKey == FeatureKeys.NestedTables, "konstrukcje obecne tylko w wyniku nie są pokryciem źródła");
+        report.CoverageSummary.Should().Contain("NIEOCZEKIWANYCH");
+    }
+
+    [Test]
+    public async Task WithoutProbes_CoverageComesFromRegistryOnly()
+    {
+        var report = await DocumentHealthTestHost.Inspect(DocumentHealthCorpus.FeatureRich(), probes: false);
+
+        report.Probes.Should().NotContain(probe => probe.Id == ConversionProbeRunner.RoundTripProbe);
+        report.Coverage.Should().NotBeEmpty();
+        report.Coverage.Should().OnlyContain(item => item.RoundTrip == RoundTripOutcome.NotVerified && item.RoundTripCount == null);
+        report.Coverage(FeatureKeys.Comments).Status.Should().Be(CoverageStatus.Unsupported);
+        report.CoverageSummary.Should().Contain("Round-trip nie został uruchomiony");
+        report.Findings.Should().NotContain(finding => finding.Code == DocumentHealthCodes.AppRoundTripLoss);
+    }
+
+    [Test]
+    public async Task SilentPassThroughFallback_IsDetectedByMissingOriginalStyles()
+    {
+        // Źródło ma styles.xml; „writer” zwraca pakiet bez tej części — tak wygląda wynik cichego fallbacku ConvertPreservingPackage.
+        var inspector = DocumentHealthTestHost.Create(
+            docxWriter: DocumentHealthTestHost.WriterReturning(DocumentHealthCorpus.FeatureRichAfterLossyRoundTrip()));
+
+        var report = await DocumentHealthTestHost.Inspect(DocumentHealthCorpus.Healthy(), inspector);
+
+        report.Probe(ConversionProbeRunner.RoundTripProbe).Status.Should().Be(ProbeStatus.Warning);
+        var fallback = report.First(DocumentHealthCodes.RoundTripFallback);
+        fallback.Description.Should().Contain("styles.xml");
+        fallback.Remedy.Should().Contain("PreserveOriginalParts");
+    }
+
+    [Test]
+    public async Task WriterException_IsQuotedAndDoesNotBreakVerdicts()
+    {
+        var writer = Substitute.For<IHtmlToDocxConverter>();
+        writer.ConvertPreservingPackage(
+                Arg.Any<string>(), Arg.Any<Stream?>(), Arg.Any<DocumentMetadata?>(), Arg.Any<HeaderFooterContent?>(),
+                Arg.Any<HeaderFooterContent?>(), Arg.Any<PageMargins?>(), Arg.Any<PageSize?>(),
+                Arg.Any<IReadOnlyList<SectionHeaderFooter>?>(), Arg.Any<IReadOnlyList<Footnote>?>(),
+                Arg.Any<IReadOnlyList<Endnote>?>(), Arg.Any<string?>(), Arg.Any<string?>())
+            .Throws(new InvalidOperationException("Nieznany węzeł HTML: <docx-bookmark>"));
+        var inspector = DocumentHealthTestHost.Create(docxWriter: writer);
+
+        var report = await DocumentHealthTestHost.Inspect(DocumentHealthCorpus.Healthy(), inspector);
+
+        var probe = report.Probe(ConversionProbeRunner.RoundTripProbe);
+        probe.Status.Should().Be(ProbeStatus.Failed);
+        probe.Message.Should().Contain("docx-bookmark");
+        report.First(DocumentHealthCodes.RoundTripFailed).AppSupport.Should().Be(AppSupportLevel.Unsupported);
+        report.WordOpen.Should().Be(WordOpenVerdict.Ok);
+        report.Coverage.Should().OnlyContain(item => item.RoundTrip == RoundTripOutcome.NotVerified);
+    }
+
+    [Test]
+    public async Task Findings_CarryHowOurApplicationHandlesThem()
+    {
+        var report = await DocumentHealthTestHost.Inspect(DocumentHealthCorpus.AltChunkAndMailMerge());
+
+        var altChunk = report.First(DocumentHealthCodes.AltChunkPresent);
+        altChunk.AppSupport.Should().Be(AppSupportLevel.Unsupported);
+        altChunk.AppNote.Should().Contain("DocxToHtmlConverter");
+        report.Coverage(FeatureKeys.AltChunk).Status.Should().Be(CoverageStatus.Unsupported);
+        report.First(DocumentHealthCodes.UpdateFieldsOnOpen).AppSupport.Should().Be(AppSupportLevel.Full);
+
+        // Kody bez wpisu w mapie pozostają „nieznane” bez notatki — nie zmyślamy zachowania aplikacji.
+        report.Findings.Where(finding => finding.AppSupport == AppSupportLevel.Unknown)
+            .Should().OnlyContain(finding => finding.AppNote == null || finding.Stage == HealthStage.Application);
+    }
+
+    [Test]
+    public void CapabilityRegistry_CoversEveryInventoryKey()
+    {
+        var keys = typeof(FeatureKeys).GetFields()
+            .Where(field => field.IsLiteral && field.FieldType == typeof(string))
+            .Select(field => (string)field.GetRawConstantValue()!)
+            .ToList();
+
+        keys.Should().NotBeEmpty();
+        keys.Should().OnlyContain(key => EditorCapabilityRegistry.Find(key) != null, "każda wykrywana konstrukcja musi mieć zadeklarowany poziom obsługi");
+        EditorCapabilityRegistry.All.Values.Should().OnlyContain(capability => !string.IsNullOrWhiteSpace(capability.Note));
+    }
+
+    [Test]
+    public async Task SchemaProbe_ListsEveryErrorGroupedByCause()
+    {
+        var report = await DocumentHealthTestHost.Inspect(DocumentHealthCorpus.SchemaViolations(), probes: false);
+
+        var probe = report.Probe(ConversionProbeRunner.SchemaProbe);
+        probe.Status.Should().Be(ProbeStatus.Warning);
+        probe.Details.Should().NotBeNull();
+
+        var details = probe.Details!;
+        var total = int.Parse(System.Text.RegularExpressions.Regex.Match(probe.Message!, @"^(\d+) błędów").Groups[1].Value);
+        total.Should().BeGreaterThanOrEqualTo(3, "trzy akapity z tym samym błędem");
+
+        var fullList = details.Split('\n').SkipWhile(line => !line.StartsWith("Pełna lista")).Skip(1).Count(line => line.StartsWith("- ["));
+        fullList.Should().Be(total, "każdy błąd ma trafić do szczegółów, nie tylko pierwsze osiem");
+        details.Should().StartWith("Podsumowanie wg przyczyny");
+        details.Should().MatchRegex(@"- 3× \[", "powtarzalny błąd jest zgrupowany z licznikiem");
+        details.Should().Contain("word/document.xml").And.Contain("/w:document");
+
+        var finding = report.First(DocumentHealthCodes.SchemaErrors);
+        finding.Description.Should().Contain("grupach przyczyn").And.Contain("Najczęstsze: 3×");
+    }
+
+    [Test]
+    public async Task RoundTripSchemaErrors_NotPresentInSource_AreAttributedToWriter()
+    {
+        var inspector = DocumentHealthTestHost.Create(
+            docxWriter: DocumentHealthTestHost.WriterReturning(DocumentHealthCorpus.SchemaViolations()));
+
+        var report = await DocumentHealthTestHost.Inspect(DocumentHealthCorpus.Healthy(), inspector);
+
+        var finding = report.First(DocumentHealthCodes.AppRoundTripSchemaErrors);
+        finding.Stage.Should().Be(HealthStage.Application);
+        finding.Severity.Should().Be(StructureIssueSeverity.Warning);
+        finding.Description.Should().Contain("nowych (0 w źródle").And.Contain("Sch_");
+        finding.Location.Should().Contain("w WYNIKU zapisu");
+        finding.Remedy.Should().Contain("HtmlToDocxConverter");
+        report.WordOpen.Should().Be(WordOpenVerdict.Ok);
+    }
+
+    [Test]
+    public async Task RoundTripSchemaErrors_AlreadyInSource_AreNotBlamedOnWriter()
+    {
+        var report = await DocumentHealthTestHost.Inspect(DocumentHealthCorpus.SchemaViolations());
+
+        report.Has(DocumentHealthCodes.SchemaErrors).Should().BeTrue();
+        report.Has(DocumentHealthCodes.AppRoundTripSchemaErrors).Should().BeFalse("writer tożsamościowy nie dodał żadnego błędu");
     }
 
     [Test]

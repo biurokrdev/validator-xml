@@ -7,6 +7,15 @@ using Microsoft.Extensions.Options;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
+/// <inheritdoc cref="IDocumentHealthInspector"/>
+/// <remarks>
+/// Etapy biegną od zewnątrz do wewnątrz (plik → pakiet → XML → struktura → próby → aplikacja)
+/// i każdy jest osłonięty: awaria etapu jest ustaleniem <c>TOOL_STAGE_FAILED</c>, nie wyjątkiem —
+/// narzędzie ma działać właśnie na plikach, na których inne komponenty padają. Etap „Aplikacja"
+/// odpowiada na pytanie, co NASZ pipeline z tym dokumentem robi źle: inwentarz konstrukcji ×
+/// rejestr możliwości × round-trip przez reader i writer edytora (ten sam zestaw etapów
+/// statycznych biegnie drugi raz na wyniku zapisu). Anulowanie przechodzi dalej.
+/// </remarks>
 public sealed class DocumentHealthInspector : IDocumentHealthInspector
 {
     private readonly FileContainerCheck _fileCheck;
@@ -45,13 +54,90 @@ public sealed class DocumentHealthInspector : IDocumentHealthInspector
 
         var stopwatch = Stopwatch.StartNew();
         var findings = new HealthFindingCollector(_options.MaxFindings, _options.MaxFindingsPerCode);
+
+        var source = RunStaticStages(documentBytes, findings, cancellationToken);
+
+        IReadOnlyList<ConversionProbeResult> probes = [];
+        byte[]? roundTripPackage = null;
+
+        try
+        {
+            var outcome = await _probes.RunAsync(documentBytes, fileName, findings, includeConversionProbes, cancellationToken);
+            probes = outcome.Probes;
+            roundTripPackage = outcome.RoundTripPackage;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogWarning(exception, "Etap prób konwersji diagnostyki dokumentu nie ukończył pracy.");
+            findings.Add(DocumentHealthCodes.StageFailed, StructureIssueSeverity.Warning, HealthStage.Conversion,
+                "Etap prób konwersji nie ukończył pracy",
+                $"{exception.GetType().Name}: {exception.Message}. Wyniki prób są niekompletne; pozostałe etapy pozostają ważne.");
+        }
+
+        // Kody ustaleń źródła zapamiętujemy PRZED etapem Aplikacja, żeby porównanie „przed/po”
+        // round-tripie nie widziało własnych ustaleń jako problemów źródła.
+        var sourceCodes = findings.Codes.ToArray();
+        var coverage = new ImplementationCoverage([], "Etap „Aplikacja” nie został uruchomiony.");
+
+        Guard(HealthStage.Application, findings, () =>
+        {
+            var roundTrip = roundTripPackage is null ? null : AnalyzeRoundTrip(roundTripPackage, cancellationToken);
+            coverage = ImplementationCoverageBuilder.Build(source.Inventory, roundTrip, findings, sourceCodes);
+        });
+
+        findings.Transform(FindingAppHandling.Annotate);
+        findings.AnnotateRepetitions();
+        var verdicts = HealthVerdictBuilder.Build(findings, probes, source.DetectedFormat);
+        stopwatch.Stop();
+
+        return new DocumentHealthReport
+        {
+            FileName = fileName,
+            FileSizeInBytes = documentBytes.LongLength,
+            DetectedFormat = source.DetectedFormat,
+            MainDocumentPartPath = source.Context?.MainDocumentPartPath,
+            Verdict = verdicts.Verdict,
+            VerdictSummary = verdicts.VerdictSummary,
+            WordOpen = verdicts.WordOpen,
+            WordOpenSummary = verdicts.WordOpenSummary,
+            PdfConversion = verdicts.PdfConversion,
+            PdfConversionSummary = verdicts.PdfConversionSummary,
+            Findings = findings.Findings.OrderBy(finding => finding.Stage).ThenByDescending(finding => finding.Severity).ToArray(),
+            FindingsTruncated = findings.Truncated,
+            ErrorCount = findings.ErrorCount,
+            WarningCount = findings.WarningCount,
+            InfoCount = findings.InfoCount,
+            Probes = probes,
+            Statistics = source.Statistics ?? EmptyStatistics(source.Package),
+            Coverage = coverage.Items,
+            CoverageSummary = coverage.Summary,
+            AnalyzedAtUtc = DateTimeOffset.UtcNow,
+            DurationMs = stopwatch.ElapsedMilliseconds
+        };
+    }
+
+    private sealed record StaticAnalysis(
+        string DetectedFormat,
+        LenientPackage? Package,
+        HealthPackageContext? Context,
+        DocumentHealthStatistics? Statistics,
+        DocumentFeatureInventory Inventory);
+
+    /// <summary>Etapy Plik → Pakiet → XML → Struktura + inwentarz konstrukcji; ten sam przebieg dla źródła i dla wyniku round-tripu.</summary>
+    private StaticAnalysis RunStaticStages(byte[] bytes, HealthFindingCollector findings, CancellationToken cancellationToken)
+    {
         var detectedFormat = "unknown";
         LenientPackage? package = null;
         HealthPackageContext? context = null;
         IReadOnlyDictionary<string, XDocument> parsed = new Dictionary<string, XDocument>();
         DocumentHealthStatistics? statistics = null;
+        var inventory = DocumentFeatureInventory.Empty;
 
-        Guard(HealthStage.File, findings, () => package = _fileCheck.Run(documentBytes, findings, out detectedFormat));
+        Guard(HealthStage.File, findings, () => package = _fileCheck.Run(bytes, findings, out detectedFormat));
 
         if (package is not null)
         {
@@ -66,52 +152,18 @@ public sealed class DocumentHealthInspector : IDocumentHealthInspector
         {
             Guard(HealthStage.Xml, findings, () => parsed = _xmlCheck.Run(context, findings, cancellationToken));
             Guard(HealthStage.Structure, findings, () => statistics = _structureCheck.Run(context, parsed, findings, cancellationToken));
+            Guard(HealthStage.Structure, findings, () => inventory = DocumentFeatureInventory.Scan(context, parsed));
         }
 
-        IReadOnlyList<ConversionProbeResult> probes = [];
+        return new StaticAnalysis(detectedFormat, package, context, statistics, inventory);
+    }
 
-        try
-        {
-            probes = await _probes.RunAsync(documentBytes, fileName, findings, includeConversionProbes, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception, "Etap prób konwersji diagnostyki dokumentu nie ukończył pracy.");
-            findings.Add(DocumentHealthCodes.StageFailed, StructureIssueSeverity.Warning, HealthStage.Conversion,
-                "Etap prób konwersji nie ukończył pracy",
-                $"{exception.GetType().Name}: {exception.Message}. Wyniki prób są niekompletne; pozostałe etapy pozostają ważne.");
-        }
+    private RoundTripAnalysis AnalyzeRoundTrip(byte[] package, CancellationToken cancellationToken)
+    {
+        var findings = new HealthFindingCollector(_options.MaxFindings, _options.MaxFindingsPerCode);
+        var analysis = RunStaticStages(package, findings, cancellationToken);
 
-        findings.AnnotateRepetitions();
-        var verdicts = HealthVerdictBuilder.Build(findings, probes, detectedFormat);
-        stopwatch.Stop();
-
-        return new DocumentHealthReport
-        {
-            FileName = fileName,
-            FileSizeInBytes = documentBytes.LongLength,
-            DetectedFormat = detectedFormat,
-            MainDocumentPartPath = context?.MainDocumentPartPath,
-            Verdict = verdicts.Verdict,
-            VerdictSummary = verdicts.VerdictSummary,
-            WordOpen = verdicts.WordOpen,
-            WordOpenSummary = verdicts.WordOpenSummary,
-            PdfConversion = verdicts.PdfConversion,
-            PdfConversionSummary = verdicts.PdfConversionSummary,
-            Findings = findings.Findings.OrderBy(finding => finding.Stage).ThenByDescending(finding => finding.Severity).ToArray(),
-            FindingsTruncated = findings.Truncated,
-            ErrorCount = findings.ErrorCount,
-            WarningCount = findings.WarningCount,
-            InfoCount = findings.InfoCount,
-            Probes = probes,
-            Statistics = statistics ?? EmptyStatistics(package),
-            AnalyzedAtUtc = DateTimeOffset.UtcNow,
-            DurationMs = stopwatch.ElapsedMilliseconds
-        };
+        return new RoundTripAnalysis(analysis.Inventory, findings);
     }
 
     private void Guard(HealthStage stage, HealthFindingCollector findings, Action action)
@@ -139,6 +191,7 @@ public sealed class DocumentHealthInspector : IDocumentHealthInspector
         HealthStage.Package => "Pakiet OPC",
         HealthStage.Xml => "XML",
         HealthStage.Structure => "Struktura",
+        HealthStage.Application => "Aplikacja",
         _ => "Próby konwersji"
     };
 

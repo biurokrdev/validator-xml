@@ -11,12 +11,23 @@ using Microsoft.Extensions.Options;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
+/// <summary>Wynik etapu prób: lista prób + (opcjonalnie) pakiet DOCX z round-tripu edytora do dalszej analizy.</summary>
+public sealed record ConversionProbeOutcome(IReadOnlyList<ConversionProbeResult> Probes, byte[]? RoundTripPackage);
+
+/// <summary>
+/// Etap „Próby przetworzenia": dokument przechodzi przez TE SAME komponenty, które obsługują go
+/// w aplikacji — Open XML SDK, bramkę uploadu, konwerter DOCX→HTML edytora, writer HTML→DOCX
+/// (round-trip ścieżką pass-through jak autosave) i zarejestrowanego klienta usługi DOCX→PDF —
+/// oraz opcjonalnie przez LibreOffice. Wynik każdej próby to fakt („konwerter zwrócił: …"),
+/// a nie przewidywanie; komunikaty wyjątków są zachowane dosłownie.
+/// </summary>
 public sealed class ConversionProbeRunner
 {
     public const string SdkOpenProbe = "sdk-open";
     public const string SchemaProbe = "schema";
     public const string UploadGateProbe = "upload-gate";
     public const string EditorImportProbe = "editor-import";
+    public const string RoundTripProbe = "round-trip";
     public const string PdfConversionProbe = "pdf-conversion";
 
     private static readonly Regex PageObjectPattern = new(@"/Type\s*/Page(?![s\w])", RegexOptions.Compiled);
@@ -24,6 +35,7 @@ public sealed class ConversionProbeRunner
     private readonly OpenXmlSchemaValidatorRunner _schemaValidator;
     private readonly IFileUploadSecurityService _uploadSecurity;
     private readonly IDocxToHtmlConverter _htmlConverter;
+    private readonly IHtmlToDocxConverter _docxWriter;
     private readonly IDocxToPdfConversionService _pdfConverter;
     private readonly LibreOfficeConverterProbe _libreOffice;
     private readonly DocumentHealthOptions _options;
@@ -33,6 +45,7 @@ public sealed class ConversionProbeRunner
         OpenXmlSchemaValidatorRunner schemaValidator,
         IFileUploadSecurityService uploadSecurity,
         IDocxToHtmlConverter htmlConverter,
+        IHtmlToDocxConverter docxWriter,
         IDocxToPdfConversionService pdfConverter,
         LibreOfficeConverterProbe libreOffice,
         IOptions<DocumentHealthOptions> options,
@@ -41,13 +54,14 @@ public sealed class ConversionProbeRunner
         _schemaValidator = schemaValidator;
         _uploadSecurity = uploadSecurity;
         _htmlConverter = htmlConverter;
+        _docxWriter = docxWriter;
         _pdfConverter = pdfConverter;
         _libreOffice = libreOffice;
         _options = options.Value;
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<ConversionProbeResult>> RunAsync(
+    public async Task<ConversionProbeOutcome> RunAsync(
         byte[] documentBytes,
         string fileName,
         HealthFindingCollector findings,
@@ -59,15 +73,32 @@ public sealed class ConversionProbeRunner
             RunSdkOpen(documentBytes, findings),
         };
 
-        results.Add(RunSchemaValidation(documentBytes, findings, results[0].Status, cancellationToken));
+        var (schemaProbe, sourceSchema) = RunSchemaValidation(documentBytes, findings, results[0].Status, cancellationToken);
+        results.Add(schemaProbe);
         results.Add(RunUploadGate(documentBytes, findings));
 
         if (!includeConversionProbes)
         {
-            return results;
+            return new ConversionProbeOutcome(results, null);
         }
 
-        results.Add(await RunEditorImportAsync(documentBytes, findings, cancellationToken));
+        var (editorProbe, content) = await RunEditorImportAsync(documentBytes, findings, cancellationToken);
+        results.Add(editorProbe);
+
+        byte[]? roundTrip = null;
+
+        if (_options.EnableRoundTripProbe)
+        {
+            var (roundTripProbe, package) = await RunRoundTripAsync(documentBytes, content, findings, cancellationToken);
+            results.Add(roundTripProbe);
+            roundTrip = package;
+
+            if (package is not null)
+            {
+                CompareRoundTripSchema(package, sourceSchema, findings, cancellationToken);
+            }
+        }
+
         results.Add(await RunPdfConversionAsync(documentBytes, fileName, findings, cancellationToken));
 
         var libreOffice = await _libreOffice.RunAsync(documentBytes, cancellationToken);
@@ -82,7 +113,7 @@ public sealed class ConversionProbeRunner
                 "Przeczytaj stderr w szczegółach próby; usuń wskazaną konstrukcję albo zapisz dokument ponownie w Wordzie.");
         }
 
-        return results;
+        return new ConversionProbeOutcome(results, roundTrip);
     }
 
     private static ConversionProbeResult RunSdkOpen(byte[] documentBytes, HealthFindingCollector findings)
@@ -141,7 +172,7 @@ public sealed class ConversionProbeRunner
         }
     }
 
-    private ConversionProbeResult RunSchemaValidation(
+    private (ConversionProbeResult Probe, SchemaValidationResult? Result) RunSchemaValidation(
         byte[] documentBytes,
         HealthFindingCollector findings,
         ProbeStatus sdkStatus,
@@ -152,8 +183,8 @@ public sealed class ConversionProbeRunner
 
         if (sdkStatus != ProbeStatus.Passed)
         {
-            return new ConversionProbeResult(SchemaProbe, name, description, ProbeStatus.Skipped, 0,
-                "Pominięto — SDK nie otworzył pakietu.", null);
+            return (new ConversionProbeResult(SchemaProbe, name, description, ProbeStatus.Skipped, 0,
+                "Pominięto — SDK nie otworzył pakietu.", null), null);
         }
 
         var stopwatch = Stopwatch.StartNew();
@@ -165,20 +196,46 @@ public sealed class ConversionProbeRunner
 
             if (result.TotalCount == 0)
             {
-                return new ConversionProbeResult(SchemaProbe, name, description, ProbeStatus.Passed, stopwatch.ElapsedMilliseconds,
-                    "Brak błędów schematu.", null);
+                return (new ConversionProbeResult(SchemaProbe, name, description, ProbeStatus.Passed, stopwatch.ElapsedMilliseconds,
+                    "Brak błędów schematu.", null), result);
             }
 
-            var sample = string.Join("\n", result.Issues.Take(8).Select(issue =>
-                $"- [{issue.PartPath ?? "?"}] {issue.Description}{(issue.Path is null ? string.Empty : $" @ {issue.Path}")}"));
+            // Pełny materiał do analizy: najpierw grupy (ten sam kod + opis = jedna przyczyna w generatorze),
+            // potem KAŻDY błąd z częścią, węzłem i ścieżką — raport ma wystarczyć bez otwierania walidatora.
+            var groups = result.Issues
+                .GroupBy(issue => (issue.Code, issue.NodeName, issue.Description))
+                .OrderByDescending(group => group.Count())
+                .ThenBy(group => group.Key.Description, StringComparer.Ordinal)
+                .ToList();
+
+            var details = new StringBuilder();
+            details.AppendLine($"Podsumowanie wg przyczyny ({groups.Count} grup, {result.Issues.Count} błędów{(result.TotalCount > result.Issues.Count ? $" z {result.TotalCount} — lista przycięta limitem StructureInspection:MaxSchemaIssues" : string.Empty)}):");
+
+            foreach (var group in groups)
+            {
+                var first = group.First();
+                details.AppendLine($"- {group.Count()}× [{first.Severity}] {group.Key.Code}{(group.Key.NodeName is null ? string.Empty : $" <{group.Key.NodeName}>")}: {group.Key.Description}");
+                details.AppendLine($"    np. [{first.PartPath ?? "?"}]{(first.Path is null ? string.Empty : $" {first.Path}")}");
+            }
+
+            details.AppendLine();
+            details.AppendLine($"Pełna lista ({result.Issues.Count}):");
+
+            foreach (var issue in result.Issues)
+            {
+                details.AppendLine($"- [{issue.PartPath ?? "?"}] ({issue.Severity}, {issue.Code}{(issue.NodeName is null ? string.Empty : $", <{issue.NodeName}>")}) {issue.Description}{(issue.Path is null ? string.Empty : $" @ {issue.Path}")}");
+            }
+
+            var topGroups = string.Join("; ", groups.Take(5).Select(group =>
+                $"{group.Count()}× {group.Key.Description}"));
 
             findings.Add(DocumentHealthCodes.SchemaErrors, StructureIssueSeverity.Info, HealthStage.Conversion,
                 "Niezgodności ze schematem Open XML",
-                $"OpenXmlValidator zgłosił {result.TotalCount} błędów. Word ignoruje większość z nich (nieznane atrybuty, kolejność elementów), ale rygorystyczne konwertery mogą odrzucić dokument. Pełna lista: Walidator struktury → zakładka Schemat.",
+                $"OpenXmlValidator zgłosił {result.TotalCount} błędów w {groups.Count} grupach przyczyn. Word ignoruje większość z nich (nieznane atrybuty, kolejność elementów), ale rygorystyczne konwertery mogą odrzucić dokument. Najczęstsze: {topGroups}. Pełna lista (każdy błąd z częścią i ścieżką) w szczegółach próby „{name}” i w notatce dla programisty.",
                 null, WordOpenImpact.None, PdfConversionImpact.Possible);
 
-            return new ConversionProbeResult(SchemaProbe, name, description, ProbeStatus.Warning, stopwatch.ElapsedMilliseconds,
-                $"{result.TotalCount} błędów schematu (pierwsze {Math.Min(8, result.Issues.Count)} w szczegółach).", sample);
+            return (new ConversionProbeResult(SchemaProbe, name, description, ProbeStatus.Warning, stopwatch.ElapsedMilliseconds,
+                $"{result.TotalCount} błędów schematu w {groups.Count} grupach przyczyn — pełna lista w szczegółach.", details.ToString().TrimEnd()), result);
         }
         catch (OperationCanceledException)
         {
@@ -188,9 +245,71 @@ public sealed class ConversionProbeRunner
         {
             stopwatch.Stop();
 
-            return new ConversionProbeResult(SchemaProbe, name, description, ProbeStatus.Failed, stopwatch.ElapsedMilliseconds,
-                $"{exception.GetType().Name}: {exception.Message}", Describe(exception));
+            return (new ConversionProbeResult(SchemaProbe, name, description, ProbeStatus.Failed, stopwatch.ElapsedMilliseconds,
+                $"{exception.GetType().Name}: {exception.Message}", Describe(exception)), null);
         }
+    }
+
+    /// <summary>
+    /// Walidacja schematu WYNIKU round-tripu: grupy błędów (kod + węzeł + opis), których nie było w źródle
+    /// albo których przybyło, wprowadza nasz writer — to on generuje XML, a nie dokument użytkownika.
+    /// Przykład z produkcji: 309× „unexpected child element rFonts" w w:rPr (zła kolejność dzieci).
+    /// </summary>
+    private void CompareRoundTripSchema(
+        byte[] roundTripPackage,
+        SchemaValidationResult? sourceSchema,
+        HealthFindingCollector findings,
+        CancellationToken cancellationToken)
+    {
+        SchemaValidationResult output;
+
+        try
+        {
+            output = _schemaValidator.Validate(roundTripPackage, "Microsoft365", cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogInformation(exception, "Walidacja schematu wyniku round-tripu nie powiodła się (wynik diagnostyczny).");
+            return;
+        }
+
+        if (output.TotalCount == 0)
+        {
+            return;
+        }
+
+        static (string Code, string? Node, string Description) Key(SchemaValidationIssue issue) => (issue.Code, issue.NodeName, issue.Description);
+
+        var sourceCounts = (sourceSchema?.Issues ?? [])
+            .GroupBy(Key)
+            .ToDictionary(group => group.Key, group => group.Count());
+
+        var introduced = output.Issues
+            .GroupBy(Key)
+            .Select(group => (group.Key, Count: group.Count(), Before: sourceCounts.GetValueOrDefault(group.Key), Sample: group.First()))
+            .Where(group => group.Count > group.Before)
+            .OrderByDescending(group => group.Count - group.Before)
+            .ToList();
+
+        if (introduced.Count == 0)
+        {
+            return;
+        }
+
+        var lines = introduced.Select(group =>
+            $"- {group.Count - group.Before}× nowych ({group.Before} w źródle → {group.Count} po zapisie) {group.Key.Code}{(group.Key.Node is null ? string.Empty : $" <{group.Key.Node}>")}: {group.Key.Description} — np. [{group.Sample.PartPath ?? "?"}]{(group.Sample.Path is null ? string.Empty : $" {group.Sample.Path}")}");
+
+        findings.Add(DocumentHealthCodes.AppRoundTripSchemaErrors, StructureIssueSeverity.Warning, HealthStage.Application,
+            "Zapis z edytora wprowadza błędy schematu Open XML",
+            $"Wynik round-tripu ma {output.TotalCount} błędów schematu (źródło: {sourceSchema?.TotalCount ?? 0}); {introduced.Count} grup przyczyn pochodzi z naszego writera:\n{string.Join("\n", lines)}",
+            introduced[0].Sample.PartPath is null ? null : $"{introduced[0].Sample.PartPath}{(introduced[0].Sample.Path is null ? string.Empty : $" — {introduced[0].Sample.Path}")} (w WYNIKU zapisu)",
+            WordOpenImpact.None, PdfConversionImpact.Possible,
+            "Popraw HtmlToDocxConverter tak, żeby generował XML zgodny ze schematem (kolejność dzieci wg CT_*); strażnik: GeneratedPackageValidityTests. Word toleruje część takich błędów, rygorystyczne konwertery nie.",
+            AppSupportLevel.Unsupported, "Błąd generuje nasz writer — nie dokument użytkownika.");
     }
 
     private ConversionProbeResult RunUploadGate(byte[] documentBytes, HealthFindingCollector findings)
@@ -217,7 +336,7 @@ public sealed class ConversionProbeRunner
             $"{validation.Code}: {validation.Error}", null);
     }
 
-    private async Task<ConversionProbeResult> RunEditorImportAsync(
+    private async Task<(ConversionProbeResult Probe, DocumentContent? Content)> RunEditorImportAsync(
         byte[] documentBytes,
         HealthFindingCollector findings,
         CancellationToken cancellationToken)
@@ -244,13 +363,13 @@ public sealed class ConversionProbeRunner
                     "Konwerter DOCX→HTML zwrócił pusty HTML — treść nie została odczytana (w aplikacji: DOCUMENT_CONTENT_EMPTY).",
                     null, WordOpenImpact.None, PdfConversionImpact.Blocking);
 
-                return new ConversionProbeResult(EditorImportProbe, name, description, ProbeStatus.Warning, stopwatch.ElapsedMilliseconds,
-                    "Pusty HTML.", null);
+                return (new ConversionProbeResult(EditorImportProbe, name, description, ProbeStatus.Warning, stopwatch.ElapsedMilliseconds,
+                    "Pusty HTML.", null), null);
             }
 
-            return new ConversionProbeResult(EditorImportProbe, name, description, ProbeStatus.Passed, stopwatch.ElapsedMilliseconds,
+            return (new ConversionProbeResult(EditorImportProbe, name, description, ProbeStatus.Passed, stopwatch.ElapsedMilliseconds,
                 $"HTML {htmlLength} znaków, {content.Images.Count} obrazów, {content.Footnotes?.Count ?? 0} przypisów, {content.SectionHeadersFooters?.Count ?? 0} sekcji z własnymi nagłówkami.",
-                null);
+                null), content);
         }
         catch (TimeoutException)
         {
@@ -261,8 +380,8 @@ public sealed class ConversionProbeRunner
                 null, WordOpenImpact.None, PdfConversionImpact.Blocking,
                 "Sprawdź rozmiar dokumentu i obrazów; zawieszenie na konkretnej konstrukcji wymaga analizy logów backendu.");
 
-            return new ConversionProbeResult(EditorImportProbe, name, description, ProbeStatus.Failed, stopwatch.ElapsedMilliseconds,
-                $"Limit czasu {_options.ProbeTimeout.TotalSeconds:0} s przekroczony (wątek konwertera może nadal pracować).", null);
+            return (new ConversionProbeResult(EditorImportProbe, name, description, ProbeStatus.Failed, stopwatch.ElapsedMilliseconds,
+                $"Limit czasu {_options.ProbeTimeout.TotalSeconds:0} s przekroczony (wątek konwertera może nadal pracować).", null), null);
         }
         catch (OperationCanceledException)
         {
@@ -278,9 +397,153 @@ public sealed class ConversionProbeRunner
                 null, WordOpenImpact.None, PdfConversionImpact.Blocking,
                 "Komunikat wyjątku wskazuje konstrukcję; porównaj z ustaleniami etapów Pakiet/XML/Struktura.");
 
-            return new ConversionProbeResult(EditorImportProbe, name, description, ProbeStatus.Failed, stopwatch.ElapsedMilliseconds,
-                $"{exception.GetType().Name}: {exception.Message}", Describe(exception));
+            return (new ConversionProbeResult(EditorImportProbe, name, description, ProbeStatus.Failed, stopwatch.ElapsedMilliseconds,
+                $"{exception.GetType().Name}: {exception.Message}", Describe(exception)), null);
         }
+    }
+
+    /// <summary>
+    /// Round-trip DOCX→HTML→DOCX tą samą ścieżką co autosave istniejącego dokumentu
+    /// (<c>ConvertPreservingPackage</c> z oryginalnym pakietem). Bez edytora w przeglądarce — HTML
+    /// readera idzie prosto do writera, więc wynik mierzy wierność readera+writera, nie GUI.
+    /// Gdy pass-through zawiedzie, aplikacja po cichu regeneruje pakiet od zera — tu robimy to samo,
+    /// ale głośno (status Warning), bo to strata stylów/theme/fontów, o której użytkownik nie wie.
+    /// </summary>
+    private async Task<(ConversionProbeResult Probe, byte[]? Package)> RunRoundTripAsync(
+        byte[] documentBytes,
+        DocumentContent? content,
+        HealthFindingCollector findings,
+        CancellationToken cancellationToken)
+    {
+        const string name = "Edytor: round-trip DOCX → HTML → DOCX";
+        const string description = "IHtmlToDocxConverter.ConvertPreservingPackage — zapis wyniku importu tą samą ścieżką co autosave (pass-through styles/theme/fontTable). Wynik jest ponownie badany: inwentarz konstrukcji i kondycja zapisanego pliku.";
+
+        if (content is null)
+        {
+            return (new ConversionProbeResult(RoundTripProbe, name, description, ProbeStatus.Skipped, 0,
+                "Pominięto — import do edytora nie dał treści.", null), null);
+        }
+
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            var package = await Task.Run(() =>
+            {
+                using var original = new MemoryStream(documentBytes, writable: false);
+                return Write(content, original);
+            }, cancellationToken).WaitAsync(_options.ProbeTimeout, cancellationToken);
+
+            stopwatch.Stop();
+
+            if (package.Length == 0)
+            {
+                throw new InvalidOperationException("Writer zwrócił pusty pakiet.");
+            }
+
+            // ConvertPreservingPackage łapie awarię pass-through i PO CICHU zwraca pakiet zregenerowany
+            // od zera — z zewnątrz widać to tylko po tym, że styles.xml oryginału nie ma w wyniku.
+            if (!PassThroughApplied(documentBytes, package))
+            {
+                findings.Add(DocumentHealthCodes.RoundTripFallback, StructureIssueSeverity.Warning, HealthStage.Conversion,
+                    "Pass-through pakietu nie zadziałał — zapis zregenerował style od zera",
+                    "Wynik ConvertPreservingPackage nie zawiera oryginalnego styles.xml: PreserveOriginalParts rzucił na tym pakiecie i writer po cichu zwrócił pakiet zregenerowany. W v2 ginie pełny zestaw stylów, theme i fontTable oryginału (R-16) — użytkownik nie dostaje żadnego sygnału.",
+                    null, WordOpenImpact.None, PdfConversionImpact.Possible,
+                    "Uruchom HtmlToDocxConverter.PreserveOriginalParts na tym pakiecie pod debuggerem (catch połyka wyjątek) i obsłuż jego strukturę; do tego czasu dokument traci style przy każdym autosave.",
+                    AppSupportLevel.Partial, "Fallback jest celowy (zapis nigdy nie może się wywalić), ale strata stylów jest cicha.");
+
+                return (new ConversionProbeResult(RoundTripProbe, name, description, ProbeStatus.Warning, stopwatch.ElapsedMilliseconds,
+                    $"Pakiet zapisany ({package.Length} B), ale BEZ pass-through — styles.xml oryginału nie przetrwał.", null), package);
+            }
+
+            return (new ConversionProbeResult(RoundTripProbe, name, description, ProbeStatus.Passed, stopwatch.ElapsedMilliseconds,
+                $"Pakiet po round-tripie: {package.Length} B (źródło {documentBytes.Length} B). Różnice konstrukcji — patrz „Pokrycie przez naszą implementację”.", null), package);
+        }
+        catch (TimeoutException)
+        {
+            stopwatch.Stop();
+            findings.Add(DocumentHealthCodes.RoundTripFailed, StructureIssueSeverity.Error, HealthStage.Conversion,
+                "Zapis z edytora przekroczył limit czasu",
+                $"Writer HTML→DOCX nie zakończył pracy w {_options.ProbeTimeout.TotalSeconds:0} s — autosave tego dokumentu zakończy się tak samo.",
+                null, WordOpenImpact.None, PdfConversionImpact.Possible, null,
+                AppSupportLevel.Unsupported, "Zawieszenie writera na tym dokumencie.");
+
+            return (new ConversionProbeResult(RoundTripProbe, name, description, ProbeStatus.Failed, stopwatch.ElapsedMilliseconds,
+                $"Limit czasu {_options.ProbeTimeout.TotalSeconds:0} s przekroczony.", null), null);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            stopwatch.Stop();
+            _logger.LogInformation(exception, "Próba round-trip zakończona wyjątkiem (wynik diagnostyczny).");
+            findings.Add(DocumentHealthCodes.RoundTripFailed, StructureIssueSeverity.Error, HealthStage.Conversion,
+                "Writer edytora nie zapisuje tego dokumentu",
+                $"{exception.GetType().Name}: {exception.Message}. Autosave i „Pobierz” zakończą się tym samym błędem — dokument da się otworzyć, ale nie zapisać.",
+                null, WordOpenImpact.None, PdfConversionImpact.Possible,
+                "Wyjątek pochodzi z HtmlToDocxConverter (szczegóły próby) — konstrukcja HTML z readera, której writer nie przyjmuje.",
+                AppSupportLevel.Unsupported, "Nasz writer rzuca na wyniku naszego readera.");
+
+            return (new ConversionProbeResult(RoundTripProbe, name, description, ProbeStatus.Failed, stopwatch.ElapsedMilliseconds,
+                $"{exception.GetType().Name}: {exception.Message}", Describe(exception)), null);
+        }
+    }
+
+    private byte[] Write(DocumentContent content, Stream? original) =>
+        _docxWriter.ConvertPreservingPackage(
+            content.Html, original, content.Metadata, content.Header, content.Footer,
+            content.Margins, content.PageSize, content.SectionHeadersFooters, content.Footnotes, content.Endnotes,
+            content.FootnoteNumberFormat, content.EndnoteNumberFormat);
+
+    /// <summary>
+    /// Pass-through uznajemy za zastosowany, gdy bajty oryginalnego <c>word/styles*.xml</c> występują
+    /// w wyniku (writer wstrzykuje je FeedData 1:1). Oryginał bez części stylów = nie ma czego sprawdzać.
+    /// Każdy problem z odczytem archiwum = „nie wiemy" → nie zgłaszamy fałszywego fallbacku.
+    /// </summary>
+    private static bool PassThroughApplied(byte[] original, byte[] roundTrip)
+    {
+        try
+        {
+            var originalStyles = ReadStylesEntries(original);
+
+            if (originalStyles.Count == 0)
+            {
+                return true;
+            }
+
+            var roundTripStyles = ReadStylesEntries(roundTrip);
+
+            return originalStyles.Any(source => roundTripStyles.Any(target => target.AsSpan().SequenceEqual(source)));
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private static List<byte[]> ReadStylesEntries(byte[] package)
+    {
+        using var archive = new System.IO.Compression.ZipArchive(new MemoryStream(package, writable: false), System.IO.Compression.ZipArchiveMode.Read);
+        var result = new List<byte[]>();
+
+        foreach (var entry in archive.Entries)
+        {
+            var name = entry.FullName.Replace('\\', '/');
+
+            if (!name.StartsWith("word/styles", StringComparison.OrdinalIgnoreCase) || !name.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            using var stream = entry.Open();
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            result.Add(buffer.ToArray());
+        }
+
+        return result;
     }
 
     private async Task<ConversionProbeResult> RunPdfConversionAsync(

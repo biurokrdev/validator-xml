@@ -3,13 +3,19 @@ using D2ViewerEditor.Domain.Models;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentCompare;
 
+/// <summary>Różnica na poziomie drzewa XML — referencje do elementów obu stron (mapowane na raport później).</summary>
+/// <param name="Counterpart">
+/// Dla różnic jednostronnych: SPAROWANY rodzic po drugiej stronie (np. prawy `w:p`, gdy run istnieje tylko po lewej) —
+/// pozwala podać kontekst akapitu obu stron i odróżnić podział runów od utraty tekstu.
+/// </param>
 public sealed record XmlDifference(
     DifferenceKind Kind,
     XElement? Left,
     XElement? Right,
     string? Name,
     string? LeftValue,
-    string? RightValue);
+    string? RightValue,
+    XElement? Counterpart = null);
 
 public sealed record XmlDiffResult(
     IReadOnlyList<XmlDifference> Differences,
@@ -17,6 +23,13 @@ public sealed record XmlDiffResult(
     bool Truncated,
     int IgnoredAttributeCount);
 
+/// <summary>
+/// Literalny diff dwóch drzew XML. Dla pary elementów: nazwa, potem każdy atrybut (tylko w lewym /
+/// tylko w prawym / inna wartość), potem tekst bezpośredni, potem dzieci. Listy dzieci są wyrównywane
+/// dwustopniowo: najpierw po haszu poddrzewa (identyczne poddrzewa = kotwice, pomijane bez schodzenia
+/// w głąb), a w lukach między kotwicami po nazwie elementu (pary tej samej nazwy są porównywane
+/// rekurencyjnie, reszta to wstawienia/usunięcia z wycinkiem całego obiektu).
+/// </summary>
 public sealed class XmlTreeDiffer
 {
     private readonly DocumentCompareOptions _options;
@@ -92,7 +105,9 @@ public sealed class XmlTreeDiffer
 
             AlignChildren(
                 left.Elements().Where(child => !_hasher.IsIgnoredElement(child.Name)).ToList(),
-                right.Elements().Where(child => !_hasher.IsIgnoredElement(child.Name)).ToList());
+                right.Elements().Where(child => !_hasher.IsIgnoredElement(child.Name)).ToList(),
+                left,
+                right);
         }
 
         private void CompareAttributes(XElement left, XElement right)
@@ -143,7 +158,14 @@ public sealed class XmlTreeDiffer
             return result;
         }
 
-        private void AlignChildren(List<XElement> left, List<XElement> right)
+        /// <summary>
+        /// Cztery stopnie: (A) pary po kluczu tożsamości niezależnie od pozycji (relationship po Id, styl po
+        /// styleId, akapit po paraId…), (B) kotwice = identyczne poddrzewa w kolejności (LCS), (C) identyczne
+        /// poddrzewa poza kolejnością = element PRZENIESIONY, (D) w lukach między kotwicami pary tej samej
+        /// nazwy w kolejności; reszta = tylko po jednej stronie. Dzięki A i C zmiana kolejności nie udaje
+        /// zmiany treści, a przeniesiony akapit nie udaje usuniętego.
+        /// </summary>
+        private void AlignChildren(List<XElement> left, List<XElement> right, XElement leftParent, XElement rightParent)
         {
             if (left.Count == 0 && right.Count == 0)
             {
@@ -198,12 +220,12 @@ public sealed class XmlTreeDiffer
 
             foreach (var (anchorLeft, anchorRight) in anchors)
             {
-                HandleGap(Slice(left, from, anchorLeft, movedLeft), Slice(right, to, anchorRight, movedRight));
+                HandleGap(Slice(left, from, anchorLeft, movedLeft), Slice(right, to, anchorRight, movedRight), leftParent, rightParent);
                 from = anchorLeft + 1;
                 to = anchorRight + 1;
             }
 
-            HandleGap(Slice(left, from, left.Count, movedLeft), Slice(right, to, right.Count, movedRight));
+            HandleGap(Slice(left, from, left.Count, movedLeft), Slice(right, to, right.Count, movedRight), leftParent, rightParent);
         }
 
         private static List<XElement> Slice(List<XElement> source, int from, int to, HashSet<int> excluded)
@@ -221,6 +243,7 @@ public sealed class XmlTreeDiffer
             return result;
         }
 
+        /// <summary>Pary o unikalnym (po obu stronach) kluczu tożsamości są porównywane w głąb i usuwane z list.</summary>
         private void PairByKey(List<XElement> left, List<XElement> right, Func<XElement, string?> selector)
         {
             var leftKeys = UniqueKeys(left, selector);
@@ -278,7 +301,8 @@ public sealed class XmlTreeDiffer
             return byKey;
         }
 
-        private void HandleGap(List<XElement> left, List<XElement> right)
+        /// <summary>Luka między kotwicami: pary tej samej nazwy porównujemy w głąb, reszta = wstawione/usunięte obiekty.</summary>
+        private void HandleGap(List<XElement> left, List<XElement> right, XElement leftParent, XElement rightParent)
         {
             if (left.Count == 0 && right.Count == 0)
             {
@@ -293,19 +317,19 @@ public sealed class XmlTreeDiffer
 
             foreach (var (pairLeft, pairRight) in pairs)
             {
-                for (; i < pairLeft; i++) Add(DifferenceKind.ElementOnlyInLeft, left[i], null, Qualified(left[i]), null, null);
-                for (; j < pairRight; j++) Add(DifferenceKind.ElementOnlyInRight, null, right[j], Qualified(right[j]), null, null);
+                for (; i < pairLeft; i++) Add(DifferenceKind.ElementOnlyInLeft, left[i], null, Qualified(left[i]), null, null, rightParent);
+                for (; j < pairRight; j++) Add(DifferenceKind.ElementOnlyInRight, null, right[j], Qualified(right[j]), null, null, leftParent);
 
                 CompareElements(left[pairLeft], right[pairRight]);
                 i = pairLeft + 1;
                 j = pairRight + 1;
             }
 
-            for (; i < left.Count; i++) Add(DifferenceKind.ElementOnlyInLeft, left[i], null, Qualified(left[i]), null, null);
-            for (; j < right.Count; j++) Add(DifferenceKind.ElementOnlyInRight, null, right[j], Qualified(right[j]), null, null);
+            for (; i < left.Count; i++) Add(DifferenceKind.ElementOnlyInLeft, left[i], null, Qualified(left[i]), null, null, rightParent);
+            for (; j < right.Count; j++) Add(DifferenceKind.ElementOnlyInRight, null, right[j], Qualified(right[j]), null, null, leftParent);
         }
 
-        private void Add(DifferenceKind kind, XElement? left, XElement? right, string? name, string? leftValue, string? rightValue)
+        private void Add(DifferenceKind kind, XElement? left, XElement? right, string? name, string? leftValue, string? rightValue, XElement? counterpart = null)
         {
             Total++;
 
@@ -315,7 +339,7 @@ public sealed class XmlTreeDiffer
                 return;
             }
 
-            Differences.Add(new XmlDifference(kind, left, right, name, leftValue, rightValue));
+            Differences.Add(new XmlDifference(kind, left, right, name, leftValue, rightValue, counterpart));
         }
 
         private static string Qualified(XElement element)

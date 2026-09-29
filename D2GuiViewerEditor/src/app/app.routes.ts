@@ -7,6 +7,12 @@ import { resourceGuard } from './guards/resource.guard';
 import { authGuard } from './guards/auth.guard';
 import { homeRedirectGuard } from './guards/home-redirect.guard';
 
+// Cała aplikacja wymaga logowania (authGuard → MsalGuard; bypass gdy auth.enabled=false). Dostęp do
+// zasobów (dashboard/editor/viewer/admin) gatinguje resourceGuard po nazwie trasy względem backendowej
+// listy (GET /api/identity/resources); dokumenty dokładają documentAccessGuard (per-dokument 403).
+// Obszary są rozłączne: Operator → dashboard/editor/viewer, Administrator → admin. Root kieruje
+// homeRedirectGuard (Operator→dashboard, Administrator→/admin, brak roli→/brak-uprawnien).
+// Backend = źródło prawdy; guardy frontowe są tylko UX.
 export const routes: Routes = [
   { path: '', component: DashboardComponent, canActivate: [authGuard, homeRedirectGuard] },
   {
@@ -22,6 +28,7 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./pages/access-forbidden/access-forbidden').then((m) => m.AccessForbiddenComponent),
   },
+  // Backward-compatible alias for the previous document-specific route.
   { path: 'access-denied', redirectTo: 'brak-uprawnien', pathMatch: 'full' },
   {
     path: 'pdf-maintenance',

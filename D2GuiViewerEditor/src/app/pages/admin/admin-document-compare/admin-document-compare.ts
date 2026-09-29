@@ -4,37 +4,55 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { finalize } from 'rxjs';
 import {
   ComparedPart,
-  ComparedPartStatus,
+  DifferenceCause,
+  DifferenceImpact,
   DifferenceKind,
   DocumentCompareService,
   DocumentComparisonReport,
   DocumentDifference,
 } from '../../../services/document-compare.service';
 import { DiffSegment, diffWords, leftSide, rightSide } from '../../../core/utils/text-diff.util';
+import {
+  DifferenceGroup,
+  buildCompareNote,
+  describeDifference,
+  describeGroup,
+  describePart,
+  groupDifferences,
+  groupKeyOf,
+  groupTarget,
+  impactRank,
+} from './diff-summary.util';
+import {
+  BUCKET_HINTS,
+  BUCKET_LABELS,
+  BUCKET_ORDER,
+  CAUSE_LABELS,
+  DifferenceAssessment,
+  DifferenceBucket,
+  IMPACT_LABELS,
+  VERDICT_ORDER,
+  assessDifference,
+  bucketOf,
+} from './diff-assessment.util';
 
-const ALL = 'All';
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 50;
 
+// „Lewy/prawy” nic nie mówi o roli pliku; w praktyce porównujemy ORYGINAŁ (v1, wejście) z wersją
+// PORÓWNYWANĄ (zapis z edytora, v2, inny szablon). Backend nadal mówi Left/Right — to tylko etykiety.
 const KIND_LABELS: Record<DifferenceKind, string> = {
-  PartOnlyInLeft: 'Część tylko w lewym',
-  PartOnlyInRight: 'Część tylko w prawym',
+  PartOnlyInLeft: 'Część tylko w oryginale',
+  PartOnlyInRight: 'Część tylko w porównywanym',
   BinaryPartChanged: 'Część binarna różna',
-  ElementOnlyInLeft: 'Element tylko w lewym',
-  ElementOnlyInRight: 'Element tylko w prawym',
+  ElementOnlyInLeft: 'Element tylko w oryginale',
+  ElementOnlyInRight: 'Element tylko w porównywanym',
   ElementNameChanged: 'Inny element',
-  AttributeOnlyInLeft: 'Atrybut tylko w lewym',
-  AttributeOnlyInRight: 'Atrybut tylko w prawym',
+  AttributeOnlyInLeft: 'Atrybut tylko w oryginale',
+  AttributeOnlyInRight: 'Atrybut tylko w porównywanym',
   AttributeValueChanged: 'Inna wartość atrybutu',
   TextChanged: 'Inny tekst',
   ElementMoved: 'Element przeniesiony',
-};
-
-const STATUS_LABELS: Record<ComparedPartStatus, string> = {
-  Identical: 'identyczna',
-  Changed: 'różni się',
-  OnlyInLeft: 'tylko w lewym',
-  OnlyInRight: 'tylko w prawym',
-  Unreadable: 'nieczytelna',
+  PartRenamed: 'Część pod inną ścieżką',
 };
 
 interface ValueDiff {
@@ -42,6 +60,18 @@ interface ValueDiff {
   right: DiffSegment[];
 }
 
+/** Różnica razem z jej indeksem w raporcie (indeks = klucz rozwiniętych wycinków XML). */
+export interface IndexedDifference {
+  index: number;
+  difference: DocumentDifference;
+}
+
+/**
+ * Narzędzie administracyjne „Porównanie dokumentów": oryginał (z Worda) ↔ ten sam dokument po zapisie
+ * z naszego edytora. Backend porównuje literalnie (pakiet, XML, tekst) i analizuje przyczynę oraz skutek;
+ * ekran odpowiada na trzy pytania po kolei: czy to to samo → co jest do naprawy u nas / do sprawdzenia /
+ * nieistotne → gdzie dokładnie i dlaczego (rozwijane wystąpienia z wartościami i wycinkiem XML).
+ */
 @Component({
   selector: 'd2-admin-document-compare',
   standalone: true,
@@ -61,53 +91,116 @@ export class AdminDocumentCompareComponent {
   readonly error = signal<string | null>(null);
   readonly report = signal<DocumentComparisonReport | null>(null);
   readonly copied = signal(false);
+  readonly copiedNote = signal(false);
+  readonly showHelp = signal(false);
+  readonly showOptions = signal(false);
 
-  readonly kindFilter = signal<DifferenceKind | typeof ALL>(ALL);
-  readonly categoryFilter = signal<string>(ALL);
-  readonly partFilter = signal<string>(ALL);
+  readonly buckets = BUCKET_ORDER;
+
+  /** Wybrany kubełek; null = pierwszy niepusty (do naprawy u nas → do sprawdzenia → nieistotne). */
+  readonly bucket = signal<DifferenceBucket | null>(null);
   readonly search = signal('');
-  readonly pageLimit = signal(PAGE_SIZE);
 
+  private readonly expandedGroups = signal<ReadonlySet<string>>(new Set<string>());
+  private readonly groupLimits = signal<Readonly<Record<string, number>>>({});
   private readonly expandedExcerpts = signal<ReadonlySet<number>>(new Set<number>());
   private leftFile: File | null = null;
   private rightFile: File | null = null;
 
   readonly canCompare = computed(() => !!this.leftFileName() && !!this.rightFileName() && !this.isComparing());
 
-  readonly hasFilters = computed(
-    () => this.kindFilter() !== ALL || this.categoryFilter() !== ALL || this.partFilter() !== ALL || this.search().trim() !== '',
+  /** Ocena każdej różnicy (indeks = pozycja w raporcie) — liczona raz per raport. */
+  readonly assessments = computed<DifferenceAssessment[]>(() => (this.report()?.differences ?? []).map(assessDifference));
+
+  /** Różnice zgrupowane wg przyczyny (rodzaj + część + element + nazwa), z kubełkiem, przyczyną i skutkiem. */
+  readonly groups = computed<DifferenceGroup[]>(() =>
+    groupDifferences(this.report()?.differences ?? [], {
+      assess: assessDifference,
+      verdictOrder: VERDICT_ORDER,
+      bucket: (difference, assessment) => bucketOf(difference, assessment as DifferenceAssessment),
+    }),
   );
 
-  readonly kinds = computed<DifferenceKind[]>(() =>
-    (Object.keys(KIND_LABELS) as DifferenceKind[]).filter((kind) => (this.report()?.countsByKind[kind] ?? 0) > 0),
+  /** Wystąpienia per grupa, z indeksem w raporcie. */
+  readonly differencesByGroup = computed<ReadonlyMap<string, IndexedDifference[]>>(() => {
+    const map = new Map<string, IndexedDifference[]>();
+
+    (this.report()?.differences ?? []).forEach((difference, index) => {
+      const key = groupKeyOf(difference);
+      const list = map.get(key);
+
+      if (list) {
+        list.push({ index, difference });
+      } else {
+        map.set(key, [{ index, difference }]);
+      }
+    });
+
+    return map;
+  });
+
+  /** Liczba RÓŻNIC w każdym kubełku (po różnicach, nie po grupach). */
+  readonly bucketCounts = computed<Record<DifferenceBucket, number>>(() => {
+    const counts: Record<DifferenceBucket, number> = { fix: 0, review: 0, noise: 0 };
+    const differences = this.report()?.differences ?? [];
+    const assessments = this.assessments();
+
+    differences.forEach((difference, index) => {
+      counts[bucketOf(difference, assessments[index])]++;
+    });
+
+    return counts;
+  });
+
+  /** Liczba GRUP (przyczyn) w każdym kubełku. */
+  readonly bucketGroupCounts = computed<Record<DifferenceBucket, number>>(() => {
+    const counts: Record<DifferenceBucket, number> = { fix: 0, review: 0, noise: 0 };
+
+    for (const group of this.groups()) {
+      if (group.bucket) {
+        counts[group.bucket]++;
+      }
+    }
+
+    return counts;
+  });
+
+  /** Dopowiedzenie do liczby różnic — jedno zdanie, które mówi, czy jest co robić. */
+  readonly headline = computed<string>(() => {
+    const counts = this.bucketCounts();
+
+    if (counts.fix > 0) {
+      return `z czego ${counts.fix} do naprawy u nas`;
+    }
+
+    if (counts.review > 0) {
+      return `nic do naprawy u nas, ${counts.review} do sprawdzenia`;
+    }
+
+    return 'wszystkie nieistotne';
+  });
+
+  readonly activeBucket = computed<DifferenceBucket>(
+    () => this.bucket() ?? BUCKET_ORDER.find((bucket) => this.bucketGroupCounts()[bucket] > 0) ?? 'fix',
   );
 
-  readonly categories = computed<string[]>(() =>
-    Object.keys(this.report()?.countsByCategory ?? {}).sort((a, b) => a.localeCompare(b, 'pl')),
-  );
+  /** Grupy aktywnego kubełka po wyszukiwaniu: najpoważniejszy skutek pierwszy, potem najliczniejsze. */
+  readonly visibleGroups = computed<DifferenceGroup[]>(() => {
+    const bucket = this.activeBucket();
+    const needle = this.search().trim().toLowerCase();
+
+    return this.groups()
+      .filter((group) => group.bucket === bucket && (needle === '' || this.groupMatches(group, needle)))
+      .sort((a, b) => impactRank(a.worstImpact) - impactRank(b.worstImpact) || b.count - a.count || a.key.localeCompare(b.key));
+  });
+
+  readonly visibleCount = computed(() => this.visibleGroups().reduce((sum, group) => sum + group.count, 0));
 
   readonly changedParts = computed<ComparedPart[]>(() =>
     (this.report()?.parts ?? []).filter((part) => part.status !== 'Identical'),
   );
 
-  readonly visibleDifferences = computed<DocumentDifference[]>(() => {
-    const differences = this.report()?.differences ?? [];
-    const kind = this.kindFilter();
-    const category = this.categoryFilter();
-    const part = this.partFilter();
-    const needle = this.search().trim().toLowerCase();
-
-    return differences.filter(
-      (difference) =>
-        (kind === ALL || difference.kind === kind) &&
-        (category === ALL || difference.category === category) &&
-        (part === ALL || difference.partPath === part) &&
-        (needle === '' || this.matches(difference, needle)),
-    );
-  });
-
-  readonly pagedDifferences = computed(() => this.visibleDifferences().slice(0, this.pageLimit()));
-  readonly hasMore = computed(() => this.visibleDifferences().length > this.pageLimit());
+  // ── Pliki i porównanie ─────────────────────────────────────────────────────
 
   onFileSelected(side: 'left' | 'right', event: Event): void {
     const input = event.target as HTMLInputElement;
@@ -147,7 +240,11 @@ export class AdminDocumentCompareComponent {
     this.report.set(null);
     this.error.set(null);
     this.copied.set(false);
-    this.clearFilters();
+    this.copiedNote.set(false);
+    this.bucket.set(null);
+    this.search.set('');
+    this.expandedGroups.set(new Set<string>());
+    this.groupLimits.set({});
     this.expandedExcerpts.set(new Set<number>());
     this.isComparing.set(true);
 
@@ -163,36 +260,49 @@ export class AdminDocumentCompareComponent {
       });
   }
 
-  setKind(kind: DifferenceKind | typeof ALL): void {
-    this.kindFilter.set(kind);
-    this.pageLimit.set(PAGE_SIZE);
-  }
+  // ── Kubełki, wyszukiwanie, grupy ───────────────────────────────────────────
 
-  setCategory(category: string): void {
-    this.categoryFilter.set(category);
-    this.pageLimit.set(PAGE_SIZE);
-  }
-
-  togglePart(part: ComparedPart): void {
-    this.partFilter.set(this.partFilter() === part.path ? ALL : part.path);
-    this.pageLimit.set(PAGE_SIZE);
+  selectBucket(bucket: DifferenceBucket): void {
+    this.bucket.set(bucket);
   }
 
   setSearch(value: string): void {
     this.search.set(value);
-    this.pageLimit.set(PAGE_SIZE);
   }
 
-  clearFilters(): void {
-    this.kindFilter.set(ALL);
-    this.categoryFilter.set(ALL);
-    this.partFilter.set(ALL);
-    this.search.set('');
-    this.pageLimit.set(PAGE_SIZE);
+  isGroupExpanded(group: DifferenceGroup): boolean {
+    return this.expandedGroups().has(group.key);
   }
 
-  showMore(): void {
-    this.pageLimit.set(this.pageLimit() + PAGE_SIZE);
+  toggleGroup(group: DifferenceGroup): void {
+    const next = new Set(this.expandedGroups());
+
+    if (next.has(group.key)) {
+      next.delete(group.key);
+    } else {
+      next.add(group.key);
+    }
+
+    this.expandedGroups.set(next);
+  }
+
+  /** Wystąpienia grupy do pokazania (stronicowane per grupa). */
+  itemsOf(group: DifferenceGroup): IndexedDifference[] {
+    const all = this.differencesByGroup().get(group.key) ?? [];
+    return all.slice(0, this.groupLimits()[group.key] ?? PAGE_SIZE);
+  }
+
+  hasMoreIn(group: DifferenceGroup): boolean {
+    return (this.differencesByGroup().get(group.key)?.length ?? 0) > (this.groupLimits()[group.key] ?? PAGE_SIZE);
+  }
+
+  showMoreIn(group: DifferenceGroup): void {
+    const current = this.groupLimits()[group.key] ?? PAGE_SIZE;
+    this.groupLimits.set({ ...this.groupLimits(), [group.key]: current + PAGE_SIZE });
+  }
+
+  assessmentAt(index: number): DifferenceAssessment {
+    return this.assessments()[index];
   }
 
   isExcerptExpanded(index: number): boolean {
@@ -211,6 +321,7 @@ export class AdminDocumentCompareComponent {
     this.expandedExcerpts.set(next);
   }
 
+  /** Podświetlenie zmienionych słów w wartościach (tekst, atrybut); dla jednostronnych — bez podświetlenia. */
   valueDiff(difference: DocumentDifference): ValueDiff | null {
     if (difference.leftValue === null || difference.rightValue === null) {
       return null;
@@ -224,6 +335,8 @@ export class AdminDocumentCompareComponent {
     return difference.leftValue !== null || difference.rightValue !== null;
   }
 
+  // ── Kopiowanie ─────────────────────────────────────────────────────────────
+
   async copyReport(): Promise<void> {
     const report = this.report();
 
@@ -231,21 +344,66 @@ export class AdminDocumentCompareComponent {
       return;
     }
 
-    try {
-      await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
-      this.copied.set(true);
-      setTimeout(() => this.copied.set(false), 2500);
-    } catch {
-      this.error.set('Nie udało się skopiować raportu do schowka.');
+    await this.copyToClipboard(JSON.stringify(report, null, 2), this.copied);
+  }
+
+  /** Notatka Markdown: kubełki → grupy z przyczyną, skutkiem, wskaźnikiem do kodu i przykładami. */
+  async copySummary(): Promise<void> {
+    const report = this.report();
+
+    if (!report) {
+      return;
     }
+
+    await this.copyToClipboard(buildCompareNote(report, this.groups(), (kind) => this.kindLabel(kind)), this.copiedNote);
+  }
+
+  private async copyToClipboard(text: string, flag: ReturnType<typeof signal<boolean>>): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text);
+      flag.set(true);
+      setTimeout(() => flag.set(false), 2500);
+    } catch {
+      this.error.set('Nie udało się skopiować do schowka.');
+    }
+  }
+
+  // ── Etykiety ───────────────────────────────────────────────────────────────
+
+  bucketLabel(bucket: DifferenceBucket): string {
+    return BUCKET_LABELS[bucket];
+  }
+
+  bucketHint(bucket: DifferenceBucket): string {
+    return BUCKET_HINTS[bucket];
+  }
+
+  causeLabel(cause: string | null | undefined): string {
+    return cause ? (CAUSE_LABELS[cause as DifferenceCause] ?? cause) : '';
+  }
+
+  impactLabel(impact: string | null | undefined): string {
+    return impact ? (IMPACT_LABELS[impact as DifferenceImpact] ?? impact) : '';
   }
 
   kindLabel(kind: DifferenceKind): string {
     return KIND_LABELS[kind] ?? kind;
   }
 
-  statusLabel(status: ComparedPartStatus): string {
-    return STATUS_LABELS[status] ?? status;
+  describePart(path: string): string {
+    return describePart(path);
+  }
+
+  describeGroup(group: DifferenceGroup): string {
+    return describeGroup(group);
+  }
+
+  groupTarget(group: DifferenceGroup): string {
+    return groupTarget(group);
+  }
+
+  describeDifference(difference: DocumentDifference): string {
+    return describeDifference(difference);
   }
 
   isOneSided(kind: DifferenceKind): boolean {
@@ -270,17 +428,18 @@ export class AdminDocumentCompareComponent {
     return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
   }
 
-  private matches(difference: DocumentDifference, needle: string): boolean {
+  private groupMatches(group: DifferenceGroup, needle: string): boolean {
     return [
-      difference.partPath,
-      difference.leftPath,
-      difference.rightPath,
-      difference.name,
-      difference.leftValue,
-      difference.rightValue,
-      difference.leftContext,
-      difference.rightContext,
-      difference.category,
+      describeGroup(group),
+      describePart(group.partPath),
+      group.partPath,
+      group.element,
+      group.name,
+      group.category,
+      group.sampleContext,
+      group.dominantReason,
+      group.codePointer,
+      ...group.valueSamples.flatMap((sample) => [sample.left, sample.right]),
     ].some((value) => value?.toLowerCase().includes(needle));
   }
 

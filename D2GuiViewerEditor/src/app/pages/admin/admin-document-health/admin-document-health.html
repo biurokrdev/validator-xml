@@ -4,9 +4,10 @@
       <div>
         <h2 class="page-title">Kondycja dokumentu</h2>
         <p class="page-subtitle">
-          Czy plik DOCX jest uszkodzony (kontener ZIP, pakiet OPC, XML, struktura wymagana przez Worda)
-          i co blokuje konwersję do PDF. Próby przetworzenia cytują błędy realnych komponentów:
-          Open XML SDK, bramki uploadu, importu do edytora, konwertera PDF i LibreOffice.
+          Czy plik DOCX jest uszkodzony (kontener ZIP, pakiet OPC, XML, struktura wymagana przez Worda),
+          co blokuje konwersję do PDF i co <strong>nasza implementacja</strong> (reader DOCX→HTML, edytor, writer HTML→DOCX)
+          robi z tym dokumentem źle, częściowo albo wcale. Próby cytują błędy realnych komponentów:
+          Open XML SDK, bramki uploadu, importu do edytora, round-tripu przez writer, konwertera PDF i LibreOffice.
         </p>
       </div>
       <a class="link-btn" routerLink="/admin/walidator-struktury">Walidator struktury (drzewo i XML) →</a>
@@ -110,6 +111,14 @@
         (click)="setSeverity('Info')"
       >Informacje {{ current.infoCount }}</button>
 
+      <button
+        type="button"
+        class="secondary-btn"
+        title="Markdown: tylko luki naszej implementacji, ustalenia etapu „Aplikacja” i nieudane próby — do wklejenia do zgłoszenia albo agentowi AI"
+        (click)="copyDeveloperNote()"
+      >
+        {{ copiedNote() ? 'Skopiowano ✓' : 'Kopiuj notatkę dla programisty' }}
+      </button>
       <button type="button" class="secondary-btn" (click)="copyReport()">
         {{ copied() ? 'Skopiowano ✓' : 'Kopiuj raport (JSON)' }}
       </button>
@@ -140,6 +149,68 @@
       <span class="chip">fonty osadzone: {{ current.statistics.embeddedFonts }}</span>
     </section>
 
+    <section class="panel coverage-panel" aria-label="Pokrycie przez naszą implementację">
+      <header class="panel-header">
+        <span class="panel-title">Pokrycie przez naszą implementację</span>
+        <span class="panel-count">{{ visibleCoverage().length }} / {{ current.coverage.length }}</span>
+
+        <button
+          type="button"
+          class="toggle-btn"
+          [class.active]="coverageFilter() === 'Gaps'"
+          title="Tylko konstrukcje, których nie obsługujemy w pełni"
+          (click)="setCoverageFilter('Gaps')"
+        >Tylko luki ({{ coverageGaps().length }})</button>
+        <button
+          type="button"
+          class="toggle-btn"
+          [class.active]="coverageFilter() === 'All'"
+          (click)="setCoverageFilter('All')"
+        >Wszystkie konstrukcje</button>
+      </header>
+
+      <p class="coverage-summary">
+        {{ current.coverageSummary }}
+        @if (!roundTripRan()) {
+          <span class="muted">Kolumna „po zapisie” wymaga włączonych prób konwersji (round-trip przez writer edytora).</span>
+        }
+      </p>
+
+      <div class="panel-body coverage-body">
+        @if (current.coverage.length === 0) {
+          <div class="empty-state">Inwentarz nie wykrył konstrukcji z rejestru — analiza struktury nie doszła do skutku albo dokument jest czystym tekstem.</div>
+        } @else if (visibleCoverage().length === 0) {
+          <div class="empty-state">Wszystkie konstrukcje użyte w dokumencie są obsługiwane w pełni.</div>
+        }
+
+        @for (item of visibleCoverage(); track item.featureKey) {
+          <article class="coverage-item" [attr.data-status]="item.status">
+            <div class="coverage-head">
+              <span class="coverage-status" [attr.data-status]="item.status">{{ coverageStatusLabel(item.status) }}</span>
+              <strong class="coverage-label">{{ item.label }}</strong>
+              <code class="mono finding-code">{{ item.featureKey }}</code>
+              <span class="coverage-counts">
+                w źródle: {{ item.sourceCount }} ·
+                <span [class.coverage-loss]="item.roundTrip === 'Lost' || item.roundTrip === 'Reduced'">{{ roundTripLabel(item) }}</span>
+              </span>
+            </div>
+            <div class="coverage-levels" title="Zadeklarowany poziom obsługi per komponent (rejestr EditorCapabilityRegistry)">
+              <span class="level-pill" [attr.data-level]="item.reader">reader: {{ supportLevelLabel(item.reader) }}</span>
+              <span class="level-pill" [attr.data-level]="item.editor">edytor: {{ supportLevelLabel(item.editor) }}</span>
+              <span class="level-pill" [attr.data-level]="item.writer">writer: {{ supportLevelLabel(item.writer) }}</span>
+            </div>
+            <p class="coverage-note">{{ item.note }}</p>
+            @if (item.codePointer) {
+              <div class="coverage-pointer mono" title="Od czego zacząć w kodzie">kod: {{ item.codePointer }}</div>
+            }
+            @if (item.sampleLocation) {
+              <div class="finding-location mono" title="Pierwsze wystąpienie — do odnalezienia w Walidatorze struktury">{{ item.sampleLocation }}</div>
+            }
+          </article>
+        }
+      </div>
+    </section>
+
     <div class="workspace">
       <section class="panel findings-panel">
         <header class="panel-header">
@@ -167,6 +238,13 @@
             title="Tylko ustalenia, które wpływają na konwersję do PDF"
             (click)="setImpact('Pdf')"
           >Wpływ na PDF ({{ pdfImpactCount() }})</button>
+          <button
+            type="button"
+            class="toggle-btn"
+            [class.active]="stageFilter() === 'Application'"
+            title="Tylko luki naszej implementacji (etap „Aplikacja”)"
+            (click)="setStage(stageFilter() === 'Application' ? 'All' : 'Application')"
+          >Nasza implementacja ({{ stageCounts().Application }}{{ appWarningCount() > 0 ? ', ⚠ ' + appWarningCount() : '' }})</button>
 
           @if (hasFilters()) {
             <button type="button" class="link-btn" (click)="clearFilters()">wyczyść filtry</button>
@@ -202,6 +280,11 @@
                 }
                 @if (finding.remedy) {
                   <p class="finding-remedy"><span class="remedy-label">Co zrobić:</span> {{ finding.remedy }}</p>
+                }
+                @if (finding.appNote && appSupportLabel(finding.appSupport); as appLabel) {
+                  <p class="finding-app" [attr.data-level]="finding.appSupport">
+                    <span class="app-label">{{ appLabel }}</span> {{ finding.appNote }}
+                  </p>
                 }
               </article>
             }

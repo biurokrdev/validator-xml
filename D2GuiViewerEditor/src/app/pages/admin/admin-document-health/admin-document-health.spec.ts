@@ -9,6 +9,10 @@ import {
   HealthFinding,
 } from '../../../services/document-health.service';
 
+/**
+ * „Kondycja dokumentu": raport ma dać się przefiltrować po poziomie, etapie i wpływie (Word/PDF),
+ * flaga prób konwersji musi dotrzeć do API, a błąd backendu ma pokazać komunikat, nie pustą stronę.
+ */
 function finding(overrides: Partial<HealthFinding>): HealthFinding {
   return {
     code: 'X',
@@ -20,6 +24,8 @@ function finding(overrides: Partial<HealthFinding>): HealthFinding {
     wordImpact: 'None',
     pdfImpact: 'None',
     remedy: null,
+    appSupport: 'Unknown',
+    appNote: null,
     ...overrides,
   };
 }
@@ -41,8 +47,12 @@ const report: DocumentHealthReport = {
   findingsTruncated: false,
   findings: [
     finding({ code: 'ZIP_ENTRY_CRC_MISMATCH', severity: 'Error', stage: 'File', wordImpact: 'CannotOpen', pdfImpact: 'Blocking' }),
-    finding({ code: 'DOC_ALT_CHUNK_PRESENT', severity: 'Warning', stage: 'Structure', pdfImpact: 'Likely' }),
+    finding({
+      code: 'DOC_ALT_CHUNK_PRESENT', severity: 'Warning', stage: 'Structure', pdfImpact: 'Likely',
+      appSupport: 'Unsupported', appNote: 'Reader nie obsługuje w:altChunk.',
+    }),
     finding({ code: 'DOC_COMMENTS_PRESENT', severity: 'Info', stage: 'Structure' }),
+    finding({ code: 'APP_FEATURE_UNSUPPORTED', severity: 'Warning', stage: 'Application', pdfImpact: 'Possible', appSupport: 'Unsupported', appNote: 'n' }),
   ],
   probes: [
     { id: 'sdk-open', name: 'SDK', description: 'd', status: 'Passed', durationMs: 12, message: 'ok', details: null },
@@ -53,6 +63,18 @@ const report: DocumentHealthReport = {
     maxTableNesting: 1, drawings: 1, fields: 0, sections: 1, footnotes: 0, endnotes: 0, comments: 2,
     trackedRevisions: 0, contentControls: 0, altChunks: 1, embeddedFonts: 0,
   },
+  coverage: [
+    {
+      featureKey: 'tables', label: 'Tabele', sourceCount: 1, sampleLocation: null, reader: 'Full', editor: 'Full', writer: 'Full',
+      roundTripCount: 1, roundTrip: 'Preserved', status: 'Supported', note: 'ok', codePointer: null,
+    },
+    {
+      featureKey: 'alt-chunk', label: 'Treść dołączona przez w:altChunk', sourceCount: 1, sampleLocation: 'word/document.xml:1 — /w:altChunk[1]',
+      reader: 'Unsupported', editor: 'Unsupported', writer: 'Unsupported', roundTripCount: 0, roundTrip: 'Lost', status: 'Unsupported',
+      note: 'Brak gałęzi AltChunk.', codePointer: 'DocxToHtmlConverter',
+    },
+  ],
+  coverageSummary: '2 konstrukcji w dokumencie: 1 obsługiwanych w pełni; 1 nieobsługiwanych (Treść dołączona przez w:altChunk).',
   analyzedAtUtc: '2026-09-23T10:00:00Z',
   durationMs: 2000,
 };
@@ -86,12 +108,49 @@ describe('AdminDocumentHealthComponent', () => {
     component.analyze();
   }
 
-  it('wczytuje raport i grupuje ustalenia etapami w kolejności plik → struktura', () => {
+  it('wczytuje raport i grupuje ustalenia etapami w kolejności plik → struktura → nasza implementacja', () => {
     analyzeWith();
 
     expect(component.report()?.verdict).toBe('NeedsRepair');
-    expect(component.findingGroups().map((group) => group.stage)).toEqual(['File', 'Structure']);
+    expect(component.findingGroups().map((group) => group.stage)).toEqual(['File', 'Structure', 'Application']);
     expect(component.stageCounts().Structure).toBe(2);
+    expect(component.stageCounts().Application).toBe(1);
+    expect(component.appWarningCount()).toBe(1);
+  });
+
+  it('pokrycie domyślnie pokazuje tylko luki, przełącznik odsłania konstrukcje obsługiwane', () => {
+    analyzeWith();
+
+    expect(component.visibleCoverage().map((item) => item.featureKey)).toEqual(['alt-chunk']);
+    expect(component.roundTripRan()).toBe(true);
+
+    component.setCoverageFilter('All');
+    expect(component.visibleCoverage()).toHaveLength(2);
+    expect(component.roundTripLabel(component.visibleCoverage()[1])).toContain('UTRACONE');
+    expect(component.coverageStatusLabel('UnexpectedLoss')).toBe('nieoczekiwana utrata');
+  });
+
+  it('kopiuje notatkę dla programisty jako Markdown z lukami i notatką „u nas”', async () => {
+    analyzeWith();
+    const written: string[] = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: (text: string) => { written.push(text); return Promise.resolve(); } },
+      configurable: true,
+    });
+
+    await component.copyDeveloperNote();
+
+    expect(component.copiedNote()).toBe(true);
+    expect(written[0]).toContain('# Kondycja dokumentu — notatka dla programisty');
+    expect(written[0]).toContain('**Treść dołączona przez w:altChunk** `alt-chunk`');
+    expect(written[0]).toContain('U nas: Reader nie obsługuje w:altChunk.');
+    expect(written[0]).not.toContain('**Tabele**');
+  });
+
+  it('etykieta „u nas” istnieje tylko dla znanych poziomów obsługi', () => {
+    expect(component.appSupportLabel('Unknown')).toBeNull();
+    expect(component.appSupportLabel('Unsupported')).toBe('U nas: brak obsługi');
+    expect(component.supportLevelLabel('PassThrough')).toBe('pass-through');
   });
 
   it('przekazuje do API flagę prób konwersji', () => {
@@ -116,7 +175,7 @@ describe('AdminDocumentHealthComponent', () => {
     expect(component.visibleFindings().map((item) => item.code)).toEqual(['ZIP_ENTRY_CRC_MISMATCH']);
 
     component.setSeverity('Error');
-    expect(component.visibleFindings()).toHaveLength(3);
+    expect(component.visibleFindings()).toHaveLength(4);
   });
 
   it('filtruje po wpływie na Worda i na PDF', () => {
@@ -129,8 +188,9 @@ describe('AdminDocumentHealthComponent', () => {
     expect(component.visibleFindings().map((item) => item.code)).toEqual([
       'ZIP_ENTRY_CRC_MISMATCH',
       'DOC_ALT_CHUNK_PRESENT',
+      'APP_FEATURE_UNSUPPORTED',
     ]);
-    expect(component.pdfImpactCount()).toBe(2);
+    expect(component.pdfImpactCount()).toBe(3);
   });
 
   it('filtruje po etapie i czyści wszystkie filtry naraz', () => {
@@ -142,7 +202,7 @@ describe('AdminDocumentHealthComponent', () => {
 
     component.clearFilters();
     expect(component.hasFilters()).toBe(false);
-    expect(component.visibleFindings()).toHaveLength(3);
+    expect(component.visibleFindings()).toHaveLength(4);
   });
 
   it('rozwija i zwija szczegóły próby', () => {

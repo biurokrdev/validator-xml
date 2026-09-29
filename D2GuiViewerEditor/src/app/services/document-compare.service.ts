@@ -14,9 +14,34 @@ export type DifferenceKind =
   | 'AttributeOnlyInRight'
   | 'AttributeValueChanged'
   | 'TextChanged'
-  | 'ElementMoved';
+  | 'ElementMoved'
+  | 'PartRenamed';
 
 export type ComparedPartStatus = 'Identical' | 'Changed' | 'OnlyInLeft' | 'OnlyInRight' | 'Unreadable';
+
+/** Dlaczego różnica istnieje (perspektywa: oryginał ↔ kopia zapisana z naszego edytora). */
+export type DifferenceCause =
+  | 'Unknown'
+  | 'WordNoise'
+  | 'IdentifierRewrite'
+  | 'PairingArtifact'
+  | 'WriterNormalization'
+  | 'PipelineRegenerated'
+  | 'PipelinePartial'
+  | 'PipelineUnsupported'
+  | 'UserEdit'
+  | 'UserEditOrLoss';
+
+/** Skutek różnicy dla użytkownika końcowego. */
+export type DifferenceImpact = 'None' | 'Cosmetic' | 'Layout' | 'PdfDifference' | 'WordRepair' | 'DataLoss';
+
+export interface DifferenceAnalysis {
+  cause: DifferenceCause;
+  impact: DifferenceImpact;
+  explanation: string;
+  featureKey: string | null;
+  codePointer: string | null;
+}
 
 export interface DocumentDifference {
   kind: DifferenceKind;
@@ -34,6 +59,8 @@ export interface DocumentDifference {
   excerptTruncated: boolean;
   leftContext: string | null;
   rightContext: string | null;
+  /** Analiza przyczyny i skutku z backendu (rejestr możliwości edytora); null w starszych raportach. */
+  analysis?: DifferenceAnalysis | null;
 }
 
 export interface ComparedPart {
@@ -67,6 +94,8 @@ export interface DocumentComparisonReport {
   ignoredAttributeCount: number;
   countsByKind: Record<string, number>;
   countsByCategory: Record<string, number>;
+  countsByCause?: Record<string, number>;
+  countsByImpact?: Record<string, number>;
   parts: ComparedPart[];
   differences: DocumentDifference[];
   comparedAtUtc: string;
@@ -78,6 +107,7 @@ export interface CompareOptions {
   ignoreDocumentProperties: boolean;
 }
 
+/** Klient API narzędzia „Porównanie dokumentów": dwa pliki w jednym multipart, jeden raport w odpowiedzi. */
 @Injectable({ providedIn: 'root' })
 export class DocumentCompareService {
   private readonly http = inject(HttpClient);

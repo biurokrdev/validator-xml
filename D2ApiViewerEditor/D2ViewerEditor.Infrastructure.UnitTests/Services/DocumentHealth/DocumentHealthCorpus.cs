@@ -5,6 +5,11 @@ using OpenMcdf;
 
 namespace D2ViewerEditor.Infrastructure.UnitTests.Services.DocumentHealth;
 
+/// <summary>
+/// Korpus „chorych” plików: każdy izoluje jedno uszkodzenie, które narzędzie ma nazwać po imieniu.
+/// Uszkodzenia kontenera są wytwarzane na bajtach (ucięcie, przekłamanie, duplikat wpisu) — tego
+/// nie da się zapisać żadnym builderem pakietów.
+/// </summary>
 internal static class DocumentHealthCorpus
 {
     private const string DocumentNamespaces =
@@ -23,12 +28,14 @@ internal static class DocumentHealthCorpus
 
     public static byte[] Healthy() => StructureInspectionCorpus.Normal();
 
+    /// <summary>Plik ucięty w połowie — brak rekordu końca katalogu centralnego.</summary>
     public static byte[] Truncated()
     {
         var bytes = Healthy();
         return bytes[..(bytes.Length / 2)];
     }
 
+    /// <summary>Wpisy bez kompresji, potem jeden bajt treści głównej części przekłamany → CRC się nie zgadza.</summary>
     public static byte[] CrcMismatch()
     {
         var repacked = Repack(Healthy(), CompressionLevel.NoCompression);
@@ -44,6 +51,7 @@ internal static class DocumentHealthCorpus
         return repacked;
     }
 
+    /// <summary>Dwa wpisy o tej samej ścieżce w archiwum.</summary>
     public static byte[] DuplicateEntry()
     {
         using var buffer = new MemoryStream();
@@ -69,6 +77,7 @@ internal static class DocumentHealthCorpus
 
     public static byte[] Html() => Encoding.UTF8.GetBytes("<!DOCTYPE html><html><head><title>Sign in</title></head><body>Login</body></html>");
 
+    /// <summary>Kontener CFB ze strumieniem WordDocument — binarny .doc.</summary>
     public static byte[] LegacyDoc()
     {
         using var buffer = new MemoryStream();
@@ -82,6 +91,7 @@ internal static class DocumentHealthCorpus
         return buffer.ToArray();
     }
 
+    /// <summary>Kontener CFB z EncryptionInfo + EncryptedPackage — DOCX zaszyfrowany hasłem.</summary>
     public static byte[] EncryptedPackage()
     {
         using var buffer = new MemoryStream();
@@ -201,6 +211,70 @@ internal static class DocumentHealthCorpus
             .WithRelationship("word/document.xml", "rId7", OoxmlTestPackageBuilder.RelationshipType("aFChunk"), "chunk.html")
             .WithPart("word/settings.xml", settings, StructureInspectionCorpus.SettingsContentType)
             .WithRelationship("word/document.xml", "rId8", OoxmlTestPackageBuilder.RelationshipType("settings"), "settings.xml")
+            .Build();
+    }
+
+    /// <summary>
+    /// Dokument „bogaty” w konstrukcje o różnym poziomie obsługi w naszej implementacji: tabela
+    /// (pełna), przypis dolny (pełna), formant (częściowa), równanie OMML i tekst ukryty (brak),
+    /// komentarz w części comments.xml (brak) oraz ustawienia korespondencji seryjnej (brak, nieszkodliwe).
+    /// </summary>
+    public static byte[] FeatureRich()
+    {
+        const string body =
+            """<w:p><w:r><w:t>Akapit</w:t></w:r><w:r><w:rPr><w:vanish/></w:rPr><w:t>ukryty</w:t></w:r></w:p>""" +
+            """<w:tbl><w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid><w:tr><w:tc><w:p><w:r><w:t>komórka</w:t></w:r></w:p></w:tc></w:tr></w:tbl>""" +
+            """<w:p><w:r><w:t>Tekst</w:t></w:r><w:r><w:footnoteReference w:id="1"/></w:r><w:commentRangeStart w:id="0"/><w:r><w:t>komentowany</w:t></w:r><w:commentRangeEnd w:id="0"/><w:r><w:commentReference w:id="0"/></w:r></w:p>""" +
+            """<w:sdt><w:sdtPr><w:alias w:val="Pole"/></w:sdtPr><w:sdtContent><w:p><w:r><w:t>formant</w:t></w:r></w:p></w:sdtContent></w:sdt>""" +
+            """<w:p><m:oMathPara><m:oMath><m:r><m:t>x=1</m:t></m:r></m:oMath></m:oMathPara></w:p>""" +
+            SectionA4;
+
+        const string mathNamespace = """xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math" """;
+
+        const string footnotes =
+            """<?xml version="1.0" encoding="UTF-8"?><w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">""" +
+            """<w:footnote w:type="separator" w:id="-1"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>""" +
+            """<w:footnote w:id="1"><w:p><w:r><w:t>Treść przypisu</w:t></w:r></w:p></w:footnote></w:footnotes>""";
+
+        const string comments =
+            """<?xml version="1.0" encoding="UTF-8"?><w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">""" +
+            """<w:comment w:id="0" w:author="QA"><w:p><w:r><w:t>Uwaga</w:t></w:r></w:p></w:comment></w:comments>""";
+
+        const string settings =
+            """<?xml version="1.0" encoding="UTF-8"?><w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">""" +
+            """<w:mailMerge><w:mainDocumentType w:val="formLetters"/></w:mailMerge></w:settings>""";
+
+        return new OoxmlTestPackageBuilder()
+            .WithMainDocument(Document(body, mathNamespace))
+            .WithPart("word/footnotes.xml", footnotes, "application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml")
+            .WithRelationship("word/document.xml", "rId20", OoxmlTestPackageBuilder.RelationshipType("footnotes"), "footnotes.xml")
+            .WithPart("word/comments.xml", comments, "application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml")
+            .WithRelationship("word/document.xml", "rId21", OoxmlTestPackageBuilder.RelationshipType("comments"), "comments.xml")
+            .WithPart("word/settings.xml", settings, StructureInspectionCorpus.SettingsContentType)
+            .WithRelationship("word/document.xml", "rId22", OoxmlTestPackageBuilder.RelationshipType("settings"), "settings.xml")
+            .Build();
+    }
+
+    /// <summary>Wynik „zapisu”, który zgubił tabelę i przypis (regresja) i wprowadził komórkę bez akapitu.</summary>
+    public static byte[] FeatureRichAfterLossyRoundTrip()
+    {
+        const string body =
+            """<w:p><w:r><w:t>Akapit</w:t></w:r></w:p>""" +
+            """<w:tbl><w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid><w:tr><w:tc><w:tbl><w:tblGrid><w:gridCol w:w="5000"/></w:tblGrid><w:tr><w:tc><w:p/></w:tc></w:tr></w:tbl></w:tc></w:tr></w:tbl>""" +
+            """<w:p><w:r><w:t>Tekst komentowany</w:t></w:r></w:p>""" +
+            SectionA4;
+
+        return new OoxmlTestPackageBuilder().WithMainDocument(Document(body)).Build();
+    }
+
+    /// <summary>Pakiet poprawny dla Worda, ale z powtarzalnymi błędami schematu: nieznany element w rPr i zła wartość w:jc (×3).</summary>
+    public static byte[] SchemaViolations()
+    {
+        const string paragraph =
+            """<w:p><w:pPr><w:jc w:val="nonsense"/></w:pPr><w:r><w:rPr><w:notAnElement/></w:rPr><w:t>x</w:t></w:r></w:p>""";
+
+        return new OoxmlTestPackageBuilder()
+            .WithMainDocument(Document(paragraph + paragraph + paragraph + SectionA4))
             .Build();
     }
 

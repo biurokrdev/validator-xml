@@ -1,5 +1,10 @@
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
+/// <summary>
+/// CRC-32 (IEEE 802.3, jak w ZIP). <c>ZipArchive</c> w .NET NIE weryfikuje sumy kontrolnej przy
+/// odczycie wpisu — a to właśnie ona wykrywa cichą korupcję bajtów (Word przy niezgodnej sumie
+/// zgłasza „plik jest uszkodzony"), więc liczymy ją sami.
+/// </summary>
 public static class Crc32
 {
     private static readonly uint[] Table = BuildTable();

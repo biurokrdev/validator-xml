@@ -4,6 +4,11 @@ using System.Xml.Linq;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
+/// <summary>
+/// Lokalizacja ustalenia w pakiecie: <c>część:linia — /w:body[1]/w:tbl[2]/w:tr[3]/w:tc[1]</c>.
+/// Ścieżka używa prefiksów z dokumentu i indeksów pozycyjnych, czyli tego samego zapisu, który
+/// pokazuje „Walidator struktury" — po odczytaniu ustalenia da się tam odnaleźć element.
+/// </summary>
 public static class HealthLocations
 {
     public static string Of(string partPath, XElement? element)
@@ -65,6 +70,7 @@ public static class HealthLocations
         return string.IsNullOrEmpty(prefix) ? element.Name.LocalName : $"{prefix}:{element.Name.LocalName}";
     }
 
+    /// <summary>Krótki podgląd tekstu elementu do opisu ustalenia (bez zalewania raportu treścią).</summary>
     public static string Preview(XElement element, int maxLength = 60)
     {
         var text = string.Concat(element.Descendants().Where(child => child.Name.LocalName == "t").Select(child => child.Value));

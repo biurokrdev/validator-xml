@@ -2,6 +2,7 @@ using D2ViewerEditor.Domain.Models;
 
 namespace D2ViewerEditor.Infrastructure.Services.DocumentHealth;
 
+/// <summary>Werdykty raportu wyprowadzone z ustaleń i prób — trzy odpowiedzi, każda z jednym zdaniem uzasadnienia.</summary>
 public sealed record HealthVerdicts(
     HealthVerdict Verdict,
     string VerdictSummary,
@@ -10,6 +11,11 @@ public sealed record HealthVerdicts(
     PdfConversionVerdict PdfConversion,
     string PdfConversionSummary);
 
+/// <summary>
+/// Reguły werdyktu są celowo proste i monotoniczne: najgorsze ustalenie decyduje. Werdykt Worda
+/// bierze się WYŁĄCZNIE z ustaleń (wiedza o wymaganiach Worda), werdykt PDF dodatkowo z prób —
+/// bo błąd zwrócony przez zarejestrowany konwerter jest faktem, nie przewidywaniem.
+/// </summary>
 public static class HealthVerdictBuilder
 {
     public static HealthVerdicts Build(
@@ -19,7 +25,10 @@ public static class HealthVerdictBuilder
     {
         var all = findings.Findings;
 
-        var staticFindings = all.Where(finding => finding.Stage != HealthStage.Conversion).ToList();
+        // Werdykt Worda liczymy WYŁĄCZNIE z ustaleń statycznych (plik → struktura): awaria SDK,
+        // edytora czy konwertera mówi o tych komponentach, nie o Wordzie, który bywa tolerancyjniejszy;
+        // luki naszej implementacji (etap Aplikacja) tym bardziej nie mówią nic o Wordzie.
+        var staticFindings = all.Where(finding => finding.Stage < HealthStage.Conversion).ToList();
         var wordImpact = staticFindings.Count == 0 ? WordOpenImpact.None : staticFindings.Max(finding => finding.WordImpact);
         var wordOpen = wordImpact switch
         {
@@ -40,6 +49,9 @@ public static class HealthVerdictBuilder
             : pdfAtRisk ? PdfConversionVerdict.AtRisk
             : PdfConversionVerdict.Ok;
 
+        // „Uszkodzony” = kontener albo pakiet ma błędy (ucięty ZIP, CRC, brakująca część/relationship)
+        // albo cokolwiek uniemożliwia otwarcie w Wordzie. Błędy warstwy XML/struktury, które Word
+        // naprawia (np. niezadeklarowany prefiks mc:Ignorable), to „wymaga naprawy”.
         var containerErrors = all.Any(finding =>
             finding.Severity == StructureIssueSeverity.Error &&
             finding.Stage is HealthStage.File or HealthStage.Package);
@@ -68,7 +80,8 @@ public static class HealthVerdictBuilder
             HealthVerdict.NeedsRepair =>
                 $"Pakiet jest czytelny, ale narusza wymagania Worda — Word zażąda naprawy. {findings.ErrorCount} błędów: {TopTitles(all, StructureIssueSeverity.Error, 3)}.",
             HealthVerdict.Warnings =>
-                $"Dokument otwiera się poprawnie; {findings.WarningCount} ostrzeżeń i {findings.InfoCount} informacji dotyczy zgodności konwerterów i edytora.",
+                $"Dokument otwiera się poprawnie; {findings.WarningCount} ostrzeżeń i {findings.InfoCount} informacji dotyczy zgodności konwerterów i luk naszej implementacji" +
+                $"{(all.Any(finding => finding.Stage == HealthStage.Application && finding.Severity == StructureIssueSeverity.Warning) ? $" (etap „Aplikacja”: {all.Count(finding => finding.Stage == HealthStage.Application && finding.Severity == StructureIssueSeverity.Warning)} ostrzeżeń)" : string.Empty)}.",
             _ => "Nie znaleziono problemów: kontener, pakiet OPC, XML i struktura WordprocessingML są zgodne z wymaganiami Worda."
         };
     }

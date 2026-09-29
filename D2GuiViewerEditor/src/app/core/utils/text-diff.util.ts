@@ -5,6 +5,7 @@ export interface DiffSegment {
   kind: DiffSegmentKind;
 }
 
+/** Powyżej tylu komórek tablicy LCS rezygnujemy z podświetlania (wynik: cała lewa usunięta, cała prawa dodana). */
 const MAX_CELLS = 250_000;
 
 function tokenize(text: string): string[] {
@@ -21,6 +22,10 @@ function push(target: DiffSegment[], text: string, kind: DiffSegmentKind): void 
   }
 }
 
+/**
+ * Różnica dwóch tekstów na poziomie słów (LCS): segmenty `same` / `removed` (tylko w lewym) /
+ * `added` (tylko w prawym). Lewa strona renderuje `same` + `removed`, prawa `same` + `added`.
+ */
 export function diffWords(left: string, right: string): DiffSegment[] {
   if (left === right) {
     return left ? [{ text: left, kind: 'same' }] : [];
