@@ -334,10 +334,34 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; opaci
 .task-form label:not(.grow) .field-btn input { width: 74px; flex: none; }
 .task-form .break { flex-basis: 100%; height: 0; } /* łamie formularz na dwa wiersze */
 /* bez aktywnych User Story: pole ukryte, a Typ i Estymata w jednym wierszu z Task i tytułem (Rozpocznij na końcu) */
-.task-form.no-stories .break, .task-form.no-stories #f-parent-wrap { display: none; }
-.task-form.no-stories button[type="submit"] { order: 10; }
+.task-form button[type="submit"] { order: 10; } /* „Rozpocznij” na końcu pierwszego wiersza */
+.head-switches { display: flex; gap: 16px; flex-wrap: wrap; justify-content: flex-end; }
+.switch:has(input:disabled) { opacity: 0.5; cursor: not-allowed; }
+/* „Wskaż User Story”: numer + tytuł pod polami formularza */
+/* sekcja „Wskaż User Story”: wyodrębniona ramką, z oddechem od pól zadania (~3–5 mm) */
+.task-form .story-row { flex-basis: 100%; order: -1; padding: 12px 14px; margin: 2px 0 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.task-form .story-row[hidden] { display: none; }
+.task-form .story-row label:not(.grow) input { width: 90px; }
+.task-form .story-row select { width: 100%; }
+.task-form .story-hint { flex-basis: 100%; order: 15; margin: 0; }
+.task-form .story-hint[hidden] { display: none; }
+#f-story-id.invalid { border-color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); }
 .task-form label.grow .field-btn input { width: 100%; flex: 1; }
-#f-parent.picked { color: var(--primary); font-weight: 600; }
+/* przełącznik „Określ czas trwania” i pola Od / Do – osobny wiersz na dole formularza */
+.task-form .range-row { flex-basis: 100%; order: 20; display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.task-form .range-row[hidden] { display: none; }
+.form-head { align-items: center; margin-bottom: 12px; }
+.form-head h2 { margin-bottom: 0; }
+.task-form label.switch, .switch { display: inline-flex; flex-direction: row; align-items: center; gap: 6px; min-width: 0; font-size: 12px; font-weight: 400; cursor: pointer; user-select: none; height: 26px; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { position: relative; width: 28px; height: 16px; flex: none; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--input-bg); transition: background 0.15s, border-color 0.15s; }
+.switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--text-secondary); transition: transform 0.15s, background 0.15s; }
+.switch input:checked + .switch-track { background: var(--primary-btn); border-color: var(--primary-btn); }
+.switch input:checked + .switch-track::after { transform: translateX(12px); background: #fff; }
+.switch input:focus-visible + .switch-track { box-shadow: 0 0 0 2px var(--primary); }
+.range-fields { display: flex; gap: 12px; align-items: flex-end; }
+.range-fields[hidden] { display: none; }
+.task-form .range-field .field-btn input { width: 74px; flex: none; font-size: 14px; }
 
 /* ---------- Lista zadań: panel wysuwany z lewej ---------- */
 .backlog {
@@ -491,6 +515,15 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; opaci
 a.entry-wi:hover { color: var(--primary); text-decoration: underline; }
 .entry-title { flex: 0 1 auto; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } /* jedna linia z wielokropkiem (pełny tytuł w dymku); typ zaraz za tytułem albo, gdy brak miejsca, w następnej linii */
 .entry-closed { font-size: 12px; color: var(--text-secondary); }
+/* edycja w miejscu: tytuł i godziny wpisu */
+.inline-edit { cursor: text; border-radius: 2px; }
+.inline-edit:hover { background: var(--neutral-btn-hover); box-shadow: 0 0 0 2px var(--neutral-btn-hover); }
+.inline-edit.editing, .inline-edit.editing:hover { background: none; box-shadow: none; overflow: visible; }
+.inline-input { height: 26px; padding: 0 6px; font: inherit; font-size: 14px; color: var(--text); background: var(--input-bg); border: 1px solid var(--primary); border-radius: 2px; box-shadow: inset 0 0 0 1px var(--primary); outline: none; }
+.entry-title.editing { flex: 1 1 auto; white-space: normal; }
+.entry-title .inline-input { width: 100%; font-weight: 600; }
+[data-range].editing { display: flex; align-items: center; gap: 4px; }
+[data-range] .inline-input { width: 52px; text-align: center; font-variant-numeric: tabular-nums; padding: 0 2px; }
 .badge {
   font-size: 11px;
   line-height: 16px;
@@ -536,7 +569,8 @@ a.entry-wi:hover { color: var(--primary); text-decoration: underline; }
 .entry-btn svg { flex: none; display: block; }
 .entry-btn.edit, .entry-btn.delete, .entry-btn.close { width: 28px; flex: none; }
 .entry-btn.main { width: 108px; flex: none; padding: 0 10px; font-weight: 600; margin-left: 10px; } /* stała szerokość – prawa krawędź równo we wszystkich kartach; wyraźny odstęp od ikon */
-.entry-btn.close { border: 1px solid var(--border); border-radius: 2px; } /* X w delikatnej ramce, tuż przed przyciskiem głównym */
+.entry-actions .entry-btn.close, .entry-actions .entry-btn.edit, .entry-actions .entry-btn.delete { border: 1px solid var(--border); border-radius: 2px; } /* X, ołówek i kosz w tej samej delikatnej ramce */
+.entry-actions .entry-btn.edit:hover, .entry-actions .entry-btn.delete:hover { border-color: var(--border-strong); }
 .entry-btn.close:hover { background: var(--neutral-btn-hover); color: var(--text); border-color: var(--border-strong); }
 .entry-btn.reopen { background: var(--primary-btn); color: #fff; } /* zadanie zamknięte: niebieskie „Wróć” zamiast „Wznów” */
 .entry-btn.reopen:hover { background: var(--primary-btn-hover); }
@@ -587,6 +621,38 @@ a.entry-wi:hover { color: var(--primary); text-decoration: underline; }
 .bal-verdict.ok { border-color: var(--success); }
 .bal-verdict.ok b { color: var(--success); }
 .bal-verdict span { font-size: 12px; color: var(--text-secondary); }
+/* tydzień na przełomie miesięcy: każda część w swoim miesiącu */
+.bal-note { font-size: 12px; color: var(--text-secondary); margin: 0 0 10px; }
+.bal-part { margin-bottom: 14px; }
+.bal-part h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+.bal-part h3 small { font-size: 12px; font-weight: 400; color: var(--text-secondary); }
+.bal-part .bal-verdict b { font-size: 18px; }
+.bal-days { border: 1px solid var(--border); border-radius: var(--radius); margin-top: 8px; font-size: 13px; }
+.bal-day { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 4px 10px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.bal-day:last-child { border-bottom: none; }
+.bal-day:hover { background: var(--neutral-btn); }
+.bal-day.weekend, .bal-day.holiday { background: var(--surface-2); }
+.bal-day.today { box-shadow: inset 3px 0 0 var(--primary); }
+.bal-day .dow { color: var(--text-secondary); margin-left: 4px; }
+.bal-day.weekend .dow, .bal-day.holiday .dow { color: var(--danger); font-weight: 600; }
+.bal-day .what { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bal-day .val { font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+.bal-day .val.warn, .bal-day .what.warn { color: var(--warn); }
+.bal-day .val.ok { color: var(--success); }
+.bal-day .val.over { color: var(--danger); }
+.bal-day .val.muted { color: var(--text-disabled); font-weight: 400; }
+/* kwartał: rozbicie na miesiące */
+.bal-months { border: 1px solid var(--border); border-radius: var(--radius); margin-top: 10px; font-size: 13px; }
+.bal-month { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(4, minmax(0, 1fr)); gap: 6px; align-items: baseline; padding: 5px 10px; border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+.bal-month:last-child { border-bottom: none; }
+.bal-month > :not(:first-child) { text-align: right; }
+.bal-month.head { font-size: 11px; font-weight: 600; color: var(--text-secondary); background: var(--surface-2); }
+.bal-month[data-ym] { cursor: pointer; }
+.bal-month[data-ym]:hover { background: var(--neutral-btn); }
+.bal-month.total { font-weight: 600; background: var(--surface-2); }
+.bal-month .warn { color: var(--warn); font-weight: 600; }
+.bal-month .ok { color: var(--success); font-weight: 600; }
+.bal-month .muted { color: var(--text-disabled); }
 .month-label { flex: 1; align-self: center; text-align: center; font-weight: 600; text-transform: capitalize; }
 .month-toggle { width: 100%; justify-content: center; margin-top: 10px; }
 .month-table { display: flex; flex-direction: column; margin-top: 10px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -969,7 +1035,17 @@ dialog.wide { width: min(1180px, 96vw); }
     <div class="col">
       <!-- Nowe zadanie -->
       <section class="panel">
-        <h2>Nowe zadanie</h2>
+        <div class="activity-head form-head">
+          <h2>Nowe zadanie</h2>
+          <div class="head-switches">
+          <label class="switch" id="f-story-switch" title="Task pod User Story z Azure (tylko aktywne, zaimportowane z CSV). Taki task przy eksporcie powstaje w Azure jako nowy – tytuł jest wymagany, numer Task (Azure) nada Azure.">
+            <input type="checkbox" id="f-story-on" role="switch" /><span class="switch-track" aria-hidden="true"></span><span>Wskaż User Story</span>
+          </label>
+          <label class="switch" title="Domyślnie zadanie startuje teraz. Włącz, aby podać godzinę rozpoczęcia (i ewentualnie zakończenia) – np. dla pracy, której nie zarejestrowałeś na bieżąco.">
+            <input type="checkbox" id="f-manual" role="switch" /><span class="switch-track" aria-hidden="true"></span><span>Określ czas trwania</span>
+          </label>
+          </div>
+        </div>
         <form id="task-form" class="task-form" autocomplete="off">
           <label>
             <span>Task (Azure)</span>
@@ -982,16 +1058,6 @@ dialog.wide { width: min(1180px, 96vw); }
             <datalist id="title-suggestions"></datalist>
           </label>
           <button type="submit" class="btn primary" title="Dodaje zadanie i od razu startuje licznik">▶ Rozpocznij</button>
-          <span class="break" aria-hidden="true"></span>
-          <label class="grow" id="f-parent-wrap">
-            <span>User Story <span class="muted">(opcjonalnie)</span></span>
-            <span class="field-btn">
-              <input type="text" id="f-parent" placeholder="Wpisz numer albo fragment tytułu historyjki…" autocomplete="off" spellcheck="false" />
-              <button type="button" class="btn icon-btn field-pick" id="f-parent-clear" title="Wyczyść" aria-label="Wyczyść User Story" hidden>
-                <svg viewBox="0 0 20 20" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M4.47 4.47a.75.75 0 0 1 1.06 0L10 8.94l4.47-4.47a.75.75 0 1 1 1.06 1.06L11.06 10l4.47 4.47a.75.75 0 1 1-1.06 1.06L10 11.06l-4.47 4.47a.75.75 0 0 1-1.06-1.06L8.94 10 4.47 5.53a.75.75 0 0 1 0-1.06z"/></svg>
-              </button>
-            </span>
-          </label>
           <label id="f-type-wrap">
             <span>Typ</span>
             <select id="f-type"></select>
@@ -1003,6 +1069,17 @@ dialog.wide { width: min(1180px, 96vw); }
               <button type="button" class="btn icon-btn field-pick" data-est="f-est" title="Wylicz estymatę z godzin od – do" aria-label="Wylicz estymatę z godzin od – do"></button>
             </span>
           </label>
+          <div class="story-row" id="f-story-row" hidden>
+            <label><span>User Story (nr)</span><input type="text" id="f-story-id" inputmode="numeric" placeholder="np. 400" autocomplete="off" spellcheck="false" /></label>
+            <label class="grow"><span>Tytuł User Story</span><select id="f-story"></select></label>
+          </div>
+          <p class="muted small story-hint" id="f-story-hint" hidden>Task powstanie w Azure jako nowy pod wskazaną User Story – tytuł jest wymagany, numer nada Azure.</p>
+          <div class="range-row" id="f-range-row" hidden>
+            <div class="range-fields" id="f-range" hidden>
+              <label class="range-field"><span>Od</span><span class="field-btn time-field"><input type="text" id="f-from" inputmode="numeric" placeholder="gg:mm" maxlength="5" autocomplete="off" spellcheck="false" /><button type="button" class="btn icon-btn field-pick" data-clock="f-from" title="Wybierz godzinę i minuty" aria-label="Wybierz godzinę rozpoczęcia"></button></span></label>
+              <label class="range-field"><span>Do <span class="muted">(puste = trwa)</span></span><span class="field-btn time-field"><input type="text" id="f-to" inputmode="numeric" placeholder="gg:mm" maxlength="5" autocomplete="off" spellcheck="false" /><button type="button" class="btn icon-btn field-pick" data-clock="f-to" title="Wybierz godzinę i minuty" aria-label="Wybierz godzinę zakończenia"></button></span></label>
+            </div>
+          </div>
         </form>
       </section>
 
@@ -1515,11 +1592,12 @@ dialog.wide { width: min(1180px, 96vw); }
     { id: "praca", name: "zadanie", base: "praca" },
     { id: "scrum", name: "scrum", base: "org" },
     { id: "inne", name: "inne", base: "other" },
+    { id: "przerwa", name: "przerwa", base: "break" }, // czas wolny – liczy się jak zwykła przerwa (np. do uzupełnienia luki wstecz)
     { id: "wsparcie", name: "utrzymanie środowisk", base: "praca" },
     { id: "itrisk", name: "IT Risk", base: "praca" },
     { id: "org", name: "organizacyjne", base: "praca" },
   ];
-  const TYPES_VERSION = 8;
+  const TYPES_VERSION = 9;
   /**
    * Jednorazowe aktualizacje listy typów zapisanej w danych. Nazwy zmienione ręcznie przez użytkownika i jego własne typy zostają.
    *  v2: praca -> „zadanie”, wsparcie produkcji -> „utrzymanie środowisk”, „organizacyjne” liczone jako praca, nowe: IT Risk (praca), Scrum (przerwa)
@@ -1558,6 +1636,8 @@ dialog.wide { width: min(1180px, 96vw); }
     const orgLike = byId("org") || types.find((t) => t.name.trim().toLowerCase() === "organizacyjne");
     if (orgLike && orgLike.base !== "praca") orgLike.base = "praca";
     if (!byId("inne") && !hasName("inne")) types.splice((scrum ? types.indexOf(scrum) : types.indexOf(byId("praca"))) + 1, 0, { ...DEFAULT_TYPES.find((t) => t.id === "inne") });
+    // v9: typ „przerwa” (kategoria przerwa) – zaraz pod „inne”
+    if (!byId("przerwa") && !hasName("przerwa")) { const inne = byId("inne") || types.find((t) => t.name.trim().toLowerCase() === "inne"); types.splice(inne ? types.indexOf(inne) + 1 : types.length, 0, { ...DEFAULT_TYPES.find((t) => t.id === "przerwa") }); }
     return types;
   }
   const H = 3600;
@@ -1744,12 +1824,14 @@ dialog.wide { width: min(1180px, 96vw); }
   }
 
   /**
-   * Sumy dnia. Obligo = dzień − przerwa. Liczy się wyłącznie praca: dzień jest zaliczony w chwili, gdy praca osiągnie obligo (doneAt),
+   * Sumy dnia. Obligo = dzień − przerwa. Dzień jest zaliczony w chwili, gdy praca osiągnie obligo (doneAt),
    * niezależnie od tego, ile trwały przerwy (krótsza przerwa = wcześniej do domu, dłuższa = dłuższy dzień – nic do odpracowania).
-   * Nadgodziny = praca po doneAt. Do odpracowania (tylko dla zamkniętego dnia, final) = brakująca praca do obliga.
+   * Nadgodziny są dopiero wtedy, gdy cały dzień (zadania + pula inne / scrum / przerwa) przekroczy dzień pracy (np. 8 h), i tylko z pracy
+   * ponad obligo: min(praca − obligo, dzień − dzień pracy). overAt = chwila, od której zaczęły się nadgodziny.
+   * Do odpracowania (tylko dla zamkniętego dnia, final) = brakująca praca do obliga.
    */
   function dayTotals(day, now, final = false) {
-    const t = { work: 0, org: 0, other: 0, idle: 0, brk: 0, total: 0, overtime: 0, owed: 0, breakOver: 0, doneAt: null, shortWork: 0 };
+    const t = { work: 0, org: 0, other: 0, idle: 0, brk: 0, total: 0, overtime: 0, owed: 0, breakOver: 0, doneAt: null, overAt: null, shortWork: 0 };
     if (!day) return t;
     for (const s of day.segments) {
       const dur = segDuration(s, now);
@@ -1763,14 +1845,15 @@ dialog.wide { width: min(1180px, 96vw); }
     t.total = t.work + t.brk;
     if (day.off) { // dzień wolny: nie ma obliga ani nic do odpracowania, a każda praca to nadgodziny
       t.overtime = t.work;
-      if (day.segments.length) t.doneAt = day.startedAt ?? Math.min(...day.segments.map((s) => s.start));
+      if (day.segments.length) t.doneAt = t.overAt = day.startedAt ?? Math.min(...day.segments.map((s) => s.start));
       return t;
     }
     t.breakOver = Math.max(0, t.brk - breakLimit());
     const workAt = t.work >= obligo() ? limitReachedAt(day, obligo(), now, true) : null;
     if (workAt !== null) {
       t.doneAt = workAt;
-      t.overtime = day.segments.filter((s) => isWorkSeg(day, s)).reduce((a, s) => a + Math.max(0, (s.end ?? now) - Math.max(s.start, t.doneAt)) / 1000, 0);
+      t.overtime = Math.max(0, Math.min(t.work - obligo(), t.total - workLimit()));
+      if (t.overtime > 0) t.overAt = Math.max(workAt, limitReachedAt(day, workLimit(), now, false) ?? workAt);
     } else if (final) t.owed = Math.max(0, obligo() - t.work);
     if (final) t.shortWork = Math.max(0, obligo() - t.work);
     return t;
@@ -1926,9 +2009,11 @@ dialog.wide { width: min(1180px, 96vw); }
     total.classList.remove("over", "owed");
     if (off && t.doneAt === null) {
       total.innerHTML = `${esc(offLabel(day))} · praca liczy się jako nadgodziny`;
-    } else if (day && t.doneAt !== null) {
-      total.innerHTML = `od <span>${fmtClock(t.doneAt)}</span> nadgodziny <span>(${fmtHMin(t.overtime)})</span>`;
+    } else if (day && t.overAt !== null) {
+      total.innerHTML = `od <span>${fmtClock(t.overAt)}</span> nadgodziny <span>(${fmtHMin(t.overtime)})</span>`;
       total.classList.add("over");
+    } else if (day && t.doneAt !== null) {
+      total.innerHTML = `obligo zaliczone o <span>${fmtClock(t.doneAt)}</span> · nadgodziny po <span>${fmtHM(workLimit())}</span> dnia`;
     } else {
       total.innerHTML = `praca <span>${fmtHM(t.work)}</span> / ${fmtHM(obligo())} · do obliga <span>${fmtHM(obligo() - t.work)}</span>`;
     }
@@ -1941,7 +2026,7 @@ dialog.wide { width: min(1180px, 96vw); }
       el.classList.toggle("wide", show && !(showOvertime && showOwed));
     }
     document.querySelector(".stat.overtime").classList.toggle("active", t.overtime > 0);
-    setText("st-overtime-sub", t.doneAt !== null ? `od ${fmtClock(t.doneAt)}` : "brak");
+    setText("st-overtime-sub", t.overAt !== null ? `od ${fmtClock(t.overAt)}` : "brak");
     setText("st-owed", fmtHM(t.owed));
     document.querySelector(".stat.owed").classList.toggle("active", t.owed > 0);
     setText("st-owed-sub", t.owed > 0 ? `do obliga ${fmtHM(obligo())}` : "brak");
@@ -1962,55 +2047,46 @@ dialog.wide { width: min(1180px, 96vw); }
   }
 
   const activeStories = () => Object.values(state.stories).filter((s) => (AZURE_STATE[(s.state || "").toLowerCase()] || "new") !== "closed");
-  // pole „User Story” w formularzu: tekst do wyszukania (numer albo tytuł) + lista podpowiedzi pod polem; wybór zapamiętany w formParentId
+  // „Wskaż User Story”: przełącznik + numer i tytuł do wyboru – tylko aktywne historyjki zaimportowane z CSV Azure; wybór w formParentId
   let formParentId = "", parentPop = null;
+  const storyOn = () => $("f-story-on").checked;
   function renderStoryOptions() {
-    const has = activeStories().length > 0;
-    $("task-form").classList.toggle("no-stories", !has); // bez aktywnych historyjek pole znika, a formularz wraca do jednego wiersza
-    $("f-parent-wrap").hidden = !has;
-    if (formParentId && !activeStories().some((s) => s.id === formParentId)) setFormParent("");
+    const stories = activeStories(), has = stories.length > 0;
+    $("f-story-on").disabled = !has;
+    $("f-story-switch").title = has ? "Task pod User Story z Azure (tylko aktywne, zaimportowane z CSV). Taki task przy eksporcie powstaje w Azure jako nowy – tytuł jest wymagany, numer Task (Azure) nada Azure."
+      : "Brak aktywnych User Story – zaimportuj je z Azure (☰ Lista zadań → Import z Azure (CSV)).";
+    if (!has && storyOn()) { $("f-story-on").checked = false; showStory(false); }
+    const html = `<option value="">— wybierz User Story —</option>` + stories.sort((a, b) => a.title.localeCompare(b.title)).map((s) => `<option value="${esc(s.id)}">${esc(s.title)}</option>`).join("");
+    if ($("f-story").innerHTML !== html) { $("f-story").innerHTML = html; $("f-story").value = formParentId; }
+    if (formParentId && !stories.some((s) => s.id === formParentId)) setFormParent("");
   }
+  function showStory(on) {
+    $("f-story-row").hidden = !on; $("f-story-hint").hidden = !on;
+    // w trybie User Story task jest zawsze nowy w Azure – numer nada Azure, więc pole Task (Azure) znika
+    $("f-wi").closest("label").hidden = on;
+    if (on) $("f-wi").value = "";
+    $("f-title").placeholder = on ? "Tytuł nowego taska (wymagany)" : "Opis zadania";
+    $("f-wi").placeholder = on ? "opcjonalnie" : "np. 12345";
+    if (!on) setFormParent("");
+  }
+  on("f-story-on", "change", () => { showStory(storyOn()); if (storyOn()) $("f-story-id").focus(); });
+  on("f-story-id", "input", () => {
+    const v = $("f-story-id").value.trim().replace(/^#/, ""), hit = activeStories().find((s) => s.id === v);
+    if (hit) setFormParent(hit.id);
+    else { formParentId = ""; syncTypeWithParent("f-type", "f-type-wrap", false); $("f-story").value = ""; $("f-story-id").classList.toggle("invalid", !!v); }
+  });
+  on("f-story", "change", () => { setFormParent($("f-story").value); if (formParentId) $("f-title").focus(); });
   /** Task pod User Story ma typ wynikający z historyjki (w Azure to zawsze praca) – lista „Typ” jest wtedy ukryta, a wybór ustawiony na typ „zadanie”. */
   const storyTaskTypeId = () => (types().find((t) => t.id === "praca") ?? types().find((t) => t.base === "praca") ?? types()[0]).id;
   function syncTypeWithParent(selectId, wrapId, hasParent) { $(wrapId).hidden = hasParent; if (hasParent) $(selectId).value = storyTaskTypeId(); }
   function setFormParent(id) {
     formParentId = id;
     syncTypeWithParent("f-type", "f-type-wrap", !!id);
-    $("f-parent").value = id ? storyLabel(id) : "";
-    $("f-parent").classList.toggle("picked", !!id);
-    $("f-parent-clear").hidden = !id;
+    $("f-story-id").value = id || "";
+    $("f-story-id").classList.remove("invalid");
+    $("f-story").value = id || "";
+    if (id && !storyOn()) { $("f-story-on").checked = true; showStory(true); } // np. autouzupełnienie zadania, które ma historyjkę
   }
-  const closeParentPop = () => { parentPop?.remove(); parentPop = null; };
-  function storyMatches(q) {
-    const s = q.trim().toLowerCase().replace(/^#/, "");
-    return activeStories().filter((x) => !s || x.id.includes(s) || x.title.toLowerCase().includes(s));
-  }
-  function showParentPop() {
-    const hits = storyMatches($("f-parent").value);
-    if (!parentPop) { parentPop = document.createElement("div"); parentPop.className = "pop pick-pop parent-pop"; parentPop.innerHTML = `<ul class="pick-list"></ul>`;
-      const pickFrom = (e) => { const b = e.target.closest("button[data-id]"); if (b && parentPop) { e.preventDefault(); setFormParent(b.dataset.id); closeParentPop(); $("f-est").focus(); } };
-      parentPop.addEventListener("mousedown", (e) => { e.preventDefault(); pickFrom(e); }); // wybór już przy wciśnięciu – zanim pole straci fokus i lista zniknie
-      parentPop.addEventListener("click", pickFrom); } // klawiatura (Enter na przycisku)
-    parentPop.querySelector("ul").innerHTML = hits.length
-      ? hits.map((s, i) => `<li><button type="button" class="${i === 0 ? "first" : ""}" data-id="${esc(s.id)}"><span class="entry-wi">#${esc(s.id)}</span><span class="pick-title">${esc(s.title)}<small>${esc(s.state || "")}</small></span></button></li>`).join("")
-      : `<li class="muted small">${activeStories().length ? "Brak historyjki pasującej do wpisanego tekstu." : "Brak aktywnych User Story – zaimportuj je z Azure (☰ Lista zadań → Import z Azure (CSV))."}</li>`;
-    placePop(parentPop, $("f-parent").closest(".field-btn"));
-  }
-  on("f-parent", "focus", () => { if (formParentId) $("f-parent").select(); setTimeout(showParentPop, 0); });
-  on("f-parent", "input", () => { if (formParentId) { formParentId = ""; $("f-parent").classList.remove("picked"); $("f-parent-clear").hidden = true; } showParentPop(); });
-  on("f-parent", "keydown", (e) => {
-    if (e.key === "Escape" && parentPop) { e.preventDefault(); e.stopPropagation(); closeParentPop(); }
-    if (e.key === "Enter") { e.preventDefault(); const first = parentPop?.querySelector("button[data-id]"); if (first) { setFormParent(first.dataset.id); closeParentPop(); $("f-est").focus(); } }
-    if (e.key === "ArrowDown") { e.preventDefault(); parentPop?.querySelector("button[data-id]")?.focus(); }
-  });
-  on("f-parent", "blur", () => setTimeout(() => {
-    if (document.activeElement === $("f-parent")) return; // fokus wrócił (np. po kliknięciu w listę)
-    closeParentPop();
-    if (formParentId) return;
-    const q = $("f-parent").value.trim(), hits = q ? storyMatches(q) : [];
-    if (hits.length === 1 || (q && hits.find((s) => s.id === q.replace(/^#/, "")))) setFormParent((hits.find((s) => s.id === q.replace(/^#/, "")) || hits[0]).id); // jednoznaczny wpis (numer albo jedyny pasujący tytuł) wybiera się sam
-  }, 120));
-  on("f-parent-clear", "click", () => { setFormParent(""); $("f-parent").focus(); });
 
   // pole „Task (Azure)”: podpowiedzi z listy zadań (numer albo tytuł); wybór wypełnia cały formularz, brak dopasowania = wpisany tekst zostaje
   let wiPop = null;
@@ -2045,7 +2121,6 @@ dialog.wide { width: min(1180px, 96vw); }
   });
   on("f-wi", "blur", () => setTimeout(() => { if (document.activeElement !== $("f-wi")) closeWiPop(); }, 120));
   document.addEventListener("mousedown", (e) => { if (wiPop && !e.target.closest(".wi-pop, #f-wi")) closeWiPop(); }, true);
-  document.addEventListener("mousedown", (e) => { if (parentPop && !e.target.closest(".parent-pop, #f-parent")) closeParentPop(); }, true);
   // wyszukiwarka po tytule: lista pod polem „Tytuł” z niezamkniętymi zadaniami (także bez numeru), klik / Enter wypełnia formularz
   let titlePop = null, titlePopFor = null;
   const closeTitlePop = () => { titlePop?.remove(); titlePop = null; titlePopFor = null; };
@@ -2057,6 +2132,7 @@ dialog.wide { width: min(1180px, 96vw); }
   }
   const pickItemHtml = (key, e, i) => { const type = types().find((x) => x.id === e.typeId); return `<li><button type="button" class="${i === 0 ? "first" : ""}" data-key="${esc(key)}">${e.wi ? `<span class="entry-wi">#${esc(e.wi)}</span>` : ""}<span class="pick-title">${esc(taskTitle(e))}<small>${esc(type ? type.name : BASES[e.type] || "")} · ${TASK_STATES[e.status]}</small></span></button></li>`; };
   function showTitlePop(inputId, onPick) {
+    if (inputId === "f-title" && $("f-story-on").checked) { closeTitlePop(); return; } // tryb User Story: zawsze nowy task
     const input = $(inputId), hits = titleMatches(input.value);
     if (!hits.length) { closeTitlePop(); return; }
     if (!titlePop || titlePopFor !== inputId) {
@@ -2146,8 +2222,8 @@ dialog.wide { width: min(1180px, 96vw); }
       const url = workItemUrl(task.wi), title = taskTitle(task);
       const wiHtml = !task.wi ? "" : url ? `<a class="entry-wi" href="${esc(url)}" target="_blank" rel="noopener">#${esc(task.wi)}</a>` : `<span class="entry-wi">#${esc(task.wi)}</span>`;
       // etykiety nad tytułem: „Brak ID Azure” (gdy brak numeru), typ, Closed; pod nimi numer i tytuł
-      const tags = `${task.wi ? "" : `<span class="badge noid" title="Zadanie bez ID w Azure Boards">Brak ID Azure</span>`}<span class="badge ${type}">${typeLabel(task)}</span>${taskState(task) === "closed" ? `<span class="entry-closed" title="Zadanie zamknięte (Closed) – stan można zmienić w liście zadań">Closed</span>` : ""}`;
-      head = `<div class="entry-tags">${tags}</div><div class="entry-title-line">${wiHtml}<span class="entry-title" title="${esc(title)}">${esc(title)}</span></div>`;
+      const tags = `${task.wi || type === "break" ? "" : `<span class="badge noid" title="Zadanie bez ID w Azure Boards">Brak ID Azure</span>`}<span class="badge ${type}">${typeLabel(task)}</span>${taskState(task) === "closed" ? `<span class="entry-closed" title="Zadanie zamknięte (Closed) – stan można zmienić w liście zadań">Closed</span>` : ""}`;
+      head = `<div class="entry-tags">${tags}</div><div class="entry-title-line">${wiHtml}<span class="entry-title inline-edit" data-inline="title" title="${esc(title)} – kliknij, aby zmienić tytuł">${esc(title)}</span></div>`;
       const daySec = taskSecondsInDay(day, task.id, now), allSec = taskSecondsAllDays(day, task, now);
       overEst = !!task.estimateH && allSec > task.estimateH * H;
       sub = taskInfo(daySec, allSec, task.estimateH * H);
@@ -2157,12 +2233,12 @@ dialog.wide { width: min(1180px, 96vw); }
     }
     // stałe kolumny: [akcja zadania] [edycja] [usuń] – ikony równo we wszystkich kartach
     const actions = [];
-    if (!task || isLastOfTask) { // starsze wpisy tego samego zadania nie mają żadnych akcji
+    // X „zamknij” (jak „Wznów”) tylko na ostatnim wpisie danego zadania w dniu – na lewym skraju, przed koszem
+    if (task && isLastOfTask && taskState(task) !== "closed") actions.push(`<button class="btn entry-btn close" data-act="close-task" title="Zamknij zadanie (stan Closed w liście zadań)${running ? " – zatrzymuje je i zaczyna przerwę; czas leci dalej, dopóki nie rozpoczniesz nowego zadania" : ""}" aria-label="Zamknij zadanie">${ICON.close}</button>`);
+    { // edycja i kosz na każdym wpisie (także starszych wpisach tego samego zadania); X i Wznów / Wróć tylko na ostatnim
       if (!running) actions.push(`<button class="btn entry-btn delete" data-act="delete" title="Usuń wpis" aria-label="Usuń wpis">${ICON.trash}</button>`);
       actions.push(`<button class="btn entry-btn edit" data-act="edit" title="Edytuj" aria-label="Edytuj">${ICON.edit}</button>`);
     }
-    // X „zamknij” (jak „Wznów”) tylko na ostatnim wpisie danego zadania w dniu – tuż przed przyciskiem głównym
-    if (task && isLastOfTask && taskState(task) !== "closed") actions.push(`<button class="btn entry-btn close" data-act="close-task" title="Zamknij zadanie (stan Closed w liście zadań)${running ? " – zatrzymuje je i zaczyna przerwę; czas leci dalej, dopóki nie rozpoczniesz nowego zadania" : ""}" aria-label="Zamknij zadanie">${ICON.close}</button>`);
     if (task && running) actions.push(`<button class="btn entry-btn main stop" data-act="stop-task" title="Zatrzymuje zadanie – czas leci dalej jako przerwa">${ICON.stop}Zatrzymaj</button>`);
     else if (task && isLastOfTask) actions.push(taskState(task) === "closed"
       ? `<button class="btn entry-btn main reopen" data-act="reopen-task" title="Przywraca zadanie (stan Active) i od razu je wznawia – nowy wpis liczy dalej">Wróć</button>`
@@ -2172,7 +2248,7 @@ dialog.wide { width: min(1180px, 96vw); }
     return `
       <li class="entry ${type} ${running ? "running" : ""} ${overEst ? "over-est" : ""}" data-id="${s.id}" ${overEst ? 'title="Przekroczona estymata"' : ""}>
         <div class="entry-time">
-          <b data-range>${fmtClock(s.start)} – ${running ? "…" : fmtClock(s.end)}</b>
+          <b data-range data-inline="range" class="inline-edit" title="Kliknij, aby zmienić godziny">${fmtClock(s.start)} – ${running ? "…" : fmtClock(s.end)}</b>
           <span data-dur>${fmtHMS(segDuration(s, now))}</span>
         </div>
         <div class="entry-main">
@@ -2219,7 +2295,7 @@ dialog.wide { width: min(1180px, 96vw); }
       limits: { work: workLimit(), obligo: obligo(), brk: breakLimit() },
       start: fmtClock(day.startedAt ?? day.segments[0].start),
       end: running ? "…" : fmtClock(Math.max(...day.segments.map((s) => s.end))),
-      doneAt: t.doneAt !== null ? fmtClock(t.doneAt) : null,
+      doneAt: t.doneAt !== null ? fmtClock(t.doneAt) : null, overAt: t.overAt !== null ? fmtClock(t.overAt) : null,
       events: [...(day.events || [])].sort((a, b) => a.at - b.at).map((ev) => ({ type: ev.type, label: EV_LABEL[ev.type] || ev.type, at: fmtClock(ev.at) })),
     });
 
@@ -2236,7 +2312,9 @@ dialog.wide { width: min(1180px, 96vw); }
         ranges: segs.map(rangeStr), comments: uniqComments(segs),
       };
     };
-    const withTime = day.tasks.filter((task) => taskSecondsInDay(day, task.id, now) > 0);
+    // trwające zadanie zawsze na początku listy (numeracja idzie za kolejnością)
+    const isRunning = (task) => segsOf(day, task.id).some((s) => s.end === null);
+    const withTime = day.tasks.filter((task) => taskSecondsInDay(day, task.id, now) > 0).sort((a, b) => isRunning(b) - isRunning(a));
     const ofBase = (base) => withTime.filter((task) => baseOf(task) === base).map(toRow);
     m.work = ofBase("praca");
     m.org = ofBase("org");
@@ -2255,7 +2333,7 @@ dialog.wide { width: min(1180px, 96vw); }
     const t = m.totals;
     L.push(`Praca: ${m.start} – ${m.end} · łącznie ${fmtHM(t.total)} / ${fmtHM(m.limits.work)}` + (t.overtime > 0 ? ` · nadgodziny ${fmtHM(t.overtime)}` : ""));
     L.push(`Zadania: ${fmtHM(t.work)} / ${fmtHM(m.limits.obligo)} · inne + scrum: ${fmtHM(t.brk)} / ${fmtHM(m.limits.brk)} (scrum ${fmtHM(t.org)}, inne ${fmtHM(t.other)}, przerwa ${fmtHM(t.idle)})`);
-    if (t.overtime > 0) L.push(`Nadgodziny: ${fmtHM(t.overtime)} (praca od ${m.doneAt})`);
+    if (t.overtime > 0) L.push(`Nadgodziny: ${fmtHM(t.overtime)} (od ${m.overAt})`);
     if (t.owed > 0) L.push(`Do odpracowania: ${fmtHM(t.owed)}` + (t.breakOver > 0 ? ` (przerwa ponad limit ${fmtHM(t.breakOver)})` : ""));
     if (m.events.length) L.push(`Zdarzenia: ${m.events.map((ev) => `${ev.label} ${ev.at}`).join(", ")}`);
 
@@ -2286,7 +2364,7 @@ dialog.wide { width: min(1180px, 96vw); }
       chip("Inne", fmtHM(t.other)),
       chip("Przerwa", fmtHM(t.idle)),
       chip("Inne + scrum + przerwa", `${fmtHM(t.brk)} <small>/ ${fmtHM(m.limits.brk)}</small>`, t.brk > m.limits.brk ? "over" : ""),
-      t.overtime > 0 ? chip("Nadgodziny", `${fmtHM(t.overtime)} <small>od ${m.doneAt}</small>`, "over") : "",
+      t.overtime > 0 ? chip("Nadgodziny", `${fmtHM(t.overtime)} <small>od ${m.overAt}</small>`, "over") : "",
       t.owed > 0 ? chip("Do odpracowania", fmtHM(t.owed), "warn") : "",
     ];
     const meta = (r) => {
@@ -2538,14 +2616,25 @@ dialog.wide { width: min(1180px, 96vw); }
 
   /** Wiersz na każdy dzień miesiąca + sumy. Dzień roboczy bez wpisów = wolne; praca w sobotę / niedzielę = w całości nadgodziny. */
   function monthModel(ym) {
-    const [y, m] = ym.split("-").map(Number), count = new Date(y, m, 0).getDate(), now = Date.now(), tdy = today();
-    const rows = [], sum = { workdays: 0, offDays: 0, offKinds: {}, worked: 0, extraDays: 0, missing: 0, work: 0, workReg: 0, brk: 0, org: 0, other: 0, idle: 0, owed: 0, overtime: 0, extraWork: 0 };
-    for (let d = 1; d <= count; d++) {
-      const key = `${y}-${pad(m)}-${pad(d)}`, dow = new Date(y, m - 1, d).getDay(), weekend = dow === 0 || dow === 6;
+    const [y, m] = ym.split("-").map(Number);
+    return { ym, y, m, ...daysModel(`${y}-${pad(m)}-01`, dateKey(new Date(y, m, 0))) };
+  }
+  /**
+   * Harmonogram dowolnego zakresu dni (miesiąc, tydzień, kwartał) – wspólna podstawa „Podsumowania miesiąca” i „Bilansu godzin”.
+   * Dzień roboczy = pn–pt bez oznaczonego wolnego; wymagane = obligo × dni robocze; praca w weekend / dzień wolny = w całości nadgodziny.
+   */
+  function daysModel(from, to) {
+    const now = Date.now(), tdy = today();
+    const rows = [], sum = { workdays: 0, offDays: 0, offKinds: {}, worked: 0, extraDays: 0, missing: 0, work: 0, workReg: 0, brk: 0, org: 0, other: 0, idle: 0, owed: 0, overtime: 0, extraWork: 0,
+      required: 0, workdaysLeft: 0, todayWorkday: false, workToday: 0, todayRow: null };
+    for (let key = from; key <= to; key = shiftDate(key, 1)) {
+      const [y, m, d] = ymd(key), dow = new Date(y, m - 1, d).getDay(), weekend = dow === 0 || dow === 6;
       const day = getDay(key), started = !!day && day.segments.length > 0, off = weekend ? "" : offLabel(day);
       const row = { key, d, dow, weekend, off, offShort: off ? OFF_SHORT[day.off] ?? "W" : "", holiday: !weekend && day?.off === "swieto", started, future: key > tdy, isToday: key === tdy, t: started ? dayTotals(day, now, key < tdy) : null };
       if (!weekend) sum.workdays++;
       if (off) { sum.offDays++; sum.offKinds[off] = (sum.offKinds[off] || 0) + 1; }
+      if (!weekend && !off) { sum.required += obligo(); if (key > tdy) sum.workdaysLeft++; if (key === tdy) sum.todayWorkday = true; }
+      if (key === tdy) { sum.todayRow = row; sum.workToday = started ? row.t.work : 0; }
       if (started) {
         sum.work += row.t.work; sum.brk += row.t.brk; sum.org += row.t.org; sum.other += row.t.other; sum.idle += row.t.idle;
         if (weekend || off) { sum.extraDays++; sum.extraWork += row.t.work; } // praca w weekend / dzień wolny = w całości nadgodziny
@@ -2553,7 +2642,7 @@ dialog.wide { width: min(1180px, 96vw); }
       } else if (!weekend && !off && key < tdy) sum.missing++;
       rows.push(row);
     }
-    return { ym, y, m, rows, sum };
+    return { rows, sum };
   }
 
   function monthHtml(mm) {
@@ -2618,54 +2707,85 @@ dialog.wide { width: min(1180px, 96vw); }
     renderBalance();
   }
   /**
-   * Bilans okresu. Dzień roboczy = pn–pt bez oznaczonego wolnego. Wymagane = obligo × dni robocze.
-   * Zaległości liczone „do wczoraj” (dzisiejszy dzień jeszcze trwa), osobno dziś i to, co zostaje do końca okresu.
-   * Praca w weekend / dzień wolny liczy się do bilansu jak każda inna (nadrabia braki).
+   * Bilans godzin – oparty o pełne okresy rozliczeniowe (miesiąc, kwartał) i te same wiersze dzienne co „Podsumowanie miesiąca”:
+   * saldo = nadgodziny − do odpracowania; dni wolne (urlop, święto…) zmniejszają wymagane, praca w weekend / dzień wolny = nadgodziny.
+   * Tydzień na przełomie miesięcy jest dzielony na części – każda liczy się w swoim miesiącu (rozliczenie jest miesięczne / kwartalne).
    */
-  function periodStats(from, to) {
-    const now = Date.now(), tdy = today(), s = { workdays: 0, passed: 0, future: 0, todayWorkday: false, work: 0, workPast: 0, workToday: 0, overtime: 0, pool: 0, missing: 0, off: 0 };
-    for (let key = from; key <= to; key = shiftDate(key, 1)) {
-      const [y, m, d] = ymd(key), dow = new Date(y, m - 1, d).getDay(), weekend = dow === 0 || dow === 6, day = getDay(key), off = !weekend && !!day?.off;
-      const workday = !weekend && !off, started = !!day && day.segments.length > 0;
-      if (off) s.off++;
-      if (workday) { s.workdays++; if (key < tdy) s.passed++; else if (key > tdy) s.future++; else s.todayWorkday = true; if (key < tdy && !started) s.missing++; }
-      if (!started) continue;
-      const t = dayTotals(day, now, key < tdy);
-      s.work += t.work; s.pool += t.brk; s.overtime += workday ? t.overtime : t.work;
-      if (key < tdy) s.workPast += t.work; else if (key === tdy) s.workToday = t.work;
+  const balSigned = (sec) => (sec < -29 ? `−${fmtHM(-sec)}` : sec > 29 ? `+${fmtHM(sec)}` : "0:00");
+  const balCls = (sec) => (sec < -29 ? "warn" : sec > 29 ? "ok" : "");
+  const monthOf = (key) => { const [y, m] = ymd(key); return { y, m, from: `${y}-${pad(m)}-01`, to: dateKey(new Date(y, m, 0)), label: `${MONTHS[m - 1]} ${y}` }; };
+  /** Lista dni (tydzień): co się działo w każdym dniu i jak wpływa na bilans. */
+  function balDaysHtml(rows) {
+    const tdy = today();
+    return `<div class="bal-days">${rows.map((r) => {
+      let what, val = "", cls = "";
+      if (r.started && (r.weekend || r.off)) { what = r.off ? `${esc(r.off)} · praca` : "weekend · praca"; val = `+${fmtHM(r.t.work)}`; cls = "over"; }
+      else if (r.off) { what = esc(r.off); val = "wolne"; cls = "muted"; }
+      else if (r.weekend) { what = "weekend"; val = "—"; cls = "muted"; }
+      else if (r.future) { what = "przed Tobą"; val = fmtHM(obligo()); cls = "muted"; }
+      else if (!r.started) { what = r.isToday ? "dziś · nie rozpoczęto" : "brak wpisów – oznacz wolne albo uzupełnij"; val = r.isToday ? `0:00 / ${fmtHM(obligo())}` : "?"; cls = "warn"; }
+      else if (r.isToday) { what = `dziś (w toku) · praca ${fmtHM(r.t.work)}`; val = r.t.overtime > 29 ? `+${fmtHM(r.t.overtime)}` : r.t.work < obligo() ? `brakuje ${fmtHM(obligo() - r.t.work)}` : "obligo ✓"; cls = r.t.overtime > 29 ? "over" : r.t.work < obligo() ? "" : "ok"; }
+      else { const b = r.t.overtime - r.t.owed; what = `praca ${fmtHM(r.t.work)}${r.t.brk >= 60 ? ` · inne + scrum ${fmtHM(r.t.brk)}` : ""}`; val = balSigned(b); cls = b < -29 ? "warn" : b > 29 ? "over" : "muted"; }
+      const dcls = `bal-day ${r.weekend ? "weekend" : ""} ${r.holiday ? "holiday" : ""} ${r.key === tdy ? "today" : ""}`;
+      return `<div class="${dcls}" data-day="${r.key}" title="Pokaż ten dzień w „Podsumowaniu dnia”"><span>${r.key.slice(8)}.${r.key.slice(5, 7)}<span class="dow">${WEEKDAYS[r.dow]}</span></span><span class="what ${cls === "warn" ? "warn" : ""}">${what}</span><span class="val ${cls}">${val}</span></div>`;
+    }).join("")}</div>`;
+  }
+  /** Bilans jednego zakresu dni (pełny miesiąc, kwartał, dzień albo część tygodnia w jednym miesiącu). */
+  function balanceSection(from, to, opts = {}) {
+    const { rows: dayRows, sum: s } = daysModel(from, to), tdy = today(), pastOnly = to < tdy, futureOnly = from > tdy;
+    const stat = (l, v, cls = "") => `<li class="sum-stat ${cls}"><span>${l}</span><b>${v}</b></li>`;
+    const overtime = s.overtime + s.extraWork, balance = overtime - s.owed, days = s.worked + s.extraDays, workdaysNet = s.workdays - s.offDays;
+    const offTxt = s.offDays ? ` · wolne: ${Object.entries(s.offKinds).map(([k, n]) => `${esc(k)} ${n}`).join(", ")}` : "";
+    const verdict = futureOnly
+      ? `<div class="bal-verdict"><span>Okres jeszcze się nie zaczął</span><b>${fmtHM(s.required)}</b><span>do przepracowania · ${plural(workdaysNet, "dzień roboczy", "dni robocze", "dni roboczych")} × ${fmtHM(obligo())}${offTxt}</span></div>`
+      : `<div class="bal-verdict ${balCls(balance)}"><span>${pastOnly ? "Bilans zamknięty" : "Bilans do tej pory"} (nadgodziny − do odpracowania)</span><b>${balSigned(balance)}</b><span>nadgodziny ${fmtHM(overtime)} · do odpracowania ${fmtHM(s.owed)}${s.missing ? ` · ${plural(s.missing, "dzień", "dni", "dni")} bez wpisów – nie wliczone` : ""}</span></div>`;
+    const rows = [
+      stat("Dni robocze", `${workdaysNet} <small>${s.offDays ? `z ${s.workdays} pn–pt${offTxt}` : "pn–pt"}</small>`),
+      stat("Wymagane (obligo)", `${fmtHM(s.required)} <small>${workdaysNet} × ${fmtHM(obligo())}</small>`),
+      stat("Praca nad zadaniami", `${fmtHM(s.work)}${!pastOnly && !futureOnly && s.workToday ? ` <small>w tym dziś ${fmtHM(s.workToday)}</small>` : ""}${s.extraWork >= 60 ? ` <small>w tym weekend / wolne ${fmtHM(s.extraWork)}</small>` : ""}`),
+    ];
+    if (!opts.compact) {
+      rows.push(stat("Dni przepracowane", `${s.worked}${s.extraDays ? ` <small>+ ${s.extraDays} w weekend / dzień wolny</small>` : ""}`));
+      rows.push(stat("Praca w dni robocze", `${fmtHM(s.workReg)} <small>/ ${fmtHM(s.worked * obligo())} obliga</small>`, s.worked && s.workReg < s.worked * obligo() ? "warn" : ""));
     }
-    s.requiredPast = s.passed * obligo();
-    s.balancePast = s.workPast - s.requiredPast;
-    s.required = s.workdays * obligo();
-    s.left = Math.max(0, s.required - s.work);
-    s.capacity = (s.future + (s.todayWorkday ? 1 : 0)) * obligo() - s.workToday; // ile jeszcze „zwykłej” pracy mieści się w dniach roboczych okresu
-    return s;
+    rows.push(stat("Do odpracowania", fmtHM(s.owed), s.owed >= 30 ? "warn" : ""));
+    rows.push(stat("Nadgodziny", `${fmtHM(overtime)}${s.extraWork >= 30 ? ` <small>w tym weekendy i dni wolne ${fmtHM(s.extraWork)}</small>` : ""}`, overtime >= 30 ? "over" : ""));
+    if (!opts.compact && !pastOnly && !futureOnly && s.workdaysLeft) rows.push(stat("Pozostałe dni robocze", `${s.workdaysLeft} <small>× ${fmtHM(obligo())} = ${fmtHM(s.workdaysLeft * obligo())}</small>`));
+    if (!opts.compact && s.missing) rows.push(stat("Dni robocze bez wpisów (do wczoraj)", `${s.missing} <small>oznacz jako wolne albo uzupełnij</small>`, "warn"));
+    if (!opts.compact) rows.push(stat("Inne + scrum + przerwa", `${fmtHM(s.brk)}${days ? ` <small>/ ${fmtHM(days * breakLimit())} limitu</small>` : ""}`, days && s.brk > days * breakLimit() ? "warn" : ""));
+    return { s, balance, futureOnly, html: verdict + (opts.days ? balDaysHtml(dayRows) : "") + `<ul class="sum-stats">${rows.join("")}</ul>` };
   }
   function renderBalance() {
-    const { from, to, label } = periodRange(balPeriod, balAnchor), s = periodStats(from, to), tdy = today(), pastOnly = to < tdy, futureOnly = from > tdy;
+    const { from, to, label } = periodRange(balPeriod, balAnchor), tdy = today();
     setText("bal-label", label);
     for (const b of $("bal-period").querySelectorAll("[data-p]")) b.classList.toggle("on", b.dataset.p === balPeriod);
-    const stat = (l, v, cls = "") => `<li class="sum-stat ${cls}"><span>${l}</span><b>${v}</b></li>`;
-    const signed = (sec) => (sec < -29 ? `brakuje ${fmtHM(-sec)}` : sec > 29 ? `nadwyżka ${fmtHM(sec)}` : "0:00 – równo");
-    let verdict;
-    if (futureOnly) verdict = `<div class="bal-verdict"><span>Okres jeszcze się nie zaczął</span><b>${fmtHM(s.required)}</b><span>do przepracowania · ${plural(s.workdays, "dzień roboczy", "dni robocze", "dni roboczych")}</span></div>`;
-    else if (pastOnly) { const bal = s.work - s.required; verdict = `<div class="bal-verdict ${bal < -29 ? "warn" : bal > 29 ? "ok" : ""}"><span>Okres zamknięty</span><b>${signed(bal)}</b><span>przepracowano ${fmtHM(s.work)} z wymaganych ${fmtHM(s.required)}</span></div>`; }
-    else verdict = `<div class="bal-verdict ${s.balancePast < -29 ? "warn" : s.balancePast > 29 ? "ok" : ""}"><span>Zaległości do wczoraj</span><b>${s.passed ? signed(s.balancePast) : "—"}</b><span>${s.passed ? `przepracowano ${fmtHM(s.workPast)} z wymaganych ${fmtHM(s.requiredPast)} (${plural(s.passed, "dzień roboczy", "dni robocze", "dni roboczych")})` : "pierwszy dzień roboczy okresu trwa"}</span></div>`;
-    const rows = [
-      stat("Wymagane w okresie", `${fmtHM(s.required)} <small>${plural(s.workdays, "dzień roboczy", "dni robocze", "dni roboczych")} × ${fmtHM(obligo())}${s.off ? ` · wolne: ${s.off}` : ""}</small>`),
-      stat("Przepracowano", `${fmtHM(s.work)}${!pastOnly && !futureOnly && s.todayWorkday ? ` <small>w tym dziś ${fmtHM(s.workToday)}</small>` : ""}`),
-    ];
-    if (!pastOnly && !futureOnly) {
-      if (s.todayWorkday) rows.push(stat("Dziś", `${fmtHM(s.workToday)} <small>/ ${fmtHM(obligo())}</small>`, s.workToday >= obligo() ? "ok" : ""));
-      const fits = s.left <= s.capacity + 29, daysLeft = s.future + (s.todayWorkday ? 1 : 0);
-      rows.push(`<li class="sum-stat wrap ${fits ? "" : "warn"}"><span>Do końca okresu zostaje</span><b>${fmtHM(s.left)}</b><small class="sum-note">${fits ? `mieści się w ${plural(daysLeft, "dniu roboczym", "dniach roboczych", "dniach roboczych")}` : `ponad pojemność dni roboczych o ${fmtHM(s.left - s.capacity)} – potrzebne nadgodziny`}</small></li>`);
-    }
-    if (s.overtime >= 30) rows.push(stat("Nadgodziny w okresie", fmtHM(s.overtime), "over"));
-    if (s.missing) rows.push(stat("Dni robocze bez wpisów", `${s.missing} <small>oznacz jako wolne albo uzupełnij</small>`, "warn"));
-    rows.push(stat("Inne + scrum + przerwa", fmtHM(s.pool)));
-    const html = verdict + `<ul class="sum-stats">${rows.join("")}</ul>`;
+    let html;
+    if (balPeriod === "week") {
+      // tydzień dzielony na części miesięcy – każda liczona w swoim miesiącu
+      const parts = [];
+      for (let a = from; a <= to; ) { const mo = monthOf(a), b = mo.to < to ? mo.to : to; parts.push({ a, b, mo }); a = shiftDate(b, 1); }
+      html = (parts.length > 1 ? `<p class="bal-note">Tydzień przechodzi przez dwa miesiące – każda część liczy się do swojego miesiąca (rozliczenie miesięczne / kwartalne).</p>` : "") +
+        parts.map(({ a, b, mo }) => {
+          const sec = balanceSection(a, b, { compact: true, days: true }), n = sec.s.workdays - sec.s.offDays;
+          return `<section class="bal-part"><h3><span>${parts.length > 1 ? `${MONTHS[mo.m - 1]} · ` : ""}${fmtDatePl(a).slice(0, 5)}–${fmtDatePl(b).slice(0, 5)}</span><small>${plural(n, "dzień roboczy", "dni robocze", "dni roboczych")} · ${fmtHM(sec.s.required)}</small></h3>${sec.html}</section>`;
+        }).join("");
+    } else if (balPeriod === "quarter") {
+      const total = balanceSection(from, to);
+      const months = [0, 1, 2].map((i) => monthOf(dateKey(new Date(ymd(from)[0], ymd(from)[1] - 1 + i, 1))));
+      const mrows = months.map((mo) => {
+        const { sum: s } = daysModel(mo.from, mo.to), bal = s.overtime + s.extraWork - s.owed, future = mo.from > tdy;
+        return `<div class="bal-month" data-ym="${mo.from}" title="Pokaż bilans tego miesiąca"><span>${MONTHS[mo.m - 1]}${mo.from <= tdy && mo.to >= tdy ? " (bieżący)" : ""}</span><span>${s.workdays - s.offDays}${s.offDays ? `<small class="muted"> −${s.offDays}</small>` : ""}</span><span>${fmtHM(s.required)}</span><span>${future ? '<span class="muted">—</span>' : fmtHM(s.work)}${s.missing ? ` <small class="warn" title="Dni robocze bez wpisów (nie wliczone do bilansu) – oznacz jako wolne albo uzupełnij">⚠ ${s.missing}</small>` : ""}</span><span class="${future ? "muted" : balCls(bal)}">${future ? "—" : balSigned(bal)}</span></div>`;
+      }).join("");
+      const ts = total.s;
+      html = total.html + `<div class="bal-months"><div class="bal-month head"><span>Miesiąc</span><span>Dni rob.</span><span>Wymagane</span><span>Praca</span><span>Bilans</span></div>${mrows}<div class="bal-month total"><span>Kwartał</span><span>${ts.workdays - ts.offDays}</span><span>${fmtHM(ts.required)}</span><span>${fmtHM(ts.work)}</span><span class="${balCls(total.balance)}">${balSigned(total.balance)}</span></div></div>`;
+    } else html = balanceSection(from, to).html;
     if (html !== lastBalanceHtml) { $("bal-view").innerHTML = html; lastBalanceHtml = html; }
   }
+  on("bal-view", "click", (e) => {
+    const mo = e.target.closest("[data-ym]"), dayEl = e.target.closest(".bal-day[data-day]");
+    if (mo) { balPeriod = "month"; balAnchor = mo.dataset.ym; renderBalance(); }
+    else if (dayEl) showDay(dayEl.dataset.day);
+  });
   let lastBalanceHtml = "";
   on("bal-period", "click", (e) => { const b = e.target.closest("[data-p]"); if (b) { balPeriod = b.dataset.p; renderBalance(); } });
   on("bal-prev", "click", () => shiftPeriod(-1));
@@ -2790,9 +2910,10 @@ dialog.wide { width: min(1180px, 96vw); }
     parent: ["parent", "element nadrzędny"],
     area: ["area path", "ścieżka obszaru"],
     iteration: ["iteration path", "ścieżka iteracji"],
+    assigned: ["assigned to", "przypisano do", "przypisane do"],
   };
   const AZURE_STATE = { new: "new", "to do": "new", proposed: "new", active: "active", "in progress": "active", doing: "active", committed: "active", resolved: "active", closed: "closed", done: "closed", removed: "closed" };
-  let importRows = [], importStories = [];
+  let importRows = [], importStories = [], importAssignee = "";
   /** Wiersze z pliku jako propozycje wpisów rejestru; pomija elementy inne niż Task, gdy plik ma kolumnę typu. */
   function readAzureCsv(text) {
     const rows = parseCsv(text);
@@ -2800,7 +2921,8 @@ dialog.wide { width: min(1180px, 96vw); }
     const header = rows[0].map((c) => c.trim().toLowerCase());
     const col = (names) => header.findIndex((c) => names.includes(c));
     const iId = col(IMPORT_COLS.id), iKind = col(IMPORT_COLS.kind), iState = col(IMPORT_COLS.state), iEst = col(IMPORT_COLS.est);
-    const iParent = col(IMPORT_COLS.parent), iArea = col(IMPORT_COLS.area), iIter = col(IMPORT_COLS.iteration);
+    const iParent = col(IMPORT_COLS.parent), iArea = col(IMPORT_COLS.area), iIter = col(IMPORT_COLS.iteration), iAssigned = col(IMPORT_COLS.assigned);
+    const assignees = new Map(); // „Assigned To” tasków z pliku – najczęstszy to Ty (nowe taski dostaną tę osobę)
     const cell = (r, i) => (i >= 0 ? (r[i] || "").trim() : "");
     const titleCols = header.map((c, i) => (/^(title|tytuł)( \d+)?$/.test(c) ? i : -1)).filter((i) => i >= 0); // zapytanie drzewiaste ma „Title 1”, „Title 2”…
     if (iId < 0 && !titleCols.length) throw new Error("Nie rozpoznaję kolumn – w pliku powinny być co najmniej „ID” i „Title”.");
@@ -2814,10 +2936,11 @@ dialog.wide { width: min(1180px, 96vw); }
       if (STORY_KINDS.includes(kind)) { // historyjka: tylko jako rodzic dla nowych tasków
         if (!wi) continue;
         const closed = (AZURE_STATE[azState.toLowerCase()] || "new") === "closed";
-        stories.push({ id: wi, title, azState, area: cell(r, iArea), iteration: cell(r, iIter), existing: !!state.stories[wi], on: !closed });
+        stories.push({ id: wi, title, azState, area: cell(r, iArea), iteration: cell(r, iIter), assigned: cell(r, iAssigned), existing: !!state.stories[wi], on: !closed });
         continue;
       }
       if (kind && kind !== "task") { skipped++; continue; }
+      if (cell(r, iAssigned)) assignees.set(cell(r, iAssigned), (assignees.get(cell(r, iAssigned)) || 0) + 1);
       const est = iEst >= 0 ? parseEstimate(r[iEst]) : null;
       // zadanie, które w aplikacji było tylko z tytułem (np. utworzone pod historyjką), a w Azure dostało już numer – łączymy je
       const oldKey = state.backlog[taskKey({ wi, title })] ? taskKey({ wi, title }) : wi && title && state.backlog[taskKey({ wi: "", title })] ? taskKey({ wi: "", title }) : "";
@@ -2827,7 +2950,8 @@ dialog.wide { width: min(1180px, 96vw); }
         status: existing ? existing.status : AZURE_STATE[azState.toLowerCase()] || "new", existing: !!existing, gainsId: !!existing && !existing.wi && !!wi,
         on: (!existing || (!existing.wi && !!wi)) && (AZURE_STATE[azState.toLowerCase()] || "new") !== "closed" });
     }
-    return { rows: out, stories, skipped };
+    const assignee = [...assignees.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+    return { rows: out, stories, skipped, assignee };
   }
   function renderImport() {
     const typeOpts = (sel) => types().map((t) => `<option value="${esc(t.id)}" ${t.id === sel ? "selected" : ""}>${esc(t.name)}</option>`).join("");
@@ -2863,7 +2987,8 @@ dialog.wide { width: min(1180px, 96vw); }
     const input = $("backlog-import"), f = input.files?.[0];
     if (!f) return;
     try {
-      const { rows, stories, skipped } = readAzureCsv(await f.text());
+      const { rows, stories, skipped, assignee } = readAzureCsv(await f.text());
+      importAssignee = assignee;
       if (!rows.length && !stories.length) throw new Error(skipped ? `W pliku nie ma elementów typu Task ani User Story (pominięte inne typy: ${skipped}).` : "W pliku nie ma zadań do zaimportowania.");
       importRows = rows; importStories = stories;
       $("imp-type-all").innerHTML = `<option value="">— bez zmian —</option>` + types().map((t) => `<option value="${esc(t.id)}">${esc(t.name)}</option>`).join("");
@@ -2914,8 +3039,9 @@ dialog.wide { width: min(1180px, 96vw); }
       if (r.oldKey && r.oldKey !== key) delete state.backlog[r.oldKey];
       state.backlog[key] = { ...fields, status: r.status, ...(r.parentId ? { parentId: r.parentId } : {}) };
     }
-    for (const s of chosenStories) state.stories[s.id] = { id: s.id, title: s.title.trim() || `User Story #${s.id}`, state: s.azState, area: s.area, iteration: s.iteration };
-    importRows = []; importStories = [];
+    for (const s of chosenStories) state.stories[s.id] = { id: s.id, title: s.title.trim() || `User Story #${s.id}`, state: s.azState, area: s.area, iteration: s.iteration, ...(s.assigned ? { assigned: s.assigned } : {}) };
+    if (importAssignee) state.settings.azureUser = importAssignee; // osoba z „Assigned To” tasków – przypisanie nowych tasków w Azure
+    importRows = []; importStories = []; importAssignee = "";
     commit();
   });
 
@@ -3043,12 +3169,82 @@ dialog.wide { width: min(1180px, 96vw); }
   on("task-pause", "click", stopTask);
   on("task-resume", "click", resumeLastTask);
 
+  /** Czy w chwili t dzień pracy trwał (wg znaczników start / wznowienie / zatrzymanie). */
+  const workingAt = (day, t) => { let on = false; for (const ev of [...day.events].sort((a, b) => a.at - b.at)) { if (ev.at > t) break; on = ev.type !== "stop"; } return on; };
+  /**
+   * Plan wstawienia wpisu zadania w godzinach [from, to) (to = null → trwa od „from”).
+   * Przerwy w tym czasie są przycinane po cichu; nachodzące wpisy zadań – po potwierdzeniu. Zwraca komunikat błędu albo plan.
+   */
+  function planRange(day, from, to, now) {
+    const end = to ?? now;
+    if (from > now) return { error: "Godzina rozpoczęcia jest w przyszłości." };
+    if (to !== null && to > now) return { error: "Godzina zakończenia jest w przyszłości – zostaw „Do” puste, jeśli zadanie trwa." };
+    if (to !== null && to <= from) return { error: "Godzina zakończenia musi być późniejsza niż rozpoczęcia." };
+    const inside = day.events.filter((ev) => ev.at > from && ev.at < end);
+    if (inside.length) return { error: `W tych godzinach dzień pracy był ${inside.map((ev) => `${ev.type === "stop" ? "zatrzymany" : "wznowiony"} o ${fmtClock(ev.at)}`).join(", ")} – podaj godziny w jednym ciągu pracy albo popraw je w kilku krokach.` };
+    const hits = day.segments.filter((s) => s.start < end && (s.end ?? now) > from);
+    const tasksHit = hits.filter((s) => s.kind === "task");
+    return { from, to, end, hits, tasksHit, working: workingAt(day, from) };
+  }
+  /** Wycina [from, end) z wpisów dnia (przycina, dzieli albo usuwa), potem dodaje wpis zadania i znaczniki dnia pracy. */
+  function applyRange(day, task, plan, now) {
+    const { from, to, end } = plan;
+    for (const s of [...plan.hits]) {
+      const sEnd = s.end ?? now;
+      if (s.start < from && sEnd > end) { // wpis obejmuje cały zakres – dzielimy
+        if (to !== null) pushSegment(day, { kind: s.kind, taskId: s.taskId, start: end, end: s.end, comment: s.comment });
+        s.end = from;
+      } else if (s.start >= from && sEnd <= end) day.segments = day.segments.filter((x) => x !== s); // w całości w środku – znika
+      else if (s.start < from) s.end = from; // nachodzi z lewej
+      else s.start = end;                    // nachodzi z prawej
+    }
+    pushSegment(day, { kind: "task", taskId: task.id, start: from, end: to });
+    day.segments.sort((a, b) => a.start - b.start);
+    // znaczniki dnia pracy: zakres poza pracą dostaje start / wznowienie i (dla zakończonego) zatrzymanie
+    if (!plan.working) {
+      const firstStart = day.events.find((ev) => ev.type === "start");
+      if (!day.startedAt || (firstStart && from < firstStart.at)) {
+        if (firstStart) { firstStart.type = "resume"; } // wcześniejszy początek dnia: dawny start staje się wznowieniem
+        day.startedAt = from;
+        addEvent(day, "start", from);
+      } else addEvent(day, "resume", from);
+      if (to !== null) addEvent(day, "stop", to);
+      else day.status = "working";
+    }
+    if (to === null) day.status = "working";
+  }
+
+  const showRange = (on) => { $("f-range").hidden = !on; $("f-range-row").hidden = !on; };
+  on("f-manual", "change", () => { showRange($("f-manual").checked); syncSubmitLabel(); if ($("f-manual").checked && !$("f-from").value) $("f-from").focus(); });
+  const syncSubmitLabel = () => { const pastOnly = $("f-manual").checked && $("f-to").value.trim(); $("task-form").querySelector('button[type="submit"]').innerHTML = pastOnly ? "＋ Dodaj wpis" : "▶ Rozpocznij"; };
+  for (const id of ["f-from", "f-to"]) { on(id, "input", syncSubmitLabel); on(id, "change", () => { normalizeClock($(id)); syncSubmitLabel(); }); on(id, "blur", () => normalizeClock($(id))); }
+
   on("task-form", "submit", (e) => {
     e.preventDefault();
-    const title = $("f-title").value.trim(), wi = $("f-wi").value.trim();
-    if (!title && !wi) { $("f-title").setCustomValidity("Podaj ID Azure lub tytuł zadania."); $("f-title").reportValidity(); return; }
+    let title = $("f-title").value.trim();
+    const wi = storyOn() ? "" : $("f-wi").value.trim(); // pod User Story numer nada Azure
+    // przerwa (typ z kategorią „przerwa”) nie potrzebuje tytułu – wpis dostaje nazwę typu
+    if (!title && !wi && pickedType("f-type").type === "break" && !formParentId) title = $("f-type").selectedOptions[0]?.textContent.trim() || "przerwa";
+    if (!title && !wi && !storyOn()) { $("f-title").setCustomValidity("Podaj ID Azure lub tytuł zadania."); $("f-title").reportValidity(); return; }
     const day = ensureDay(today());
-    if ($("f-parent").value.trim() && !formParentId) { alert("Nie znalazłem takiej User Story – wybierz ją z listy pod polem albo wyczyść pole."); $("f-parent").focus(); return; }
+    if (storyOn()) {
+      if (!formParentId) { alert($("f-story-id").value.trim() ? `Nie ma aktywnej User Story #${$("f-story-id").value.trim().replace(/^#/, "")} – wybierz ją z listy tytułów albo wyłącz „Wskaż User Story”.` : "Wskaż User Story – wpisz jej numer albo wybierz tytuł z listy."); $("f-story-id").focus(); return; }
+      if (!title) { $("f-title").setCustomValidity("Podaj tytuł – Azure utworzy nowy task pod tą User Story."); $("f-title").reportValidity(); return; }
+    }
+    // tryb „Określ czas trwania”: walidacja przed jakąkolwiek zmianą danych
+    let plan = null;
+    const manual = $("f-manual").checked, now = Date.now();
+    if (manual) {
+      if (!$("f-from").value.trim() || !normalizeClock($("f-from"))) { alert(`Podaj godzinę rozpoczęcia, np. 9:30 albo 930.`); $("f-from").focus(); return; }
+      if (!normalizeClock($("f-to"))) { alert(`Nie rozumiem godziny zakończenia „${$("f-to").value}”. Wpisz np. 11:00 albo zostaw puste.`); $("f-to").focus(); return; }
+      const from = timeOnDay(day.date, $("f-from").value), to = $("f-to").value ? timeOnDay(day.date, $("f-to").value) : null;
+      plan = planRange(day, from, to, now);
+      if (plan.error) { alert(plan.error); $(plan.error.includes("zakończenia") ? "f-to" : "f-from").focus(); return; }
+      if (plan.tasksHit.length) {
+        const names = plan.tasksHit.map((s) => `• ${taskTitle(findTask(day, s.taskId) || {})} ${rangeStr(s)}`).join("\n");
+        if (!confirm(`Te godziny nachodzą na wpisy zadań:\n${names}\n\nPrzyciąć je (wpis leżący w całości w tym zakresie zostanie usunięty)?`)) return;
+      }
+    }
     const fields = { wi, title, ...pickedType("f-type"), estimateH: parseEstimate($("f-est").value), ...(formParentId ? { parentId: formParentId } : {}) };
     // to samo zadanie już dziś było? dopisujemy kolejny wpis do niego zamiast dublować zadanie (jak przy „Przypisz zadanie”)
     const key = taskKey(fields);
@@ -3056,13 +3252,20 @@ dialog.wide { width: min(1180px, 96vw); }
     if (task) Object.assign(task, fields, { title: title || task.title, estimateH: fields.estimateH ?? task.estimateH });
     else { task = { id: uid(), ...fields }; day.tasks.push(task); }
     activateStory(formParentId);
-    startTask(task.id);
+    if (plan) {
+      applyRange(day, task, plan, now);
+      const entry = state.backlog[taskKey(task)];
+      if (entry) entry.status = "active";
+      commit();
+    } else startTask(task.id);
+    const keepManual = manual; // przełącznik zostaje włączony – wygodne przy dopisywaniu kilku wpisów wstecz
     $("task-form").reset();
-    setFormParent("");
+    $("f-manual").checked = keepManual; showRange(keepManual); syncSubmitLabel();
+    setFormParent(""); // przełącznik „Wskaż User Story” zostaje jak był – historyjkę wybiera się dla każdego taska
     $("f-wi").focus();
   });
   // autouzupełnianie z wcześniejszych zadań
-  const fillForm = (t) => { $("f-wi").value = t.wi || ""; $("f-title").value = t.title || ""; $("f-type").value = typeIdFor(t); $("f-est").value = estimateToInput(t.estimateH); setFormParent(t.parentId && activeStories().some((s) => s.id === t.parentId) ? t.parentId : ""); };
+  const fillForm = (t) => { $("f-wi").value = t.wi || ""; $("f-title").value = t.title || ""; $("f-type").value = typeIdFor(t); $("f-est").value = estimateToInput(t.estimateH); setFormParent(!t.wi && t.parentId && activeStories().some((s) => s.id === t.parentId) ? t.parentId : ""); };
   on("f-title", "input", () => $("f-title").setCustomValidity(""));
   on("f-wi", "input", () => $("f-title").setCustomValidity(""));
   on("f-wi", "change", () => { const known = knownTasks().find((t) => t.wi === $("f-wi").value.trim()); if (known && !$("f-title").value.trim()) fillForm(known); });
@@ -3080,6 +3283,8 @@ dialog.wide { width: min(1180px, 96vw); }
     return [node, day, seg];
   };
   on("timeline", "click", (e) => {
+    const inl = e.target.closest("[data-inline]");
+    if (inl) { startInlineEdit(inl); return; }
     const evBtn = e.target.closest("button[data-ev]");
     if (evBtn) { openEventEdit(evBtn.dataset.ev); return; }
     const [btn, day, seg] = segFromEvent(e.target, "button[data-act]");
@@ -3435,9 +3640,11 @@ dialog.wide { width: min(1180px, 96vw); }
   });
 
   // ---------- Edycja wpisu ----------
-  function openEdit(dayKey, segId) {
+  function openEdit(dayKey, segId) { if (fillEdit(dayKey, segId)) $("edit-dialog").showModal(); }
+  /** Wypełnia okno edycji danymi wpisu (bez otwierania) – używa go też edycja w miejscu na karcie. */
+  function fillEdit(dayKey, segId) {
     const day = getDay(dayKey), seg = day?.segments.find((s) => s.id === segId);
-    if (!seg) return;
+    if (!seg) return false;
     editing = { dayKey, segId };
     const task = seg.kind === "task" ? findTask(day, seg.taskId) : null;
     setText("e-heading", task ? "Edytuj wpis zadania" : "Edytuj przerwę");
@@ -3456,7 +3663,43 @@ dialog.wide { width: min(1180px, 96vw); }
     setText("e-end-hint", seg.end === null ? "Wpis trwa – zostaw koniec pusty, aby dalej liczyć." : "");
     $("e-end-hint").hidden = seg.end !== null;
     $("e-comment").value = seg.comment || "";
-    $("edit-dialog").showModal();
+    return true;
+  }
+  /** Edycja w miejscu: klik w tytuł zadania albo w godziny wpisu zamienia je w pole; Enter / wyjście z pola zapisuje, Esc anuluje. */
+  function startInlineEdit(el) {
+    if (el.classList.contains("editing")) return;
+    const li = el.closest("li[data-id]"), day = todayDay(), seg = day?.segments.find((s) => s.id === li?.dataset.id);
+    if (!seg) return;
+    const kind = el.dataset.inline, task = seg.kind === "task" ? findTask(day, seg.taskId) : null;
+    if (kind === "title" && !task) return;
+    el.classList.add("editing");
+    el.innerHTML = kind === "title"
+      ? `<input class="inline-input" data-f="title" value="${esc(task.title || "")}" placeholder="${esc(taskTitle(task))}" aria-label="Tytuł zadania" />`
+      : `<input class="inline-input" data-f="start" inputmode="numeric" maxlength="5" value="${fmtClock(seg.start)}" aria-label="Początek" />–<input class="inline-input" data-f="end" inputmode="numeric" maxlength="5" value="${seg.end === null ? "" : fmtClock(seg.end)}" placeholder="…" aria-label="Koniec (puste = trwa)" title="Puste = wpis trwa" />`;
+    const inputs = [...el.querySelectorAll("input")];
+    let done = false;
+    const finish = (save) => {
+      if (done) return;
+      done = true;
+      if (!save) { renderTimeline(); return; }
+      const val = (f) => el.querySelector(`[data-f="${f}"]`)?.value.trim();
+      const changed = kind === "title" ? val("title") !== (task.title || "") : val("start") !== fmtClock(seg.start) || val("end") !== (seg.end === null ? "" : fmtClock(seg.end));
+      if (!changed || !fillEdit(today(), seg.id)) { renderTimeline(); return; }
+      if (kind === "title") $("e-title").value = val("title");
+      else { $("e-start").value = val("start"); $("e-end").value = val("end"); }
+      $("edit-form").requestSubmit(); // te same reguły co w oknie edycji; przy błędzie komunikat i powrót do widoku karty
+      editing = null;
+      renderTimeline();
+    };
+    for (const input of inputs) {
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); finish(true); }
+        if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(false); }
+      });
+      input.addEventListener("blur", () => setTimeout(() => { if (!inputs.includes(document.activeElement)) finish(true); }, 0));
+      input.addEventListener("click", (e) => e.stopPropagation());
+    }
+    inputs[0].focus(); inputs[0].select();
   }
   on("e-cancel", "click", () => $("edit-dialog").close());
   on("e-parent", "change", () => syncTypeWithParent("e-type", "e-type-wrap", !!$("e-parent").value));
@@ -3677,7 +3920,8 @@ dialog.wide { width: min(1180px, 96vw); }
    * bo importer odrzuca nieznane kolumny. Import zastępuje wartości pól (nie dodaje), stąd domyślnie czas ze wszystkich dni.
    */
   /** Nowe taski (bez numeru) pod historyjką → plik do „Import work items”: pusty ID = Azure tworzy element; Parent = numer historyjki. */
-  const newAzureTasks = () => Object.entries(state.backlog).filter(([, e]) => !e.wi && e.parentId && e.status !== "closed").map(([key, e]) => ({ key, e }));
+  // także zamknięte (X), jeśli mają naliczony czas – inaczej przepracowane godziny nie trafiłyby do Azure
+  const newAzureTasks = () => Object.entries(state.backlog).filter(([key, e]) => !e.wi && e.parentId && (e.status !== "closed" || keyUsage(key, Date.now()).sec > 0)).map(([key, e]) => ({ key, e }));
   on("export-azure", "click", () => {
     const { days, tag } = csvScope(), now = Date.now(), useTotal = $("azure-total").checked, withTitle = $("azure-title").checked;
     const byWi = new Map();
@@ -3691,16 +3935,19 @@ dialog.wide { width: min(1180px, 96vw); }
     }
     const rows = [...byWi.values()].sort((a, b) => a.wi.localeCompare(b.wi, undefined, { numeric: true }));
     // nowe taski (bez numeru) pod historyjką – te same wiersze, tylko z pustym ID: Azure je utworzy
-    const fresh = newAzureTasks().map(({ key, e }) => { const story = state.stories[e.parentId] || {}; return { wi: "", title: e.title, est: (e.estimateH || 0) * H, total: keyUsage(key, now).sec, inRange: keyUsage(key, now).sec, parent: e.parentId, area: story.area || "", iteration: story.iteration || "" }; });
+    const fresh = newAzureTasks().map(({ key, e }) => { const story = state.stories[e.parentId] || {}; return { wi: "", title: e.title, est: (e.estimateH || 0) * H, total: keyUsage(key, now).sec, inRange: keyUsage(key, now).sec, parent: e.parentId, assigned: S().azureUser || story.assigned || "", closed: e.status === "closed", area: story.area || "", iteration: story.iteration || "" }; });
     for (const r of rows) r.parent = state.backlog[`wi:${r.wi}`]?.parentId || "";
     if (!rows.length && !fresh.length) { alert("W wybranym zakresie nie ma zadań z numerem Task (Azure) ani nowych tasków pod User Story."); return; }
     const all = [...rows, ...fresh], anyEst = all.some((r) => r.est > 0), title = withTitle || fresh.length > 0;
     const withParent = fresh.length > 0, withArea = fresh.some((r) => r.area), withIter = fresh.some((r) => r.iteration);
+    const withAssigned = fresh.some((r) => r.assigned), withState = fresh.some((r) => r.closed); // tylko dla nowych tasków; istniejące – puste = bez zmian
     const header = ["ID", "Work Item Type", ...(title ? ["Title"] : []), ...(withParent ? ["Parent"] : []), ...(withArea ? ["Area Path"] : []), ...(withIter ? ["Iteration Path"] : []),
+      ...(withAssigned ? ["Assigned To"] : []), ...(withState ? ["State"] : []),
       "Completed Work", ...(anyEst ? ["Original Estimate", "Remaining Work"] : [])];
     const lines = [header, ...all.map((r) => {
       const completed = r.wi ? (useTotal ? r.total : r.inRange) : r.total;
       return [r.wi, "Task", ...(title ? [r.title || `Zadanie #${r.wi}`] : []), ...(withParent ? [r.parent || ""] : []), ...(withArea ? [r.area || ""] : []), ...(withIter ? [r.iteration || ""] : []),
+        ...(withAssigned ? [r.wi ? "" : r.assigned || ""] : []), ...(withState ? [!r.wi && r.closed ? "Closed" : ""] : []),
         fmtAzure(completed), ...(anyEst ? (r.est > 0 ? [fmtAzure(r.est), fmtAzure(Math.max(0, r.est - r.total))] : ["", ""]) : [])];
     })];
     const CRLF = String.fromCharCode(13, 10), DQ = String.fromCharCode(34);
