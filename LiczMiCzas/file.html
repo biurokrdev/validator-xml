@@ -3140,7 +3140,7 @@ dialog.wide { width: min(1180px, 96vw); }
       if (STORY_KINDS.includes(kind)) { // historyjka: tylko jako rodzic dla nowych tasków
         if (!wi) continue;
         const closed = (AZURE_STATE[azState.toLowerCase()] || "new") === "closed";
-        stories.push({ id: wi, title, azState, area: cell(r, iArea), iteration: cell(r, iIter), assigned: cell(r, iAssigned), existing: !!state.stories[wi], on: !closed });
+        stories.push({ id: wi, title, kind: cell(r, iKind) || "User Story", azState, area: cell(r, iArea), iteration: cell(r, iIter), assigned: cell(r, iAssigned), existing: !!state.stories[wi], on: !closed });
         continue;
       }
       if (kind && kind !== "task") { skipped++; continue; }
@@ -3243,7 +3243,7 @@ dialog.wide { width: min(1180px, 96vw); }
       if (r.oldKey && r.oldKey !== key) delete state.backlog[r.oldKey];
       state.backlog[key] = { ...fields, status: r.status, ...(r.parentId ? { parentId: r.parentId } : {}) };
     }
-    for (const s of chosenStories) state.stories[s.id] = { id: s.id, title: s.title.trim() || `User Story #${s.id}`, state: s.azState, area: s.area, iteration: s.iteration, ...(s.assigned ? { assigned: s.assigned } : {}) };
+    for (const s of chosenStories) state.stories[s.id] = { id: s.id, title: s.title.trim() || `User Story #${s.id}`, state: s.azState, kind: s.kind, area: s.area, iteration: s.iteration, ...(s.assigned ? { assigned: s.assigned } : {}) };
     if (importAssignee) state.settings.azureUser = importAssignee; // osoba z „Assigned To” tasków – przypisanie nowych tasków w Azure
     importRows = []; importStories = []; importAssignee = "";
     commit();
@@ -4143,6 +4143,31 @@ dialog.wide { width: min(1180px, 96vw); }
     for (const r of rows) r.parent = state.backlog[`wi:${r.wi}`]?.parentId || "";
     if (!rows.length && !fresh.length) { alert("W wybranym zakresie nie ma zadań z numerem Task (Azure) ani nowych tasków pod User Story."); return; }
     const all = [...rows, ...fresh], anyEst = all.some((r) => r.est > 0), title = withTitle || fresh.length > 0;
+    const CRLF = String.fromCharCode(13, 10), DQ = String.fromCharCode(34);
+    const quote = (v) => (typeof v === "string" && v !== "" && !/^[0-9.]+$/.test(v) ? DQ + v.split(DQ).join(DQ + DQ) + DQ : String(v)); // tekst w cudzysłowie (przecinki, cudzysłowy w tytule)
+    const estCells = (r) => (anyEst ? (r.est > 0 ? [fmtAzure(r.est), fmtAzure(Math.max(0, r.est - r.total))] : ["", ""]) : []);
+    if (fresh.length) {
+      /*
+       * Import Azure Boards nie przyjmuje pustej komórki w kolumnie „Parent” („Parent link cannot be empty”), a istniejące taski
+       * często nie mają znanego rodzica. Dlatego plik z nowymi taskami ma oficjalny format drzewa: wiersz historyjki z „Title 1”
+       * (z jej ID – Azure jej nie tworzy, tylko wskazuje rodzica), a pod nim nowe taski z „Title 2” i pustym ID. Istniejące taski idą
+       * na górze jako osobne wiersze „Title 1” – aktualizacja Completed Work / Remaining Work jak dotąd.
+       */
+      const header = ["ID", "Work Item Type", "Title 1", "Title 2", "Area Path", "Iteration Path", "Assigned To", "State", "Completed Work", ...(anyEst ? ["Original Estimate", "Remaining Work"] : [])];
+      const blank = (n) => Array(n).fill("");
+      const lines = [header, ...rows.map((r) => [r.wi, "Task", r.title || `Zadanie #${r.wi}`, "", "", "", "", "", fmtAzure(useTotal ? r.total : r.inRange), ...estCells(r)])];
+      const groups = new Map();
+      for (const r of fresh) { if (!groups.has(r.parent)) groups.set(r.parent, []); groups.get(r.parent).push(r); }
+      for (const [storyId, kids] of groups) {
+        const s = state.stories[storyId] || { id: storyId, title: `User Story #${storyId}` };
+        // wiersz rodzica: tylko ID, typ i tytuł – pozostałe pola puste, więc historyjka się nie zmienia
+        lines.push([storyId, s.kind || "User Story", s.title, "", ...blank(4), "", ...(anyEst ? ["", ""] : [])]);
+        for (const r of kids) lines.push(["", "Task", "", r.title, r.area || "", r.iteration || "", r.assigned || "", r.closed ? "Closed" : "", fmtAzure(r.total), ...estCells(r)]);
+      }
+      const csv = lines.map((l) => l.map(quote).join(",")).join(CRLF) + CRLF;
+      downloadFile(`azure-boards-import-${tag}.csv`, "\uFEFF" + csv, "text/csv;charset=utf-8");
+      return;
+    }
     const withParent = fresh.length > 0, withArea = fresh.some((r) => r.area), withIter = fresh.some((r) => r.iteration);
     const withAssigned = fresh.some((r) => r.assigned), withState = fresh.some((r) => r.closed); // tylko dla nowych tasków; istniejące – puste = bez zmian
     const header = ["ID", "Work Item Type", ...(title ? ["Title"] : []), ...(withParent ? ["Parent"] : []), ...(withArea ? ["Area Path"] : []), ...(withIter ? ["Iteration Path"] : []),
@@ -4152,10 +4177,8 @@ dialog.wide { width: min(1180px, 96vw); }
       const completed = r.wi ? (useTotal ? r.total : r.inRange) : r.total;
       return [r.wi, "Task", ...(title ? [r.title || `Zadanie #${r.wi}`] : []), ...(withParent ? [r.parent || ""] : []), ...(withArea ? [r.area || ""] : []), ...(withIter ? [r.iteration || ""] : []),
         ...(withAssigned ? [r.wi ? "" : r.assigned || ""] : []), ...(withState ? [!r.wi && r.closed ? "Closed" : ""] : []),
-        fmtAzure(completed), ...(anyEst ? (r.est > 0 ? [fmtAzure(r.est), fmtAzure(Math.max(0, r.est - r.total))] : ["", ""]) : [])];
+        fmtAzure(completed), ...estCells(r)];
     })];
-    const CRLF = String.fromCharCode(13, 10), DQ = String.fromCharCode(34);
-    const quote = (v) => (typeof v === "string" && v !== "" && !/^[0-9.]+$/.test(v) ? DQ + v.split(DQ).join(DQ + DQ) + DQ : String(v)); // tekst w cudzysłowie (przecinki, cudzysłowy w tytule)
     const csv = lines.map((l) => l.map(quote).join(",")).join(CRLF) + CRLF;
     downloadFile(`azure-boards-import-${tag}.csv`, "﻿" + csv, "text/csv;charset=utf-8");
   });
