@@ -3949,16 +3949,17 @@ dialog.wide { width: min(1180px, 96vw); }
        * (z jej ID – Azure jej nie tworzy, tylko wskazuje rodzica), a pod nim nowe taski z „Title 2” i pustym ID. Istniejące taski idą
        * na górze jako osobne wiersze „Title 1” – aktualizacja Completed Work / Remaining Work jak dotąd.
        */
-      const header = ["ID", "Work Item Type", "Title 1", "Title 2", "Area Path", "Iteration Path", "Assigned To", "State", "Completed Work", ...(anyEst ? ["Original Estimate", "Remaining Work"] : [])];
+      // „Reason” jest wymagany przy przejściu w stan Closed (Agile: domyślny powód zamknięcia taska = „Completed”)
+      const header = ["ID", "Work Item Type", "Title 1", "Title 2", "Area Path", "Iteration Path", "Assigned To", "State", "Reason", "Completed Work", ...(anyEst ? ["Original Estimate", "Remaining Work"] : [])];
       const blank = (n) => Array(n).fill("");
-      const lines = [header, ...rows.map((r) => [r.wi, "Task", r.title || `Zadanie #${r.wi}`, "", "", "", "", "", fmtAzure(useTotal ? r.total : r.inRange), ...estCells(r)])];
+      const lines = [header, ...rows.map((r) => [r.wi, "Task", r.title || `Zadanie #${r.wi}`, "", "", "", "", "", "", fmtAzure(useTotal ? r.total : r.inRange), ...estCells(r)])];
       const groups = new Map();
       for (const r of fresh) { if (!groups.has(r.parent)) groups.set(r.parent, []); groups.get(r.parent).push(r); }
       for (const [storyId, kids] of groups) {
         const s = state.stories[storyId] || { id: storyId, title: `User Story #${storyId}` };
         // wiersz rodzica: tylko ID, typ i tytuł – pozostałe pola puste, więc historyjka się nie zmienia
-        lines.push([storyId, s.kind || "User Story", s.title, "", ...blank(4), "", ...(anyEst ? ["", ""] : [])]);
-        for (const r of kids) lines.push(["", "Task", "", r.title, r.area || "", r.iteration || "", r.assigned || "", r.closed ? "Closed" : "", fmtAzure(r.total), ...estCells(r)]);
+        lines.push([storyId, s.kind || "User Story", s.title, "", ...blank(5), "", ...(anyEst ? ["", ""] : [])]);
+        for (const r of kids) lines.push(["", "Task", "", r.title, r.area || "", r.iteration || "", r.assigned || "", r.closed ? "Closed" : "", r.closed ? "Completed" : "", fmtAzure(r.total), ...estCells(r)]);
       }
       const csv = lines.map((l) => l.map(quote).join(",")).join(CRLF) + CRLF;
       downloadFile(`azure-boards-import-${tag}.csv`, "\uFEFF" + csv, "text/csv;charset=utf-8");
@@ -3967,12 +3968,12 @@ dialog.wide { width: min(1180px, 96vw); }
     const withParent = fresh.length > 0, withArea = fresh.some((r) => r.area), withIter = fresh.some((r) => r.iteration);
     const withAssigned = fresh.some((r) => r.assigned), withState = fresh.some((r) => r.closed); // tylko dla nowych tasków; istniejące – puste = bez zmian
     const header = ["ID", "Work Item Type", ...(title ? ["Title"] : []), ...(withParent ? ["Parent"] : []), ...(withArea ? ["Area Path"] : []), ...(withIter ? ["Iteration Path"] : []),
-      ...(withAssigned ? ["Assigned To"] : []), ...(withState ? ["State"] : []),
+      ...(withAssigned ? ["Assigned To"] : []), ...(withState ? ["State", "Reason"] : []),
       "Completed Work", ...(anyEst ? ["Original Estimate", "Remaining Work"] : [])];
     const lines = [header, ...all.map((r) => {
       const completed = r.wi ? (useTotal ? r.total : r.inRange) : r.total;
       return [r.wi, "Task", ...(title ? [r.title || `Zadanie #${r.wi}`] : []), ...(withParent ? [r.parent || ""] : []), ...(withArea ? [r.area || ""] : []), ...(withIter ? [r.iteration || ""] : []),
-        ...(withAssigned ? [r.wi ? "" : r.assigned || ""] : []), ...(withState ? [!r.wi && r.closed ? "Closed" : ""] : []),
+        ...(withAssigned ? [r.wi ? "" : r.assigned || ""] : []), ...(withState ? (!r.wi && r.closed ? ["Closed", "Completed"] : ["", ""]) : []),
         fmtAzure(completed), ...estCells(r)];
     })];
     const csv = lines.map((l) => l.map(quote).join(",")).join(CRLF) + CRLF;
