@@ -1,0 +1,43 @@
+<h1>Sprawdź numer</h1>
+
+<section class="card">
+  <form class="row" (ngSubmit)="onCheck()">
+    <label class="field">
+      Numer nadania
+      <input
+        class="mono"
+        type="text"
+        name="number"
+        [ngModel]="number()"
+        (ngModelChange)="number.set($event)"
+        placeholder="00759007731512000621 lub RR473124829PL"
+        style="min-width: 22rem"
+        data-testid="check-input"
+      />
+    </label>
+    <button type="submit" [disabled]="!number().trim() || busy()" data-testid="check-submit">
+      {{ busy() ? 'Sprawdzanie…' : 'Sprawdź' }}
+    </button>
+  </form>
+</section>
+
+@if (error()) {
+  <div class="alert error" role="alert" data-testid="check-error">{{ error() }}</div>
+}
+
+@if (result(); as r) {
+  <section class="card" data-testid="check-number-result" [attr.data-valid]="r.isValid">
+    @if (!r.isFormatValid) {
+      <div class="alert error" data-testid="check-invalid">Numer niepoprawny: {{ r.error }}</div>
+    } @else if (r.existsInPool === false) {
+      <div class="alert warning" data-testid="check-not-in-pool">
+        Numer <span class="mono">{{ r.fullNumber }}</span> jest poprawny ({{ typeLabel[r.type!] }}), ale nie ma go w puli.
+      </div>
+    } @else {
+      <div class="alert success" data-testid="check-in-pool">
+        Numer <span class="mono">{{ r.fullNumber }}</span> ({{ typeLabel[r.type!] }}) jest w puli, stan:
+        <span class="badge" [class]="'badge ' + r.state" data-testid="check-state">{{ stateLabel[r.state!] }}</span>
+      </div>
+    }
+  </section>
+}

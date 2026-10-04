@@ -1,0 +1,140 @@
+<h1>Zasilenie puli przedziałem numerów</h1>
+
+<section class="card">
+  <p class="muted">
+    Podaj pierwszy numer z rolki (pełny, z cyfrą kontrolną; dozwolone spacje i „(00)”) oraz ilość
+    nalepek albo ostatni numer. Krajowe: 20 cyfr SSCC, zagraniczne: 13 znaków, np. RR473124829PL.
+  </p>
+
+  <form (ngSubmit)="onCheck()">
+    <div class="row">
+      <label class="field">
+        Pierwszy numer
+        <input
+          class="mono"
+          type="text"
+          name="firstNumber"
+          [ngModel]="firstNumber()"
+          (ngModelChange)="firstNumber.set($event)"
+          placeholder="00759007731512000621 lub RR473124829PL"
+          style="min-width: 22rem"
+          required
+          data-testid="import-first"
+        />
+      </label>
+
+      <label class="field">
+        Sposób podania końca
+        <select name="mode" [ngModel]="mode()" (ngModelChange)="mode.set($event)" data-testid="import-mode">
+          <option value="count">ilość numerów</option>
+          <option value="last">ostatni numer</option>
+        </select>
+      </label>
+
+      @if (mode() === 'count') {
+        <label class="field">
+          Ilość
+          <input
+            type="number"
+            name="count"
+            min="1"
+            max="100000"
+            [ngModel]="count()"
+            (ngModelChange)="count.set($event)"
+            data-testid="import-count"
+          />
+        </label>
+      } @else {
+        <label class="field">
+          Ostatni numer
+          <input
+            class="mono"
+            type="text"
+            name="lastNumber"
+            [ngModel]="lastNumber()"
+            (ngModelChange)="lastNumber.set($event)"
+            style="min-width: 22rem"
+            data-testid="import-last"
+          />
+        </label>
+      }
+    </div>
+
+    <div class="row" style="margin-top: 0.75rem">
+      <button type="submit" [disabled]="!formValid() || checking()" data-testid="import-check">
+        {{ checking() ? 'Sprawdzanie…' : 'Sprawdź' }}
+      </button>
+      <button type="button" (click)="onImport()" [disabled]="!canImport()" data-testid="import-submit">
+        {{ importing() ? 'Zasilanie…' : 'Zasil' }}
+      </button>
+      <button type="button" class="secondary" (click)="resetForm()" data-testid="import-reset">Wyczyść</button>
+      @if (check() && !checkIsCurrent()) {
+        <span class="muted">Przedział zmienił się po sprawdzeniu, sprawdź ponownie.</span>
+      }
+    </div>
+  </form>
+</section>
+
+@if (error()) {
+  <div class="alert error" role="alert" data-testid="import-error">{{ error() }}</div>
+}
+
+@if (check(); as c) {
+  <section class="card" data-testid="check-result">
+    <h2>Wynik sprawdzenia</h2>
+    <p>
+      Typ: <b>{{ typeLabel[c.type] }}</b>, przedział
+      <span class="mono" data-testid="check-first">{{ c.firstNumber }}</span> …
+      <span class="mono" data-testid="check-last">{{ c.lastNumber }}</span>
+    </p>
+    <p>
+      Numerów w przedziale: <b data-testid="check-requested">{{ c.requested }}</b>,
+      nowych: <b data-testid="check-new">{{ c.new }}</b>,
+      już w puli: <b data-testid="check-existing">{{ c.alreadyExisting }}</b>.
+    </p>
+
+    @if (c.isFullyDuplicated) {
+      <div class="alert warning" data-testid="check-duplicated-all">
+        Cały przedział jest już w puli. Zasilenie nic nie doda.
+      </div>
+    } @else if (c.hasDuplicates) {
+      <div class="alert warning" data-testid="check-duplicated-some">
+        Część numerów już jest w puli. Zasilenie doda tylko {{ c.new }} nowych, istniejące pominie.
+      </div>
+    } @else {
+      <div class="alert success" data-testid="check-ok">Żaden z numerów nie występuje jeszcze w puli.</div>
+    }
+
+    @if (c.existing.length > 0) {
+      <h2>Numery już obecne w puli (pierwsze {{ c.existing.length }})</h2>
+      <table class="grid" data-testid="check-existing-table">
+        <thead>
+          <tr>
+            <th>Numer</th>
+            <th>Stan</th>
+            <th>Edytor</th>
+            <th>Zmieniono</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (e of c.existing; track e.fullNumber) {
+            <tr>
+              <td class="mono">{{ e.fullNumber }}</td>
+              <td><span class="badge" [class]="'badge ' + e.state">{{ stateLabel[e.state] }}</span></td>
+              <td>{{ e.editor }}</td>
+              <td>{{ e.changeDate | date: 'yyyy-MM-dd HH:mm' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </section>
+}
+
+@if (imported(); as r) {
+  <section class="alert success" role="status" data-testid="import-result">
+    Zasilono pulę <b>{{ typeLabel[r.type] }}</b>: dodano <b data-testid="import-added">{{ r.added }}</b>,
+    pominięto <b data-testid="import-skipped">{{ r.skipped }}</b> z {{ r.requested }}
+    (<span class="mono">{{ r.firstNumber }}</span> … <span class="mono">{{ r.lastNumber }}</span>).
+  </section>
+}
