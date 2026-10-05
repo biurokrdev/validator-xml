@@ -4,7 +4,9 @@ import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
 import {
   POOL_STATE_LABEL,
+  POOL_TYPES,
   POOL_TYPE_LABEL,
+  PoolType,
   RangeCheckResponse,
   RangeImportResponse,
   RangeRequest,
@@ -14,8 +16,8 @@ import { RegisteredNumbersService } from '../../core/registered-numbers.service'
 type RangeMode = 'count' | 'last';
 
 /**
- * Zasilenie puli przedziałem numerów. Przepływ: wpisz przedział -> "Sprawdź" (co nowe, co już mamy)
- * -> "Zasil" (dostępne dopiero po sprawdzeniu, żeby nie importować w ciemno).
+ * Zasilenie puli przedziałem numerów. Przepływ: wskaż rodzaj puli -> wpisz przedział -> "Sprawdź"
+ * (co nowe, co już mamy) -> "Zasil" (dostępne dopiero po sprawdzeniu, żeby nie importować w ciemno).
  */
 @Component({
   selector: 'app-import-range',
@@ -29,7 +31,15 @@ export class ImportRange {
   protected readonly typeLabel = POOL_TYPE_LABEL;
   protected readonly stateLabel = POOL_STATE_LABEL;
 
+  protected readonly types = POOL_TYPES;
+  protected readonly typeHint: Record<PoolType, string> = {
+    Domestic: '20 cyfr, np. 00759007731512000621',
+    International: '13 znaków, np. RR473124829PL',
+  };
+
   // formularz
+  /** Rodzaj puli wskazuje użytkownik, celowo bez wartości domyślnej. */
+  protected readonly type = signal<PoolType | null>(null);
   protected readonly firstNumber = signal('');
   protected readonly mode = signal<RangeMode>('count');
   protected readonly count = signal<number | null>(1000);
@@ -46,6 +56,7 @@ export class ImportRange {
   private readonly checkedFor = signal<string | null>(null);
 
   protected readonly request = computed<RangeRequest>(() => ({
+    type: this.type(),
     firstNumber: this.firstNumber().trim(),
     count: this.mode() === 'count' ? this.count() : null,
     lastNumber: this.mode() === 'last' ? this.lastNumber().trim() || null : null,
@@ -53,7 +64,7 @@ export class ImportRange {
 
   protected readonly formValid = computed(() => {
     const r = this.request();
-    if (!r.firstNumber) return false;
+    if (!r.type || !r.firstNumber) return false;
     return this.mode() === 'count' ? (r.count ?? 0) >= 1 : !!r.lastNumber;
   });
 
@@ -105,6 +116,7 @@ export class ImportRange {
   }
 
   protected resetForm(): void {
+    this.type.set(null);
     this.firstNumber.set('');
     this.mode.set('count');
     this.count.set(1000);

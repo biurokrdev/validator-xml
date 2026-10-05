@@ -55,6 +55,16 @@ export class NumbersList {
   /** Dostępne numery łącznie w obu pulach. */
   protected readonly totalAvailable = computed(() => this.stats().reduce((sum, s) => sum + s.available, 0));
 
+  protected readonly availableLabel: Record<PoolType, string> = {
+    Domestic: 'krajowe',
+    International: 'zagraniczne',
+  };
+
+  /** Dostępne numery jednego typu; 0 także wtedy, gdy API nie zwróciło statystyk tej puli. */
+  protected availableOf(type: PoolType): number {
+    return this.stats().find((s) => s.type === type)?.available ?? 0;
+  }
+
   /** Polska liczba mnoga: 1 numer, 2-4 numery, 5+ numerów (z wyjątkiem 12-14). */
   protected plural(n: number, one: string, few: string, many: string): string {
     const abs = Math.abs(n);

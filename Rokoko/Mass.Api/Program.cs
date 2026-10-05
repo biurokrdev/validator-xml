@@ -30,6 +30,11 @@ builder.Services.AddDbContext<MassDbContext>(o =>
 
 builder.Services.AddScoped<IRegisteredNumberPoolRepository, RegisteredNumberPoolRepository>();
 
+// Wydawanie numerów do nadruku + sprzątanie porzuconych rezerwacji.
+builder.Services.Configure<RegisteredNumberDispenserOptions>(builder.Configuration.GetSection(RegisteredNumberDispenserOptions.Section));
+builder.Services.AddSingleton<IRegisteredNumberDispenser, RegisteredNumberDispenser>();
+builder.Services.AddHostedService<StaleReservationSweeper>();
+
 // ---------------------------------------------------------------- API
 builder.Services
     .AddControllers()

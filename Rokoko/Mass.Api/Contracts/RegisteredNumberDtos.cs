@@ -27,11 +27,14 @@ public sealed record PagedResponse<T>(IReadOnlyList<T> Items, int Page, int Page
 /// <summary>
 /// Zakres do sprawdzenia/importu. Podaj <see cref="FirstNumber"/> oraz <see cref="Count"/> ALBO <see cref="LastNumber"/>.
 /// Numery w pełnym zapisie z cyfrą kontrolną, dozwolone spacje i "(00)".
+/// <see cref="Type"/> to rodzaj puli wskazany ręcznie przez użytkownika; gdy jest podany,
+/// musi zgadzać się z rodzajem wynikającym z numerów.
 /// </summary>
 public sealed record RangeRequest(
     [Required] string FirstNumber,
     [Range(1, RegisteredNumberRange.MaxCount)] int? Count,
-    string? LastNumber)
+    string? LastNumber,
+    RegisteredNumberPoolType? Type = null)
 {
     public RegisteredNumberRange ToRange()
     {
@@ -41,10 +44,23 @@ public sealed record RangeRequest(
         if (hasCount == hasLast)
             throw new ArgumentException("Podaj dokładnie jedno z: count albo lastNumber.");
 
-        return hasCount
+        var range = hasCount
             ? RegisteredNumberRange.FromFirstAndCount(FirstNumber, Count!.Value)
             : RegisteredNumberRange.FromFirstAndLast(FirstNumber, LastNumber!);
+
+        if (Type is { } declared && declared != range.Type)
+            throw new ArgumentException(
+                $"Wskazano pulę {Describe(declared)}, a podane numery są {Describe(range.Type, plural: true)}. " +
+                "Popraw rodzaj puli albo numery.");
+
+        return range;
     }
+
+    private static string Describe(RegisteredNumberPoolType type, bool plural = false) => type switch
+    {
+        RegisteredNumberPoolType.Domestic => plural ? "krajowe (20 cyfr SSCC)" : "krajową",
+        _ => plural ? "zagraniczne (13 znaków S10)" : "zagraniczną"
+    };
 }
 
 public sealed record RangeCheckResponse(

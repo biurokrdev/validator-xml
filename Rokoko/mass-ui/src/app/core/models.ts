@@ -65,6 +65,8 @@ export interface ListQuery {
 }
 
 export interface RangeRequest {
+  /** Rodzaj puli wskazany ręcznie; API odrzuca przedział, gdy numery są innego rodzaju. */
+  type: PoolType | null;
   firstNumber: string;
   count?: number | null;
   lastNumber?: string | null;

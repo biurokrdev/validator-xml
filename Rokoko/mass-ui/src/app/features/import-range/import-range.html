@@ -1,12 +1,35 @@
 <h1>Zasilenie puli przedziałem numerów</h1>
 
 <section class="card">
-  <p class="muted">
-    Podaj pierwszy numer z rolki (pełny, z cyfrą kontrolną; dozwolone spacje i „(00)”) oraz ilość
-    nalepek albo ostatni numer. Krajowe: 20 cyfr SSCC, zagraniczne: 13 znaków, np. RR473124829PL.
-  </p>
-
   <form (ngSubmit)="onCheck()">
+    <fieldset class="pool-type" data-testid="import-type">
+      <legend>1. Rodzaj zasilanej puli</legend>
+      @for (t of types; track t) {
+        <label class="pool-type-option" [class.selected]="type() === t">
+          <input
+            type="radio"
+            name="type"
+            [value]="t"
+            [ngModel]="type()"
+            (ngModelChange)="type.set($event)"
+            [attr.data-testid]="'import-type-' + t"
+          />
+          <span>
+            <b>{{ typeLabel[t] }}</b>
+            <span class="muted">{{ typeHint[t] }}</span>
+          </span>
+        </label>
+      }
+      @if (!type()) {
+        <div class="muted" data-testid="import-type-missing">Wskaż rodzaj puli, żeby wpisać przedział.</div>
+      }
+    </fieldset>
+
+    <p class="muted">
+      2. Podaj pierwszy numer z rolki (pełny, z cyfrą kontrolną; dozwolone spacje i „(00)”) oraz ilość
+      nalepek albo ostatni numer.
+    </p>
+
     <div class="row">
       <label class="field">
         Pierwszy numer
@@ -16,7 +39,8 @@
           name="firstNumber"
           [ngModel]="firstNumber()"
           (ngModelChange)="firstNumber.set($event)"
-          placeholder="00759007731512000621 lub RR473124829PL"
+          [placeholder]="type() ? typeHint[type()!] : ''"
+          [disabled]="!type()"
           style="min-width: 22rem"
           required
           data-testid="import-first"
@@ -25,7 +49,7 @@
 
       <label class="field">
         Sposób podania końca
-        <select name="mode" [ngModel]="mode()" (ngModelChange)="mode.set($event)" data-testid="import-mode">
+        <select name="mode" [ngModel]="mode()" (ngModelChange)="mode.set($event)" [disabled]="!type()" data-testid="import-mode">
           <option value="count">ilość numerów</option>
           <option value="last">ostatni numer</option>
         </select>
@@ -41,6 +65,7 @@
             max="100000"
             [ngModel]="count()"
             (ngModelChange)="count.set($event)"
+            [disabled]="!type()"
             data-testid="import-count"
           />
         </label>
@@ -53,6 +78,7 @@
             name="lastNumber"
             [ngModel]="lastNumber()"
             (ngModelChange)="lastNumber.set($event)"
+            [disabled]="!type()"
             style="min-width: 22rem"
             data-testid="import-last"
           />

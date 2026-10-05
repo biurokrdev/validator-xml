@@ -33,8 +33,8 @@ Na produkcji ustaw `Database:Provider = Postgres` i `ConnectionStrings:Mass` (po
 | GET | `/stats` | liczności obu pul wg stanów | 200 |
 | GET | `/{fullNumber}` | szczegóły numeru | 200, 400 (zły numer), 404 (spoza puli) |
 | POST | `/validate` `{number}` | format, cyfra kontrolna, obecność w puli, stan | 200 |
-| POST | `/ranges/check` `{firstNumber, count \| lastNumber}` | **weryfikacja przed zasileniem**: ile nowych, ile już mamy (z listą) | 200, 400 |
-| POST | `/ranges/import` `{firstNumber, count \| lastNumber}` | zasilenie puli; istniejące pomija | 200, 400 |
+| POST | `/ranges/check` `{type?, firstNumber, count \| lastNumber}` | **weryfikacja przed zasileniem**: ile nowych, ile już mamy (z listą) | 200, 400 |
+| POST | `/ranges/import` `{type?, firstNumber, count \| lastNumber}` | zasilenie puli; istniejące pomija | 200, 400 |
 | POST | `/{fullNumber}/state` `{action: Reserve\|Use\|Release\|Cancel}` | zmiana stanu | 200, 400, 404, 409 (niedozwolone przejście / konflikt) |
 | POST | `/acquire` `{type}` | pobierz i zarezerwuj kolejny wolny numer | 200, 409 (pula pusta) |
 
@@ -48,8 +48,8 @@ Jedna strona bez routera. Trzy sekcje są zdefiniowane jako `ng-template` w `app
 
 | Sekcja | Przycisk | Funkcje |
 |---|---|---|
-| Lista | `Lista` | panel stanu puli pod tytułem („Zostało N numerów do wykorzystania”, per typ: dostępne, zarezerwowane, użyte, anulowane, razem), filtry (typ, stan, fragment numeru), stronicowanie, akcje zmiany stanu zależne od stanu, „Pobierz kolejny numer” |
-| Zasilenie | `Zasilenie` | pierwszy numer + ilość albo ostatni numer → **Sprawdź** (duplikaty, tabela istniejących) → **Zasil** (aktywne tylko po aktualnym sprawdzeniu i gdy jest co dodać) |
+| Lista | `Lista` | panel stanu puli pod tytułem („Zostało N numerów do wykorzystania”, per typ: dostępne, zarezerwowane, użyte, anulowane, razem), filtry (typ, stan, fragment numeru), nad tabelą liczba dostępnych numerów krajowych i zagranicznych, stronicowanie, akcje zmiany stanu zależne od stanu, „Pobierz kolejny numer” |
+| Zasilenie | `Zasilenie` | ręczne wskazanie rodzaju puli (krajowa / zagraniczna; numery innego rodzaju API odrzuca) → pierwszy numer + ilość albo ostatni numer → **Sprawdź** (duplikaty, tabela istniejących) → **Zasil** (aktywne tylko po aktualnym sprawdzeniu i gdy jest co dodać) |
 | Sprawdź numer | `Sprawdź numer` | walidacja pojedynczego numeru i jego stan w puli |
 
 Pole „Edytor” w nagłówku trafia do `X-Editor`. Serwis: `src/app/core/registered-numbers.service.ts`, modele: `src/app/core/models.ts`, komponenty sekcji: `src/app/features/`. Elementy mają `data-testid` pod Playwright.
@@ -136,6 +136,25 @@ bool used = await repo.IsUsedAsync("00759007731512000621");
 Reguły stanów: `Available -> Reserved -> Used`, `Reserved -> Available` (release), `Available -> Used` (nalepka użyta bez rezerwacji), `Available|Reserved -> Cancelled`. Numer użyty nie zmienia już stanu.
 
 `AcquireNextAsync` na PostgreSQL używa `SELECT ... FOR UPDATE SKIP LOCKED`, więc wiele instancji aplikacji pobiera różne numery bez czekania. Na innych providerach (testy InMemory/SQLite) działa zwykły `OrderBy`, a kolizje wykrywa token współbieżności `RowVersion` mapowany na `xmin`.
+
+### Wydawanie numerów do nadruku (`IRegisteredNumberDispenser`)
+
+Kod nadrukowujący nie woła repozytorium, tylko dyspozytor (singleton):
+
+```csharp
+foreach (var document in documents)
+{
+    await dispenser.UseNumberAsync(RegisteredNumberPoolType.Domestic, "nadruk", async (number, ct) =>
+    {
+        await printer.PrintAsync(document, number, ct);   // numer jest w tym czasie Zarezerwowany
+        return true;
+    }, ct);
+}
+```
+
+Sukces -> numer Użyty. Wyjątek z nadruku -> rezerwacja zwolniona, numer wraca do puli. Proces padł w trakcie -> numer zostaje Zarezerwowany, a `StaleReservationSweeper` po `StaleReservationAfter` (domyślnie 30 min) go anuluje; `StaleReservationAction = Release` zwraca go zamiast tego do puli. Ustawienia: sekcja `RegisteredNumbers:Dispenser`.
+
+Indeksy pod zliczanie pozostałych numerów i pod wydawanie: `003_add_registered_number_pool_indexes.sql`.
 
 Wpięcie w DI:
 ```csharp

@@ -19,8 +19,11 @@ test.describe('Zasilenie puli przedziałem', () => {
 
   test('E2E-IMP-01 przycisk Zasil jest nieaktywny do czasu sprawdzenia przedziału', async ({ page }) => {
     await expect(page.getByTestId('import-submit')).toBeDisabled();
-    await expect(page.getByTestId('import-check')).toBeDisabled(); // brak pierwszego numeru
+    await expect(page.getByTestId('import-check')).toBeDisabled(); // brak rodzaju puli i pierwszego numeru
+    await expect(page.getByTestId('import-first')).toBeDisabled(); // najpierw rodzaj puli
+    await expect(page.getByTestId('import-type-missing')).toBeVisible();
 
+    await page.getByTestId('import-type-Domestic').check();
     await page.getByTestId('import-first').fill(domesticRange(1).first);
     await expect(page.getByTestId('import-check')).toBeEnabled();
     await expect(page.getByTestId('import-submit')).toBeDisabled();
@@ -29,6 +32,7 @@ test.describe('Zasilenie puli przedziałem', () => {
   test('E2E-IMP-02 krajowy przedział (pierwszy numer + ilość): sprawdzenie bez duplikatów i zasilenie', async ({ page, request }) => {
     const range = domesticRange(5);
 
+    await page.getByTestId('import-type-Domestic').check();
     await page.getByTestId('import-first').fill(range.first);
     await page.getByTestId('import-count').fill('5');
     await page.getByTestId('import-check').click();
@@ -58,6 +62,7 @@ test.describe('Zasilenie puli przedziałem', () => {
   test('E2E-IMP-03 zagraniczny przedział podany jako pierwszy i ostatni numer', async ({ page, request }) => {
     const range = internationalRange(3);
 
+    await page.getByTestId('import-type-International').check();
     await page.getByTestId('import-first').fill(range.first);
     await page.getByTestId('import-mode').selectOption('last');
     await page.getByTestId('import-last').fill(range.numbers[2]);
@@ -75,6 +80,7 @@ test.describe('Zasilenie puli przedziałem', () => {
     const range = domesticRange(7);
     await apiImport(request, range.first, 5); // 5 z 7 już mamy
 
+    await page.getByTestId('import-type-Domestic').check();
     await page.getByTestId('import-first').fill(range.first);
     await page.getByTestId('import-count').fill('7');
     await page.getByTestId('import-check').click();
@@ -97,6 +103,7 @@ test.describe('Zasilenie puli przedziałem', () => {
     const range = domesticRange(3);
     await apiImport(request, range.first, 3);
 
+    await page.getByTestId('import-type-Domestic').check();
     await page.getByTestId('import-first').fill(range.first);
     await page.getByTestId('import-count').fill('3');
     await page.getByTestId('import-check').click();
@@ -107,6 +114,7 @@ test.describe('Zasilenie puli przedziałem', () => {
   });
 
   test('E2E-IMP-06 błędna cyfra kontrolna pierwszego numeru daje czytelny błąd', async ({ page }) => {
+    await page.getByTestId('import-type-Domestic').check();
     await page.getByTestId('import-first').fill(corruptCheckDigit(domesticRange(1).first));
     await page.getByTestId('import-count').fill('10');
     await page.getByTestId('import-check').click();
@@ -118,6 +126,7 @@ test.describe('Zasilenie puli przedziałem', () => {
 
   test('E2E-IMP-07 zmiana przedziału po sprawdzeniu unieważnia wynik i blokuje Zasil', async ({ page }) => {
     const range = domesticRange(2);
+    await page.getByTestId('import-type-Domestic').check();
     await page.getByTestId('import-first').fill(range.first);
     await page.getByTestId('import-count').fill('2');
     await page.getByTestId('import-check').click();
@@ -129,11 +138,35 @@ test.describe('Zasilenie puli przedziałem', () => {
   });
 
   test('E2E-IMP-08 przedział z różnych pul (pierwszy krajowy, ostatni zagraniczny) jest odrzucany', async ({ page }) => {
+    await page.getByTestId('import-type-Domestic').check();
     await page.getByTestId('import-first').fill(domesticRange(1).first);
     await page.getByTestId('import-mode').selectOption('last');
     await page.getByTestId('import-last').fill(internationalRange(1).first);
     await page.getByTestId('import-check').click();
 
     await expect(page.getByTestId('import-error')).toContainText('różnych pul');
+  });
+
+  test('E2E-IMP-09 numery innego rodzaju niż wskazana pula są odrzucane', async ({ page }) => {
+    await page.getByTestId('import-type-Domestic').check();
+    await page.getByTestId('import-first').fill(internationalRange(1).first);
+    await page.getByTestId('import-count').fill('5');
+    await page.getByTestId('import-check').click();
+
+    await expect(page.getByTestId('import-error')).toContainText('Wskazano pulę krajową');
+    await expect(page.getByTestId('check-result')).toHaveCount(0);
+    await expect(page.getByTestId('import-submit')).toBeDisabled();
+  });
+
+  test('E2E-IMP-10 zmiana rodzaju puli po sprawdzeniu unieważnia wynik', async ({ page }) => {
+    const range = domesticRange(2);
+    await page.getByTestId('import-type-Domestic').check();
+    await page.getByTestId('import-first').fill(range.first);
+    await page.getByTestId('import-count').fill('2');
+    await page.getByTestId('import-check').click();
+    await expect(page.getByTestId('import-submit')).toBeEnabled();
+
+    await page.getByTestId('import-type-International').check();
+    await expect(page.getByTestId('import-submit')).toBeDisabled();
   });
 });
