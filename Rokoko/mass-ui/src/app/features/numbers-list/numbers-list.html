@@ -97,6 +97,14 @@
 }
 
 <section class="card">
+  <div class="available-bar" data-testid="available-bar">
+    @for (t of types; track t) {
+      <div class="available" [class.empty]="availableOf(t) === 0">
+        Dostępne {{ availableLabel[t] }}: <b [attr.data-testid]="'available-' + t">{{ availableOf(t) }}</b>
+      </div>
+    }
+  </div>
+
   <div class="muted" data-testid="list-summary">
     @if (result(); as r) {
       Znaleziono {{ r.totalCount }} numerów, strona {{ r.page }} z {{ r.totalPages }}.

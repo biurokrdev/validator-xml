@@ -59,6 +59,13 @@ label.field {
     font-family: ui-monospace, Consolas, monospace;
     letter-spacing: 0.04em;
   }
+
+  input:disabled,
+  select:disabled {
+    background: #eef1f6;
+    color: #8b95aa;
+    cursor: not-allowed;
+  }
 }
 
 button {

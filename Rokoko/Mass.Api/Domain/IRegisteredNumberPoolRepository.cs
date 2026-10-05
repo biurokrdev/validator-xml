@@ -63,6 +63,12 @@ public interface IRegisteredNumberPoolRepository
     Task<RegisteredNumberPool> CancelAsync(string fullNumber, string editor, CancellationToken ct = default);
 
     Task<RegisteredNumberPool?> FindAsync(string? fullNumber, CancellationToken ct = default);
+
+    /// <summary>
+    /// Rozlicza rezerwacje starsze niż <paramref name="reservedBeforeUtc"/> (anuluje albo zwalnia).
+    /// Jedno wywołanie obsługuje ograniczoną porcję; zwraca liczbę rozliczonych numerów.
+    /// </summary>
+    Task<int> ExpireStaleReservationsAsync(DateTime reservedBeforeUtc, StaleReservationAction action, string editor, CancellationToken ct = default);
 }
 
 /// <summary>Wynik importu zakresu.</summary>

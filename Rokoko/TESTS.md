@@ -48,6 +48,9 @@ Format: ID · warunki wstępne · kroki · oczekiwany wynik.
 | TM-IMP-11 | - | Ilość 100001. | Błąd limitu (100 000). |
 | TM-IMP-12 | - | Ilość i ostatni numer jednocześnie (przez Swagger). | HTTP 400 „Podaj dokładnie jedno z: count albo lastNumber”. |
 | TM-IMP-13 | - | Numer krajowy z S1 = 3 (paczka) jako pierwszy. | Błąd: przesyłka polecona ma S1 = 1 lub 4. |
+| TM-IMP-14 | - | Otwórz „Zasilenie” bez wskazania rodzaju puli. | Pola przedziału i „Sprawdź” nieaktywne, podpowiedź „Wskaż rodzaj puli”. Po wyborze rodzaju pola aktywne. |
+| TM-IMP-15 | - | Rodzaj puli Krajowy, pierwszy numer I1, ilość 5, „Sprawdź”. | Błąd „Wskazano pulę krajową, a podane numery są zagraniczne”. Brak wyniku, „Zasil” nieaktywne. |
+| TM-IMP-16 | - | Po „Sprawdź” zmień rodzaj puli. | „Zasil” nieaktywne aż do ponownego sprawdzenia. |
 
 ### 2.2 Lista numerów (ekran „Lista”)
 
@@ -61,6 +64,7 @@ Format: ID · warunki wstępne · kroki · oczekiwany wynik.
 | TM-LST-06 | - | „Wyczyść”. | Filtry puste, pełna lista. |
 | TM-LST-07 | brak dopasowań | Fragment `ZZZ`. | „Brak numerów spełniających kryteria”. |
 | TM-LST-08 | API zatrzymane | Odśwież listę. | Czerwony komunikat „Brak połączenia z API”, brak wyjątku w konsoli. |
+| TM-LST-09 | pula z numerami | Otwórz „Lista”. | Nad tabelą obok siebie „Dostępne krajowe: N” i „Dostępne zagraniczne: M”; liczą tylko stan Dostępny. Przy 0 pole jest czerwone. |
 
 ### 2.3 Zmiana stanu numeru
 
@@ -136,9 +140,12 @@ Pliki: `mass-ui/e2e/*.spec.ts`, konfiguracja `mass-ui/playwright.config.ts`, hel
 | | E2E-IMP-06 | TM-IMP-07 |
 | | E2E-IMP-07 | TM-IMP-10 |
 | | E2E-IMP-08 | TM-IMP-08 |
+| | E2E-IMP-09 | TM-IMP-15 |
+| | E2E-IMP-10 | TM-IMP-16 |
 | `numbers-list.spec.ts` | E2E-LST-01 | TM-LST-01, 04 |
 | | E2E-LST-02 | TM-LST-02, 03, 06 |
 | | E2E-LST-03 | TM-LST-05 |
+| | E2E-LST-05 | TM-LST-09 |
 | | E2E-LST-04 | statystyki |
 | | E2E-STA-01 | TM-STA-01, 02 (+ edytor z nagłówka) |
 | | E2E-STA-02 | TM-STA-04 |

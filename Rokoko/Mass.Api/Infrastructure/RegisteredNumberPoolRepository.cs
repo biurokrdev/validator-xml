@@ -13,6 +13,7 @@ using Mass.Domain;
 public sealed class RegisteredNumberPoolRepository(MassDbContext db) : IRegisteredNumberPoolRepository
 {
     private const int ImportBatchSize = 1_000;
+    private const int StaleBatchSize = 500;
 
     private readonly MassDbContext _db = db ?? throw new ArgumentNullException(nameof(db));
 
@@ -204,6 +205,24 @@ public sealed class RegisteredNumberPoolRepository(MassDbContext db) : IRegister
         return await FindByFullNumberAsync(parsed.FullNumber, track: true, ct);
     }
 
+    public async Task<int> ExpireStaleReservationsAsync(DateTime reservedBeforeUtc, StaleReservationAction action, string editor, CancellationToken ct = default)
+    {
+        var stale = await _db.RegisteredNumbers
+            .Where(x => x.State == RegisteredNumberPoolState.Reserved && x.ChangeDate < reservedBeforeUtc)
+            .OrderBy(x => x.ChangeDate)
+            .Take(StaleBatchSize)
+            .ToListAsync(ct);
+
+        foreach (var entity in stale)
+        {
+            if (action == StaleReservationAction.Release) entity.Release(editor);
+            else entity.Cancel(editor);
+        }
+
+        await _db.SaveChangesAsync(ct);   // xmin: numer rozliczony w międzyczasie przerywa porcję zamiast zostać nadpisany
+        return stale.Count;
+    }
+
     // =============================================================== pomocnicze
 
     private async Task<RegisteredNumberPool> MutateAsync(string fullNumber, Action<RegisteredNumberPool> action, CancellationToken ct)
@@ -241,11 +260,12 @@ public sealed class RegisteredNumberPoolRepository(MassDbContext db) : IRegister
         {
             // FOR UPDATE SKIP LOCKED: równoległe instancje dostają różne wiersze zamiast czekać lub kolidować.
             // Zapytanie nie jest komponowane dalej, więc EF wysyła je dosłownie.
+            // "state = 0" (Available) jest literałem, żeby planista użył indeksu częściowego ix_registered_number_pool_available.
             var rows = await _db.RegisteredNumbers
                 .FromSqlInterpolated($"""
                     SELECT *
                     FROM   mass.registered_number_pool
-                    WHERE  type = {(int)type} AND state = {(int)RegisteredNumberPoolState.Available}
+                    WHERE  type = {(int)type} AND state = 0
                     ORDER  BY value, full_number
                     LIMIT  1
                     FOR UPDATE SKIP LOCKED

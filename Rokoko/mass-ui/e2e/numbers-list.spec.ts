@@ -77,6 +77,22 @@ test.describe('Lista numerów i zmiana stanu', () => {
     await expect(stat.getByTestId('stat-available')).toHaveText(String(before + 4));
   });
 
+  test('E2E-LST-05 nad tabelą widać liczbę dostępnych numerów krajowych i zagranicznych', async ({ page, request }) => {
+    await page.goto('/');
+    await expect(page.getByTestId('available-bar')).toBeVisible();
+    const dom = Number(await page.getByTestId('available-Domestic').textContent());
+    const intl = Number(await page.getByTestId('available-International').textContent());
+
+    await apiImport(request, domesticRange(3).first, 3);
+    const used = internationalRange(2);
+    await apiImport(request, used.first, 2);
+    await apiChangeState(request, used.numbers[0], 'Use'); // użyty nie liczy się do dostępnych
+    await page.reload();
+
+    await expect(page.getByTestId('available-Domestic')).toHaveText(String(dom + 3));
+    await expect(page.getByTestId('available-International')).toHaveText(String(intl + 1));
+  });
+
   test('E2E-STA-01 Dostępny -> Zarezerwuj -> Oznacz jako użyty; użyty nie ma akcji', async ({ page, request }) => {
     const range = domesticRange(1);
     await apiImport(request, range.first, 1);

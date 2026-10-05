@@ -1,0 +1,149 @@
+<h1>Sprawdzenie okienka adresowego</h1>
+
+<section class="card">
+  <fieldset class="envelope" data-testid="envelope">
+    <legend>1. Rodzaj koperty (C65)</legend>
+    @for (e of envelopes; track e) {
+      <label class="envelope-option" [class.selected]="envelope() === e">
+        <input
+          type="radio"
+          name="envelope"
+          [value]="e"
+          [checked]="envelope() === e"
+          (change)="onEnvelopeChange(e)"
+          [attr.data-testid]="'envelope-' + e"
+        />
+        <span>
+          <b>{{ envelopeLabel[e] }}</b>
+          <span class="muted">{{ envelopeHint[e] }}</span>
+        </span>
+      </label>
+    }
+  </fieldset>
+
+  <p class="muted">2. Wczytaj pismo w PDF. Sprawdzana jest pierwsza strona, bo tylko ją widać w okienku.</p>
+
+  <div class="row">
+    <input
+      #fileInput
+      type="file"
+      accept="application/pdf,.pdf"
+      hidden
+      (change)="onFileSelected($event)"
+      data-testid="file-input"
+    />
+    <button type="button" (click)="fileInput.click()" [disabled]="checking()" data-testid="file-button">
+      {{ checking() ? 'Sprawdzanie…' : 'Wczytaj plik PDF' }}
+    </button>
+
+    @if (file(); as f) {
+      <span data-testid="file-name">
+        <b>{{ f.name }}</b>&nbsp;<span class="muted">({{ fileSize(f.size) }})</span>
+      </span>
+      <button type="button" class="secondary" (click)="clear()" data-testid="file-clear">Wyczyść</button>
+    }
+  </div>
+</section>
+
+@if (error()) {
+  <div class="alert error" role="alert" data-testid="check-error">{{ error() }}</div>
+}
+
+@if (checking()) {
+  <div class="muted" role="status" data-testid="check-progress">Trwa sprawdzanie pisma…</div>
+}
+
+@if (result(); as r) {
+  <section
+    class="alert verdict"
+    [class.success]="r.isValid"
+    [class.error]="!r.isValid"
+    role="status"
+    data-testid="verdict"
+    [attr.data-valid]="r.isValid"
+  >
+    <b>
+      @if (r.isValid) {
+        Pismo nadaje się do koperty.
+      } @else if (!r.isReadable) {
+        Nie udało się odczytać pliku.
+      } @else {
+        Pismo nie nadaje się do koperty.
+      }
+    </b>
+    <div data-testid="summary">{{ r.summary }}</div>
+    <div class="muted">
+      {{ r.fileName }} · {{ envelopeLabel[r.envelope] | lowercase }}
+      @if (r.page; as p) {
+        · strona {{ p.number }} z {{ p.count }} · {{ p.widthMm }} × {{ p.heightMm }} mm
+      }
+    </div>
+  </section>
+
+  <div class="result">
+    <div class="details">
+      @if (r.documentFindings.length > 0) {
+        <section class="card" data-testid="document-findings">
+          <h2>Dokument</h2>
+          <ng-container [ngTemplateOutlet]="findingsTpl" [ngTemplateOutletContext]="{ $implicit: r.documentFindings }" />
+        </section>
+      }
+
+      @for (w of r.windows; track w.kind) {
+        <section class="card" [attr.data-testid]="'window-' + w.kind">
+          <h2>
+            {{ w.name }}
+            @if (w.isValid) {
+              <span class="badge ok">OK</span>
+            } @else if (!w.found) {
+              <span class="badge Error">brak adresu</span>
+            } @else {
+              <span class="badge Error">błąd</span>
+            }
+          </h2>
+
+          @if (w.address; as a) {
+            <pre class="address" data-testid="address">{{ a.lines.join('\n') }}</pre>
+            @if (fontSize(a); as size) {
+              <div class="muted">Czcionka: {{ size }}</div>
+            }
+          }
+
+          @if (w.overflow; as o) {
+            <div class="alert error" data-testid="overflow">Adres wystaje poza okno: {{ o.description }}.</div>
+          }
+
+          <ng-container [ngTemplateOutlet]="findingsTpl" [ngTemplateOutletContext]="{ $implicit: w.findings }" />
+        </section>
+      }
+    </div>
+
+    @if (r.preview; as p) {
+      <figure class="preview card">
+        <img [src]="p.dataUri" [width]="p.widthPx" [height]="p.heightPx" alt="Podgląd pierwszej strony z oknami koperty" data-testid="preview" />
+        <figcaption class="muted">
+          Zielone okno: adres w porządku. Czerwone: błąd lub brak adresu. Niebieska ramka: wykryty adres.
+          @if (!p.renderedFromPdf) {
+            Podgląd uproszczony, strony nie udało się wyrenderować.
+          }
+        </figcaption>
+      </figure>
+    }
+  </div>
+}
+
+<ng-template #findingsTpl let-findings>
+  @if (findings.length > 0) {
+    <ul class="findings">
+      @for (f of findings; track $index) {
+        <li [attr.data-code]="f.code">
+          <span class="badge" [class]="'badge ' + f.severity">{{ severityLabel[f.severity] }}</span>
+          <span>
+            {{ f.message }}
+            <span class="muted mono">{{ f.code }}</span>
+          </span>
+        </li>
+      }
+    </ul>
+  }
+</ng-template>
