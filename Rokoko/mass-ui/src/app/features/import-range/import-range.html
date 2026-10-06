@@ -21,83 +21,82 @@
         </label>
       }
       @if (!type()) {
-        <div class="muted" data-testid="import-type-missing">Wskaż rodzaj puli, żeby wpisać przedział.</div>
+        <div class="muted" data-testid="import-type-missing">Najpierw wskaż, czy zasilasz pulę krajową, czy zagraniczną. Formularz przedziału pojawi się po wyborze.</div>
       }
     </fieldset>
 
-    <p class="muted">
-      2. Podaj pierwszy numer z rolki (pełny, z cyfrą kontrolną; dozwolone spacje i „(00)”) oraz ilość
-      nalepek albo ostatni numer.
-    </p>
+    @if (type()) {
+      <p class="muted">
+        2. Podaj pierwszy numer z rolki (pełny, z cyfrą kontrolną; dozwolone spacje i „(00)”) oraz ilość
+        nalepek albo ostatni numer.
+      </p>
 
-    <div class="row">
-      <label class="field">
-        Pierwszy numer
-        <input
-          class="mono"
-          type="text"
-          name="firstNumber"
-          [ngModel]="firstNumber()"
-          (ngModelChange)="firstNumber.set($event)"
-          [placeholder]="type() ? typeHint[type()!] : ''"
-          [disabled]="!type()"
-          style="min-width: 22rem"
-          required
-          data-testid="import-first"
-        />
-      </label>
-
-      <label class="field">
-        Sposób podania końca
-        <select name="mode" [ngModel]="mode()" (ngModelChange)="mode.set($event)" [disabled]="!type()" data-testid="import-mode">
-          <option value="count">ilość numerów</option>
-          <option value="last">ostatni numer</option>
-        </select>
-      </label>
-
-      @if (mode() === 'count') {
+      <div class="row">
         <label class="field">
-          Ilość
-          <input
-            type="number"
-            name="count"
-            min="1"
-            max="100000"
-            [ngModel]="count()"
-            (ngModelChange)="count.set($event)"
-            [disabled]="!type()"
-            data-testid="import-count"
-          />
-        </label>
-      } @else {
-        <label class="field">
-          Ostatni numer
+          Pierwszy numer
           <input
             class="mono"
             type="text"
-            name="lastNumber"
-            [ngModel]="lastNumber()"
-            (ngModelChange)="lastNumber.set($event)"
-            [disabled]="!type()"
+            name="firstNumber"
+            [ngModel]="firstNumber()"
+            (ngModelChange)="firstNumber.set($event)"
+            [placeholder]="typeHint[type()!]"
             style="min-width: 22rem"
-            data-testid="import-last"
+            required
+            data-testid="import-first"
           />
         </label>
-      }
-    </div>
 
-    <div class="row" style="margin-top: 0.75rem">
-      <button type="submit" [disabled]="!formValid() || checking()" data-testid="import-check">
-        {{ checking() ? 'Sprawdzanie…' : 'Sprawdź' }}
-      </button>
-      <button type="button" (click)="onImport()" [disabled]="!canImport()" data-testid="import-submit">
-        {{ importing() ? 'Zasilanie…' : 'Zasil' }}
-      </button>
-      <button type="button" class="secondary" (click)="resetForm()" data-testid="import-reset">Wyczyść</button>
-      @if (check() && !checkIsCurrent()) {
-        <span class="muted">Przedział zmienił się po sprawdzeniu, sprawdź ponownie.</span>
-      }
-    </div>
+        <label class="field">
+          Sposób podania końca
+          <select name="mode" [ngModel]="mode()" (ngModelChange)="mode.set($event)" data-testid="import-mode">
+            <option value="count">ilość numerów</option>
+            <option value="last">ostatni numer</option>
+          </select>
+        </label>
+
+        @if (mode() === 'count') {
+          <label class="field">
+            Ilość
+            <input
+              type="number"
+              name="count"
+              min="1"
+              max="100000"
+              [ngModel]="count()"
+              (ngModelChange)="count.set($event)"
+              data-testid="import-count"
+            />
+          </label>
+        } @else {
+          <label class="field">
+            Ostatni numer
+            <input
+              class="mono"
+              type="text"
+              name="lastNumber"
+              [ngModel]="lastNumber()"
+              (ngModelChange)="lastNumber.set($event)"
+              style="min-width: 22rem"
+              data-testid="import-last"
+            />
+          </label>
+        }
+      </div>
+
+      <div class="row" style="margin-top: 0.75rem">
+        <button type="submit" [disabled]="!formValid() || checking()" data-testid="import-check">
+          {{ checking() ? 'Sprawdzanie…' : 'Sprawdź' }}
+        </button>
+        <button type="button" (click)="onImport()" [disabled]="!canImport()" data-testid="import-submit">
+          {{ importing() ? 'Zasilanie…' : 'Zasil' }}
+        </button>
+        <button type="button" class="secondary" (click)="resetForm()" data-testid="import-reset">Wyczyść</button>
+        @if (check() && !checkIsCurrent()) {
+          <span class="muted">Przedział zmienił się po sprawdzeniu, sprawdź ponownie.</span>
+        }
+      </div>
+    }
   </form>
 </section>
 
