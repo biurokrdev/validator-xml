@@ -22,8 +22,6 @@ function inspection(overrides: Partial<LetterInspection> = {}): LetterInspection
         isValid: true,
         area: { left: 119, top: 54, width: 71, height: 30 },
         clearanceMm: 1,
-        content: 'Address',
-        label: null,
         address: {
           lines: ['Pan Jan Kowalski', 'ul. Polna 1', '00-061 Warszawa'],
           textBounds: { left: 125, top: 60, width: 40, height: 12 },
@@ -116,73 +114,6 @@ describe('LetterCheck', () => {
     expect(q('verdict')?.getAttribute('data-valid')).toBe('false');
     expect(q('overflow')?.textContent).toContain('z prawej o 9,7 mm');
     expect(q('window-Recipient')?.querySelector('[data-code="ADDRESS_OUTSIDE_WINDOW"]')).toBeTruthy();
-  });
-
-  it('shows the registered label window without address data', () => {
-    const { fixture, q, select } = render();
-    select(pdf());
-
-    const base = inspection();
-    http.expectOne(URL).flush(
-      inspection({
-        envelope: 'DoubleWindow',
-        windows: [
-          base.windows[0],
-          {
-            kind: 'Sender',
-            name: 'okno nadawcy',
-            found: true,
-            isValid: true,
-            area: { left: 28, top: 64, width: 51, height: 15 },
-            clearanceMm: 1,
-            content: 'RegisteredLabel',
-            address: null,
-            label: { bounds: { left: 29.5, top: 65.5, width: 48, height: 12 }, positionEstimated: false },
-            overflow: null,
-            findings: [],
-          },
-        ],
-      }),
-    );
-    fixture.detectChanges();
-
-    const labelWindow = q('window-Sender')!;
-    expect(labelWindow.querySelector('[data-testid="label-info"]')?.textContent).toContain('48 × 12 mm');
-    expect(labelWindow.querySelector('[data-testid="address"]')).toBeNull();
-    expect(labelWindow.querySelector('.badge.ok')).toBeTruthy();
-  });
-
-  it('says the registered label is missing', () => {
-    const { fixture, q, select } = render();
-    select(pdf());
-
-    const base = inspection();
-    http.expectOne(URL).flush(
-      inspection({
-        envelope: 'DoubleWindow',
-        isValid: false,
-        windows: [
-          base.windows[0],
-          {
-            kind: 'Sender',
-            name: 'okno nadawcy',
-            found: false,
-            isValid: false,
-            area: { left: 28, top: 64, width: 51, height: 15 },
-            clearanceMm: 1,
-            content: 'RegisteredLabel',
-            address: null,
-            label: null,
-            overflow: null,
-            findings: [{ code: 'LABEL_NOT_FOUND', severity: 'Error', message: 'Nie znaleziono nalepki R.' }],
-          },
-        ],
-      }),
-    );
-    fixture.detectChanges();
-
-    expect(q('window-Sender')?.textContent).toContain('brak nalepki R');
-    expect(q('window-Sender')?.querySelector('[data-code="LABEL_NOT_FOUND"]')).toBeTruthy();
   });
 
   it('rejects a non-PDF file without calling the API', () => {

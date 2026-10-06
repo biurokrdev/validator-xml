@@ -49,11 +49,9 @@ internal sealed class PdfAddressWindowInspector(IPdfAddressWindowValidator valid
         window.WindowName,
         ToArea(window.WindowArea),
         window.ClearanceMm,
-        window.Content == WindowContent.RegisteredLabel ? WindowContentKind.RegisteredLabel : WindowContentKind.Address,
         window.Block is { } block
             ? new AddressBlock(block.Lines.ToArray(), ToArea(block.TextBounds), block.MinFontSizePt, block.MaxFontSizePt)
             : null,
-        window.Label is { } label ? new RegisteredLabel(ToArea(label.Bounds), label.PositionEstimated) : null,
         window.Overflow.Any
             ? new OverflowMm(window.Overflow.LeftMm, window.Overflow.TopMm, window.Overflow.RightMm, window.Overflow.BottomMm, window.Overflow.Describe())
             : OverflowMm.None,

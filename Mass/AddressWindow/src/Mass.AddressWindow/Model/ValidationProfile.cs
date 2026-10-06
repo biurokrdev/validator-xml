@@ -8,13 +8,6 @@ public sealed class ValidationProfile
 
     public AddressContentRules SenderRules { get; init; } = AddressContentRules.Sender;
 
-    /// <summary>
-    /// Co jest sprawdzane w oknie nadawcy w trybie <see cref="WindowMode.Double"/>. Domyślnie nalepka R:
-    /// czy jest i czy mieści się w oknie. <see cref="WindowContent.Address"/> przywraca sprawdzanie
-    /// adresu nadawcy według <see cref="SenderRules"/>.
-    /// </summary>
-    public WindowContent SenderWindowContent { get; init; } = WindowContent.RegisteredLabel;
-
     public double AverageCharacterWidthEm { get; init; } = 0.55;
 
     public double LineHeightFactor { get; init; } = 1.17;

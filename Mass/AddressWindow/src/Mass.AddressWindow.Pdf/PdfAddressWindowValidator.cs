@@ -64,9 +64,7 @@ public sealed class PdfAddressWindowValidator : IPdfAddressWindowValidator
         };
         if (mode == WindowMode.Double)
         {
-            windows.Add(profile.SenderWindowContent == WindowContent.RegisteredLabel
-                ? LabelWindowChecker.Check(WindowRole.Sender, profile.Layout.SenderWindow!, text.Images, candidates, claimed)
-                : WindowChecker.Check(WindowRole.Sender, profile.Layout.SenderWindow!, profile.SenderRules, candidates, claimed));
+            windows.Add(WindowChecker.Check(WindowRole.Sender, profile.Layout.SenderWindow!, profile.SenderRules, candidates, claimed));
         }
 
         var validation = new AddressWindowValidationResult(mode, isDocumentReadable: true, windows, documentIssues);

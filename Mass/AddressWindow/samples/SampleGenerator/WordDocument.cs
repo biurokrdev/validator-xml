@@ -37,7 +37,6 @@ internal sealed class WordDocument
 
     private readonly StringBuilder _body = new();
     private readonly StringBuilder _header = new();
-    private readonly List<byte[]> _images = [];
     private int _shapeId = 1;
 
     private static string F(double v) => v.ToString(CultureInfo.InvariantCulture);
@@ -114,23 +113,6 @@ internal sealed class WordDocument
                "</w:drawing></mc:Choice><mc:Fallback><w:pict>" + vml + "</w:pict></mc:Fallback></mc:AlternateContent></w:r>";
     }
 
-    /// <summary>Grafika PNG zakotwiczona do strony (tak Word zapisuje obraz z układem „Przed tekstem”).</summary>
-    public string Picture(double x, double y, double w, double h, string name, byte[] png)
-    {
-        _images.Add(png);
-        var relId = $"rIdImg{_images.Count}";
-        return "<w:r><w:drawing>" +
-               AnchorOpen(x, y, w, h, name, behind: false)
-                   .Replace("http://schemas.microsoft.com/office/word/2010/wordprocessingShape", "http://schemas.openxmlformats.org/drawingml/2006/picture") +
-               "<pic:pic xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\">" +
-               $"<pic:nvPicPr><pic:cNvPr id=\"0\" name=\"{Esc(name)}\"/><pic:cNvPicPr/></pic:nvPicPr>" +
-               $"<pic:blipFill><a:blip r:embed=\"{relId}\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>" +
-               $"<pic:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"{Emu(w)}\" cy=\"{Emu(h)}\"/></a:xfrm>" +
-               "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>" +
-               AnchorClose +
-               "</w:drawing></w:r>";
-    }
-
     public string WindowGuide(double x, double y, double w, double h, string name) =>
         "<w:r><mc:AlternateContent><mc:Choice Requires=\"wps\"><w:drawing>" +
         AnchorOpen(x, y, w, h, name, behind: true) +
@@ -157,7 +139,6 @@ internal sealed class WordDocument
             "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">" +
             "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>" +
             "<Default Extension=\"xml\" ContentType=\"application/xml\"/>" +
-            "<Default Extension=\"png\" ContentType=\"image/png\"/>" +
             "<Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>" +
             "<Override PartName=\"/word/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml\"/>" +
             (hasHeader ? "<Override PartName=\"/word/header1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml\"/>" : "") +
@@ -181,15 +162,7 @@ internal sealed class WordDocument
             "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
             "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>" +
             (hasHeader ? "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/header\" Target=\"header1.xml\"/>" : "") +
-            string.Concat(_images.Select((_, i) =>
-                $"<Relationship Id=\"rIdImg{i + 1}\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/image\" Target=\"media/image{i + 1}.png\"/>")) +
             "</Relationships>");
-
-        for (var i = 0; i < _images.Count; i++)
-        {
-            using var media = zip.CreateEntry($"word/media/image{i + 1}.png").Open();
-            media.Write(_images[i]);
-        }
 
         Add(zip, "word/styles.xml", $"<w:styles {Namespaces}>{Styles}</w:styles>");
 

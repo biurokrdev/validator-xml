@@ -69,7 +69,7 @@ public class LetterInspectionsApiTests(WebApplicationFactory<Program> factory) :
     }
 
     [Fact]
-    public async Task SingleWindowLetter_LacksRegisteredLabelForDoubleWindowEnvelope()
+    public async Task SingleWindowLetter_LacksSenderForDoubleWindowEnvelope()
     {
         var result = await Inspect("01_C65_jedno_okienko_poprawny.pdf", "DoubleWindow");
 
@@ -77,38 +77,7 @@ public class LetterInspectionsApiTests(WebApplicationFactory<Program> factory) :
         Assert.Equal(2, result.Windows.Count);
         var sender = result.Windows.Single(w => w.Kind == WindowKind.Sender);
         Assert.False(sender.Found);
-        Assert.Equal(WindowContentKind.RegisteredLabel, sender.Content);
-        Assert.Contains(sender.Findings, f => f.Code == "LABEL_NOT_FOUND" && f.Severity == FindingSeverity.Error);
-        Assert.Contains("nie znaleziono nalepki R", result.Summary);
-    }
-
-    [Fact]
-    public async Task LetterWithRegisteredLabel_IsValidForDoubleWindowEnvelope()
-    {
-        var result = await Inspect("02_C65_dwa_okienka_poprawny.pdf", "DoubleWindow");
-
-        Assert.True(result.IsValid, result.Summary);
-        var recipient = result.Windows.Single(w => w.Kind == WindowKind.Recipient);
-        Assert.Equal(WindowContentKind.Address, recipient.Content);
-        Assert.NotNull(recipient.Address);
-        var labelWindow = result.Windows.Single(w => w.Kind == WindowKind.Sender);
-        Assert.True(labelWindow.Found);
-        Assert.Null(labelWindow.Address);
-        Assert.Equal(48, labelWindow.Label!.Bounds.Width, 0);
-        Assert.Equal(12, labelWindow.Label.Bounds.Height, 0);
-        Assert.Null(labelWindow.Overflow);
-    }
-
-    [Fact]
-    public async Task StandardSizeRegisteredLabel_DoesNotFitTheWindow()
-    {
-        var result = await Inspect("05_C65_nalepka_R_za_duza.pdf", "DoubleWindow");
-
-        Assert.False(result.IsValid);
-        var labelWindow = result.Windows.Single(w => w.Kind == WindowKind.Sender);
-        Assert.True(labelWindow.Found);
-        Assert.Contains(labelWindow.Findings, f => f.Code == "LABEL_TOO_LARGE");
-        Assert.NotNull(labelWindow.Overflow);
+        Assert.Contains(sender.Findings, f => f.Code == "WINDOW_NOT_FOUND" && f.Severity == FindingSeverity.Error);
     }
 
     [Fact]

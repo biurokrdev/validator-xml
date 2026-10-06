@@ -1,7 +1,5 @@
 # Mass.RLabel
 
-> Dokumentacja użytkownika i integracji (nalepki R i walidacja pism razem): [../docs/README.md](../docs/README.md).
-
 Biblioteka .NET 8 generująca grafikę nalepki „R” listu poleconego: czerwona litera R w ramce, kod kreskowy numeru nadawczego i numer w postaci czytelnej. Wynik to PNG albo JPEG, dostępny jako bajty, Base64 lub `data:` URI.
 
 Działa na Windows i Linux (w tym w kontenerach GCP: Cloud Run, GKE) bez fontów systemowych i bez bibliotek graficznych Windows. Wszystkie składniki są darmowe:

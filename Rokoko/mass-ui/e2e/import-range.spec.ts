@@ -17,18 +17,13 @@ test.describe('Zasilenie puli przedziałem', () => {
     await expect(page.getByRole('heading', { name: 'Zasilenie puli przedziałem numerów' })).toBeVisible();
   });
 
-  test('E2E-IMP-01 najpierw rodzaj puli; Zasil jest nieaktywny do czasu sprawdzenia przedziału', async ({ page }) => {
-    // przed wyborem rodzaju puli formularza przedziału nie ma
+  test('E2E-IMP-01 przycisk Zasil jest nieaktywny do czasu sprawdzenia przedziału', async ({ page }) => {
+    await expect(page.getByTestId('import-submit')).toBeDisabled();
+    await expect(page.getByTestId('import-check')).toBeDisabled(); // brak rodzaju puli i pierwszego numeru
+    await expect(page.getByTestId('import-first')).toBeDisabled(); // najpierw rodzaj puli
     await expect(page.getByTestId('import-type-missing')).toBeVisible();
-    await expect(page.getByTestId('import-first')).toHaveCount(0);
-    await expect(page.getByTestId('import-check')).toHaveCount(0);
-    await expect(page.getByTestId('import-submit')).toHaveCount(0);
 
     await page.getByTestId('import-type-Domestic').check();
-    await expect(page.getByTestId('import-type-missing')).toHaveCount(0);
-    await expect(page.getByTestId('import-check')).toBeDisabled(); // brak pierwszego numeru
-    await expect(page.getByTestId('import-submit')).toBeDisabled();
-
     await page.getByTestId('import-first').fill(domesticRange(1).first);
     await expect(page.getByTestId('import-check')).toBeEnabled();
     await expect(page.getByTestId('import-submit')).toBeDisabled();

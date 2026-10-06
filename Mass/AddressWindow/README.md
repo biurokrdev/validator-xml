@@ -1,7 +1,5 @@
 # Mass.AddressWindow
 
-> Dokumentacja użytkownika i integracji (walidacja pism i nalepki R razem): [../docs/README.md](../docs/README.md).
-
 Dwie biblioteki .NET 8 do sprawdzania, czy pismo nadaje się do koperty z okienkiem:
 
 - **`Mass.AddressWindow`**: dokumenty Word (DOCX), bez zależności zewnętrznych.
@@ -14,8 +12,6 @@ Obie sprawdzają tylko pierwszą stronę, bo tylko ona jest widoczna w okienku k
 3. Czy treść adresu spełnia reguły adresowania: liczba wierszy, długość wiersza, kod pocztowy NN-NNN w ostatnim wierszu, wielkość czcionki?
 
 Tryb **jednego lub dwóch okienek** wybiera klasa wywołująca przy każdym wywołaniu (`WindowMode.Single` / `WindowMode.Double`).
-
-W trybie dwóch okienek okna nie są sprawdzane tak samo. W **oknie adresata** szukany jest adres i dotyczą go wszystkie trzy pytania. W **oknie nadawcy** ma być **nalepka „R” listu poleconego** wstawiona jako grafika: sprawdzane jest tylko, czy jest i czy mieści się w oknie (sekcja [Okno nadawcy: nalepka R](#okno-nadawcy-nalepka-r)).
 
 Biblioteka DOCX nie ma zależności zewnętrznych. DOCX jest czytany własnym parserem na `System.IO.Compression` i `System.Xml.Linq`, bez OpenXML SDK i bez bibliotek komercyjnych.
 
@@ -68,10 +64,6 @@ Uszkodzony plik lub plik, który nie jest DOCX (np. `.doc`, dokument zaszyfrowan
 | Kod | Waga | Znaczenie |
 |---|---|---|
 | `WINDOW_NOT_FOUND` | błąd | w oknie nie ma tekstu (brak okienka adresowego) |
-| `LABEL_NOT_FOUND` | błąd | w oknie nadawcy nie ma grafiki, czyli nalepki R; komunikat zaznacza, gdy zamiast niej jest tam tekst |
-| `LABEL_TOO_LARGE` | błąd | nalepka R jest większa niż obszar okna; podaje rozmiar nalepki i największy dopuszczalny |
-| `LABEL_OUTSIDE_WINDOW` | błąd | nalepka R ma dobry rozmiar, ale wychodzi poza okno; podaje, z której strony i o ile mm |
-| `LABEL_TOO_CLOSE_TO_EDGE` | błąd | nalepka R jest w oknie, ale bliżej krawędzi niż `ClearanceMm` |
 | `ADDRESS_OUTSIDE_WINDOW` | błąd | tekst wychodzi poza okno; komunikat podaje, z której strony i o ile mm |
 | `ADDRESS_TOO_CLOSE_TO_EDGE` | błąd | tekst jest w oknie, ale bliżej krawędzi niż `ClearanceMm` |
 | `TEXT_ROTATED` | błąd | tekst obrócony lub pionowy |
@@ -90,36 +82,6 @@ Uszkodzony plik lub plik, który nie jest DOCX (np. `.doc`, dokument zaszyfrowan
 | `MERGE_FIELDS_PRESENT` | ostrzeżenie | szablon korespondencji seryjnej («Pole»); błędy kodu pocztowego są wtedy obniżane do ostrzeżeń |
 | `UNEXPECTED_PAGE_FORMAT` | ostrzeżenie | strona nie jest A4 w pionie |
 | `POSITION_ESTIMATED` | informacja | położenie wyliczone w przybliżeniu (patrz niżej) |
-
-## Okno nadawcy: nalepka R
-
-W trybie `Double` okno nadawcy nie służy do adresu nadawcy, tylko do nalepki R listu poleconego (np. grafiki z biblioteki `Mass.RLabel`). Walidator nie sprawdza tam żadnych danych adresowych. Odpowiada na dwa pytania:
-
-1. Czy w oknie jest nalepka, czyli grafika: obraz wstawiony do DOCX albo obraz rastrowy na stronie PDF?
-2. Czy cała nalepka mieści się w obszarze okna, z tym samym zapasem na przesuwanie się kartki co adres?
-
-```csharp
-var result = validator.Validate(pdfBytes, WindowMode.Double);
-
-var labelWindow = result.For(WindowRole.Sender)!;
-labelWindow.Content;        // WindowContent.RegisteredLabel
-labelWindow.Found;          // czy w oknie jest grafika
-labelWindow.Label?.Bounds;  // położenie i rozmiar nalepki na stronie, w mm
-labelWindow.Overflow;       // o ile mm nalepka wystaje z każdej strony
-labelWindow.Block;          // zawsze null: w tym oknie nie szukamy adresu
-```
-
-Za nalepkę uznawana jest grafika, która najlepiej pokrywa się z oknem. Grafika poza oknem (np. logo w nagłówku) nie jest brana pod uwagę. Jeśli obok nalepki w oknie widać tekst, wynik ma ostrzeżenie `OTHER_TEXT_IN_WINDOW`. Adres nadawcy wpisany w oknie zamiast nalepki daje `LABEL_NOT_FOUND`.
-
-**Rozmiar nalepki a koperta C65.** Okno nadawcy ma na kopercie 70×30 mm, ale przy luzie kartki 19×15 mm zawsze widoczny jest tylko obszar 51×15 mm strony, a po odjęciu 1 mm odstępu nalepka może mieć najwyżej **49×13 mm**. Domyślna nalepka z `Mass.RLabel` ma 65×25 mm i w tym układzie zawsze dostanie `LABEL_TOO_LARGE`. Trzeba ją wygenerować mniejszą (`WidthMm`, `HeightMm`) albo zmienić założenie o luzie kartki (`LetterPlay.Centered`, mniej bezpieczne). Przy 48 mm szerokości najwęższa kreska kodu ma ok. 0,17 mm, mniej niż 0,25 mm zalecane dla skanerów, więc taki rozmiar warto sprawdzić na wydruku.
-
-**Ograniczenia.** Walidator rozpoznaje nalepkę po tym, że jest grafiką w oknie; nie odczytuje kodu kreskowego ani numeru i nie odróżni nalepki R od innego obrazka w tym miejscu. W DOCX obsługiwane są obrazy DrawingML (także w grupach kształtów); dla obrazu wstawionego „w tekście” położenie jest szacowane (`POSITION_ESTIMATED`). Starsze obrazy VML (`v:imagedata`) nie są wykrywane. W PDF wykrywane są obrazy rastrowe; nalepka narysowana wektorowo nie zostanie znaleziona.
-
-**Adres nadawcy zamiast nalepki.** Poprzednie zachowanie (adres nadawcy sprawdzany regułami `SenderRules`) jest dostępne przez profil:
-
-```csharp
-var profile = new ValidationProfile { SenderWindowContent = WindowContent.Address };
-```
 
 ## Konfiguracja
 
@@ -163,7 +125,7 @@ Do okna można dodać `ElementNameHint` (nazwa pola tekstowego, tag kontrolki za
 
 ### Reguły treści
 
-Domyślne reguły treści (`AddressContentRules`). Kolumna „Nadawca” dotyczy tylko profilu z `SenderWindowContent = WindowContent.Address`; domyślnie w oknie nadawcy jest nalepka R i reguł treści tam nie ma.
+Domyślne reguły treści (`AddressContentRules`):
 
 | Reguła | Adresat | Nadawca |
 |---|---|---|
@@ -241,7 +203,7 @@ AddressWindow/
 │  ├─ Model/                          WindowMode, EnvelopeLayout(s), AddressContentRules, ValidationProfile, RectangleMm
 │  ├─ Results/                        wynik, zgłoszenia, kody, WindowOverflow
 │  ├─ Docx/                           własny parser DOCX: pakiet ZIP, style, tekst, geometria pierwszej strony
-│  └─ Rules/                          wspólny silnik: wybór bloku dla okna, reguły geometrii i treści (IAddressCandidate), okno nalepki R (LabelWindowChecker)
+│  └─ Rules/                          wspólny silnik: wybór bloku dla okna, reguły geometrii i treści (IAddressCandidate)
 ├─ src/Mass.AddressWindow.Pdf/
 │  ├─ IPdfAddressWindowValidator.cs   interfejs publiczny (PDF)
 │  ├─ PdfAddressWindowValidator.cs    implementacja PDF
@@ -249,7 +211,7 @@ AddressWindow/
 │  └─ Preview/                        render strony (PDFium) + nakładki (SkiaSharp)
 ├─ tests/Mass.AddressWindow.Tests/    xUnit; dokumenty testowe generowane w kodzie (TestDocx)
 ├─ tests/Mass.AddressWindow.Pdf.Tests/ xUnit; minimalne PDF-y generowane w kodzie (MiniPdf) + PDF-y z Worda z samples/pdf
-└─ samples/                           5 pism DOCX i ich PDF-y do testów manualnych + generatory (patrz samples/README.md)
+└─ samples/                           4 pisma DOCX i ich PDF-y do testów manualnych + generatory (patrz samples/README.md)
 ```
 
 ```

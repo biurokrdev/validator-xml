@@ -3,10 +3,7 @@ using Mass.AddressWindow.Domain.Inspection;
 
 namespace Mass.AddressWindow.Api.Contracts;
 
-/// <summary>
-/// Formularz multipart/form-data: plik PDF i rodzaj koperty. Przy dwóch okienkach w oknie adresata
-/// sprawdzany jest adres, a w oknie nadawcy nalepka R listu poleconego (czy jest i czy się mieści).
-/// </summary>
+/// <summary>Formularz multipart/form-data: plik PDF i rodzaj koperty.</summary>
 public sealed class InspectLetterRequest
 {
     [Required(ErrorMessage = "Nie przesłano pliku PDF.")]
@@ -25,9 +22,6 @@ public sealed record FindingDto(string Code, FindingSeverity Severity, string Me
 
 public sealed record AddressDto(IReadOnlyList<string> Lines, AreaMm TextBounds, double? MinFontSizePt, double? MaxFontSizePt);
 
-/// <summary>Nalepka R wykryta w oknie: położenie i rozmiar grafiki na stronie.</summary>
-public sealed record LabelDto(AreaMm Bounds, bool PositionEstimated);
-
 public sealed record OverflowDto(double LeftMm, double TopMm, double RightMm, double BottomMm, string Description);
 
 public sealed record WindowDto(
@@ -37,9 +31,7 @@ public sealed record WindowDto(
     bool IsValid,
     AreaMm Area,
     double ClearanceMm,
-    WindowContentKind Content,
     AddressDto? Address,
-    LabelDto? Label,
     OverflowDto? Overflow,
     IReadOnlyList<FindingDto> Findings)
 {
@@ -50,9 +42,7 @@ public sealed record WindowDto(
         w.IsValid,
         w.Area,
         w.ClearanceMm,
-        w.Content,
         w.Address is { } a ? new AddressDto(a.Lines, a.TextBounds, a.MinFontSizePt, a.MaxFontSizePt) : null,
-        w.Label is { } l ? new LabelDto(l.Bounds, l.PositionEstimated) : null,
         w.Overflow.Any
             ? new OverflowDto(w.Overflow.Left, w.Overflow.Top, w.Overflow.Right, w.Overflow.Bottom, w.Overflow.Description)
             : null,

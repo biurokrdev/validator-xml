@@ -35,7 +35,7 @@ Do prób nadają się pliki z `Mass/AddressWindow/samples/pdf` (oczekiwane wynik
 | Pole | Wartość |
 |---|---|
 | `file` | plik PDF, do 20 MB |
-| `envelope` | `SingleWindow` (domyślnie, sprawdzany adres adresata) albo `DoubleWindow` (adres adresata i nalepka R w oknie nadawcy) |
+| `envelope` | `SingleWindow` (domyślnie, sprawdzany adresat) albo `DoubleWindow` (adresat i nadawca) |
 | `includePreview` | `true` (domyślnie) albo `false`: bez podglądu PNG, szybciej |
 
 ```
@@ -47,16 +47,7 @@ curl -F "file=@pismo.pdf" -F envelope=DoubleWindow http://localhost:5090/api/let
 | `200` + wynik | plik przyjęty do sprawdzenia, także gdy pismo jest niepoprawne (`isValid: false`) albo PDF okazał się uszkodzony lub zaszyfrowany (`isReadable: false`, zgłoszenie `INVALID_DOCUMENT`) |
 | `400` + `ProblemDetails` | brak pliku, plik pusty, za duży, bez nagłówka PDF albo nieznany rodzaj koperty |
 
-Wynik: `isValid`, `isReadable`, `summary`, `page`, `windows[]`, `documentFindings[]` i `preview.dataUri` (PNG do `<img src>`). Każde okno ma `content`, `found`, `isValid`, `overflow` w mm z gotowym opisem i `findings[]`. Kody zgłoszeń są takie same jak w bibliotece (tabela w `../README.md`).
-
-Przy dwóch okienkach okna różnią się tym, czego się w nich szuka:
-
-| Okno | `content` | Co jest sprawdzane | Co jest w wyniku |
-|---|---|---|---|
-| adresata (`kind: Recipient`) | `Address` | położenie i treść adresu | `address.lines`, rozmiar czcionki |
-| nadawcy (`kind: Sender`) | `RegisteredLabel` | tylko czy jest nalepka R (grafika) i czy mieści się w oknie; żadnych danych adresowych | `label.bounds`: położenie i rozmiar nalepki w mm |
-
-Do okna nadawcy koperty C65 mieści się nalepka najwyżej 49×13 mm; standardowa 65×25 mm daje `LABEL_TOO_LARGE` (szczegóły w `../README.md`, sekcja „Okno nadawcy: nalepka R”).
+Wynik: `isValid`, `isReadable`, `summary`, `page`, `windows[]` (dla każdego okna: `found`, `isValid`, `address.lines`, `overflow` w mm z gotowym opisem, `findings[]`), `documentFindings[]` i `preview.dataUri` (PNG do `<img src>`). Kody zgłoszeń są takie same jak w bibliotece (tabela w `../README.md`).
 
 Układ koperty to domyślny profil biblioteki, czyli C65. Inny układ ustawia się w jednym miejscu: `Infrastructure/DependencyInjection.cs`, w konstruktorze `PdfAddressWindowValidator`.
 

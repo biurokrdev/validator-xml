@@ -5,12 +5,7 @@ namespace Mass.AddressWindow.Tests;
 
 public class AddressWindowValidatorTests
 {
-    // Te testy dotyczą adresów, więc okno nadawcy sprawdza tu adres nadawcy, a nie (domyślnie) nalepkę R.
-    private static readonly ValidationProfile LeftWindow = new()
-    {
-        Layout = EnvelopeLayouts.DlTwoWindowsLeft,
-        SenderWindowContent = WindowContent.Address,
-    };
+    private static readonly ValidationProfile LeftWindow = new() { Layout = EnvelopeLayouts.DlTwoWindowsLeft };
 
     private readonly IAddressWindowValidator _validator = new AddressWindowValidator(LeftWindow);
 

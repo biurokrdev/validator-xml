@@ -1,5 +1,4 @@
 using System.Xml.Linq;
-using Mass.AddressWindow.Rules;
 
 namespace Mass.AddressWindow.Docx;
 
@@ -21,15 +20,9 @@ internal sealed class FirstPageAnalyzer
 
     public PageSetup Page { get; }
 
-    /// <summary>Grafiki z pierwszej strony; wypełniane przez <see cref="Analyze"/>.</summary>
-    public IReadOnlyList<ImageCandidate> Images => _images;
-
-    private readonly List<ImageCandidate> _images = [];
-
     public IReadOnlyList<TextBlockCandidate> Analyze()
     {
         var result = new List<TextBlockCandidate>();
-        _images.Clear();
 
         if (Page.FirstPageHeaderRelId is { } headerId && _package.GetHeader(headerId)?.Root is { } header)
         {
@@ -638,9 +631,9 @@ internal sealed class FirstPageAnalyzer
                 bool estimated;
                 if (drawing.Name == Ns.WP + "inline")
                 {
-                    var props = paragraph is null ? null : owner._extractor.Read(paragraph).Props;
-                    x = Page.ContentLeft + (props?.IndentLeftMm ?? 0);
-                    y = paragraphTop + (props?.SpaceBeforeMm ?? 0);
+                    var indent = paragraph is null ? 0 : owner._extractor.Read(paragraph).Props.IndentLeftMm;
+                    x = Page.ContentLeft + indent;
+                    y = paragraphTop;
                     estimated = true;
                 }
                 else
@@ -662,19 +655,7 @@ internal sealed class FirstPageAnalyzer
                     {
                         ProcessGroup(shape, rect, estimated, names);
                     }
-                    else if (shape.Name == Ns.PIC + "pic")
-                    {
-                        AddImage(rect, estimated, names);
-                    }
                 }
-            }
-        }
-
-        private void AddImage(RectangleMm rect, bool estimated, string?[] names)
-        {
-            if (rect.Width > 0 && rect.Height > 0)
-            {
-                owner._images.Add(new ImageCandidate(rect, part, names.FirstOrDefault(n => !string.IsNullOrWhiteSpace(n)), estimated));
             }
         }
 
@@ -746,16 +727,12 @@ internal sealed class FirstPageAnalyzer
             {
                 var isShape = child.Name == Ns.WPS + "wsp";
                 var isGroup = child.Name == Ns.WPG + "grpSp";
-                var isPicture = child.Name == Ns.PIC + "pic";
-                if (!isShape && !isGroup && !isPicture)
+                if (!isShape && !isGroup)
                 {
                     continue;
                 }
 
-                var properties = isShape ? child.Element(Ns.WPS + "spPr")
-                    : isGroup ? child.Element(Ns.WPG + "grpSpPr")
-                    : child.Element(Ns.PIC + "spPr");
-                var childXfrm = properties?.Element(Ns.A + "xfrm");
+                var childXfrm = (isShape ? child.Element(Ns.WPS + "spPr") : child.Element(Ns.WPG + "grpSpPr"))?.Element(Ns.A + "xfrm");
                 var offset = Point(childXfrm?.Element(Ns.A + "off"), "x", "y");
                 var size = Point(childXfrm?.Element(Ns.A + "ext"), "cx", "cy");
                 if (offset is null || size is null)
@@ -772,10 +749,6 @@ internal sealed class FirstPageAnalyzer
                 if (isShape)
                 {
                     ProcessWordShape(child, childRect, estimated, names);
-                }
-                else if (isPicture)
-                {
-                    AddImage(childRect, estimated, names);
                 }
                 else
                 {

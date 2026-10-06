@@ -4,7 +4,7 @@ namespace Mass.AddressWindow.Rules;
 
 internal static class GeometryRules
 {
-    internal static readonly CultureInfo Pl = CultureInfo.GetCultureInfo("pl-PL");
+    private static readonly CultureInfo Pl = CultureInfo.GetCultureInfo("pl-PL");
 
     public static WindowOverflow Check(IAddressCandidate block, AddressWindowSpec window, WindowRole role, List<ValidationIssue> issues)
     {

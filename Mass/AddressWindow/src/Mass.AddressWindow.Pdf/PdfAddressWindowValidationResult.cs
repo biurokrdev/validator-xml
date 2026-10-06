@@ -85,7 +85,7 @@ public sealed class PdfAddressWindowValidationResult
 
             var parts = Windows.Select(w => w.Found
                 ? $"{w.WindowName}: {(w.IsValid ? "OK" : "błąd")}{(w.Overflow.Any ? $" (wystaje {w.Overflow.Describe()})" : "")}"
-                : $"{w.WindowName}: {(w.Content == WindowContent.RegisteredLabel ? "nie znaleziono nalepki R" : "nie znaleziono adresu")}");
+                : $"{w.WindowName}: nie znaleziono adresu");
             return string.Join("; ", parts);
         }
     }

@@ -6,9 +6,6 @@ public class C65LayoutTests
 {
     private readonly IAddressWindowValidator _validator = new AddressWindowValidator();
 
-    // Adres nadawcy w oknie nadawcy to tryb opcjonalny; domyślnie jest tam nalepka R (RegisteredLabelWindowTests).
-    private static readonly ValidationProfile SenderAddress = new() { SenderWindowContent = WindowContent.Address };
-
     private static string RecipientBox() => TextBox(117.5, 53.8, 72, 30, Recipient, name: "Adresat");
 
     private static string SenderBox(IEnumerable<string>? lines = null) =>
@@ -79,7 +76,7 @@ public class C65LayoutTests
     [Fact]
     public void Double_BothWindowsFilled_IsValid()
     {
-        var result = _validator.Validate(Create(SenderBox() + RecipientBox()), WindowMode.Double, SenderAddress);
+        var result = _validator.Validate(Create(SenderBox() + RecipientBox()), WindowMode.Double);
 
         Assert.True(result.IsValid, string.Join("\n", result.Issues));
         Assert.Equal(Sender, result.For(WindowRole.Sender)!.Block!.Lines);
@@ -91,7 +88,7 @@ public class C65LayoutTests
     {
         string[] sender = ["Urząd Gminy Wólka", "ul. Generała Władysława Sikorskiego 1", "21-100 Lubartów"];
 
-        var result = _validator.Validate(Create(SenderBox(sender) + RecipientBox()), WindowMode.Double, SenderAddress);
+        var result = _validator.Validate(Create(SenderBox(sender) + RecipientBox()), WindowMode.Double);
 
         Assert.False(result.IsValid);
         Assert.Contains(result.For(WindowRole.Sender)!.Issues, i => i.Code == IssueCodes.LineWraps);
@@ -118,7 +115,7 @@ public class C65LayoutTests
                    + Paragraphs([Recipient[0]], pPr: "<w:spacing w:before=\"1701\" w:after=\"0\"/>" + indent)
                    + Paragraphs(Recipient.Skip(1), pPr: indent);
 
-        var result = _validator.Validate(Create(body), WindowMode.Double, SenderAddress);
+        var result = _validator.Validate(Create(body), WindowMode.Double);
 
         Assert.True(result.IsValid, string.Join("\n", result.Issues));
         Assert.Equal(Recipient, result.For(WindowRole.Recipient)!.Block!.Lines);

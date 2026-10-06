@@ -21,11 +21,6 @@ foreach (var file in Directory.EnumerateFiles(pdfDir, "*.pdf").OrderBy(f => f))
             Console.WriteLine($"    {window.Role}: tekst {b.TextBounds}, {b.MinFontSizePt}–{b.MaxFontSizePt} pt, wiersze: {string.Join(" | ", b.Lines)}");
         }
 
-        foreach (var window in result.Windows.Where(w => w.Label is not null))
-        {
-            Console.WriteLine($"    {window.Role}: nalepka R {window.Label!.Bounds}");
-        }
-
         foreach (var issue in result.Issues)
         {
             Console.WriteLine($"    - {issue.Severity,-7} {issue.Code} ({issue.Window}): {issue.Message}");

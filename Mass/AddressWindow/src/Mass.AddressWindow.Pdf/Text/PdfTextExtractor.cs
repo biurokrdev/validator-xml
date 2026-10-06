@@ -1,5 +1,4 @@
 using System.Text;
-using Mass.AddressWindow.Rules;
 using UglyToad.PdfPig.Content;
 using UglyToad.PdfPig.Core;
 
@@ -12,9 +11,6 @@ internal sealed class PdfPageText
     public required IReadOnlyList<PdfTextCandidate> Candidates { get; init; }
 
     public required IReadOnlyList<RectangleMm> LetterBoxes { get; init; }
-
-    /// <summary>Grafiki rastrowe na stronie (kandydaci na nalepkę R), w milimetrach strony.</summary>
-    public required IReadOnlyList<ImageCandidate> Images { get; init; }
 
     public bool HasText => LetterBoxes.Count > 0;
 }
@@ -49,13 +45,7 @@ internal static class PdfTextExtractor
         var candidates = BuildBlocks(lines).Select(block => new PdfTextCandidate(block)).ToList();
         var letterBoxes = glyphs.Where(g => !string.IsNullOrWhiteSpace(g.Text)).Select(g => g.Box).ToList();
 
-        var images = page.GetImages()
-            .Select(i => geometry.ToPage(i.BoundingBox))
-            .Where(r => r.Width > 0 && r.Height > 0)
-            .Select(r => new ImageCandidate(r, DocumentPartKind.Body, Name: null, Estimated: false))
-            .ToList();
-
-        return new PdfPageText { Geometry = geometry, Candidates = candidates, LetterBoxes = letterBoxes, Images = images };
+        return new PdfPageText { Geometry = geometry, Candidates = candidates, LetterBoxes = letterBoxes };
     }
 
     private static Glyph ToGlyph(Letter letter, PdfPageGeometry geometry)
