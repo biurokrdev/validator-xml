@@ -96,7 +96,7 @@
             @if (w.isValid) {
               <span class="badge ok">OK</span>
             } @else if (!w.found) {
-              <span class="badge Error">brak adresu</span>
+              <span class="badge Error">{{ w.content === 'RegisteredLabel' ? 'brak nalepki R' : 'brak adresu' }}</span>
             } @else {
               <span class="badge Error">błąd</span>
             }
@@ -109,8 +109,20 @@
             }
           }
 
+          @if (w.content === 'RegisteredLabel') {
+            <div class="muted" data-testid="label-info">
+              @if (w.label; as l) {
+                Nalepka R: grafika {{ labelSize(l) }}. W tym oknie sprawdzamy tylko, czy nalepka jest i czy się mieści.
+              } @else {
+                W tym oknie powinna być nalepka R listu poleconego wstawiona jako grafika.
+              }
+            </div>
+          }
+
           @if (w.overflow; as o) {
-            <div class="alert error" data-testid="overflow">Adres wystaje poza okno: {{ o.description }}.</div>
+            <div class="alert error" data-testid="overflow">
+              {{ w.content === 'RegisteredLabel' ? 'Nalepka R' : 'Adres' }} wystaje poza okno: {{ o.description }}.
+            </div>
           }
 
           <ng-container [ngTemplateOutlet]="findingsTpl" [ngTemplateOutletContext]="{ $implicit: w.findings }" />
@@ -122,7 +134,8 @@
       <figure class="preview card">
         <img [src]="p.dataUri" [width]="p.widthPx" [height]="p.heightPx" alt="Podgląd pierwszej strony z oknami koperty" data-testid="preview" />
         <figcaption class="muted">
-          Zielone okno: adres w porządku. Czerwone: błąd lub brak adresu. Niebieska ramka: wykryty adres.
+          Zielone okno: w porządku. Czerwone: błąd albo brak adresu lub nalepki R. Niebieska ramka: wykryty adres
+          lub nalepka R.
           @if (!p.renderedFromPdf) {
             Podgląd uproszczony, strony nie udało się wyrenderować.
           }

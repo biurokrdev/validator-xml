@@ -21,6 +21,14 @@ public static class IssueCodes
 
     public const string WindowNotFound = "WINDOW_NOT_FOUND";
 
+    public const string LabelNotFound = "LABEL_NOT_FOUND";
+
+    public const string LabelOutsideWindow = "LABEL_OUTSIDE_WINDOW";
+
+    public const string LabelTooCloseToEdge = "LABEL_TOO_CLOSE_TO_EDGE";
+
+    public const string LabelTooLarge = "LABEL_TOO_LARGE";
+
     public const string AddressOutsideWindow = "ADDRESS_OUTSIDE_WINDOW";
 
     public const string AddressTooCloseToEdge = "ADDRESS_TOO_CLOSE_TO_EDGE";

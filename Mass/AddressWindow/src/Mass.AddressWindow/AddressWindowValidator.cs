@@ -52,7 +52,9 @@ public sealed class AddressWindowValidator : IAddressWindowValidator
 
         if (mode == WindowMode.Double)
         {
-            windows.Add(WindowChecker.Check(WindowRole.Sender, profile.Layout.SenderWindow!, profile.SenderRules, candidates, claimed));
+            windows.Add(profile.SenderWindowContent == WindowContent.RegisteredLabel
+                ? LabelWindowChecker.Check(WindowRole.Sender, profile.Layout.SenderWindow!, analyzer.Images, candidates, claimed)
+                : WindowChecker.Check(WindowRole.Sender, profile.Layout.SenderWindow!, profile.SenderRules, candidates, claimed));
         }
 
         return new AddressWindowValidationResult(mode, isDocumentReadable: true, windows, documentIssues);

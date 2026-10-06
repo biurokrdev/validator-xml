@@ -1,7 +1,8 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Mass.AddressWindow\Mass.AddressWindow.csproj" />
+    <ProjectReference Include="..\..\..\RLabel\src\Mass.RLabel\Mass.RLabel.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -9,6 +9,7 @@ internal static class Ns
     public static readonly XNamespace WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
     public static readonly XNamespace WP14 = "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing";
     public static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    public static readonly XNamespace PIC = "http://schemas.openxmlformats.org/drawingml/2006/picture";
     public static readonly XNamespace WPS = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
     public static readonly XNamespace WPG = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
     public static readonly XNamespace V = "urn:schemas-microsoft-com:vml";
@@ -22,5 +23,6 @@ internal static class Ns
         ["http://purl.oclc.org/ooxml/officeDocument/relationships"] = R,
         ["http://purl.oclc.org/ooxml/drawingml/main"] = A,
         ["http://purl.oclc.org/ooxml/drawingml/wordprocessingDrawing"] = WP,
+        ["http://purl.oclc.org/ooxml/drawingml/picture"] = PIC,
     };
 }

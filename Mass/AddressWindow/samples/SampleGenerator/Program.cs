@@ -1,4 +1,5 @@
 using Mass.AddressWindow;
+using Mass.RLabel;
 using SampleGenerator;
 using static SampleGenerator.WordDocument;
 
@@ -10,6 +11,22 @@ var senderWindow = EnvelopeLayouts.C65TwoWindows.SenderWindow!.Area;
 
 string[] recipient = ["Pan Jan Kowalski", "ul. Marszałkowska 142 m. 5", "00-061 Warszawa"];
 string[] sender = ["Urząd Gminy Wólka", "ul. Polna 1", "21-100 Lubartów"];
+
+// Nalepka R jako grafika z Mass.RLabel. W oknie nadawcy C65 zawsze widać tylko 51×15 mm strony,
+// więc nalepka musi mieć najwyżej 49×13 mm; standardowa 65×25 mm się nie mieści (plik 05).
+var labelRenderer = new RegisteredLabelRenderer();
+byte[] Label(double widthMm, double heightMm) => labelRenderer.Render(new RegisteredLabelRequest
+{
+    Number = "00759007731512000621",
+    Type = MailType.Domestic,
+    WidthMm = widthMm,
+    HeightMm = heightMm,
+    Dpi = 600,
+}).Bytes;
+
+string Letterhead() =>
+    P("URZĄD GMINY WÓLKA", "<w:pStyle w:val=\"Nagwek\"/>", fontPt: 12, bold: true) +
+    P("ul. Polna 1, 21-100 Lubartów  •  tel. 81 555 12 00  •  www.wolka.example.pl", "<w:pStyle w:val=\"Nagwek\"/>", fontPt: 8);
 
 string Letter(string subject) =>
     P("Znak sprawy: OR.6220.14.2026", Spacing(beforeMm: 62, afterMm: 2), fontPt: 10) +
@@ -42,15 +59,16 @@ var files = new List<(string Name, string Description)>();
 
 {
     var doc = new WordDocument();
+    doc.Header(Letterhead());
     var anchors = doc.WindowGuide(senderWindow.Left, senderWindow.Top, senderWindow.Width, senderWindow.Height, "Okno nadawcy (pomocnicze)")
                   + doc.WindowGuide(recipientWindow.Left, recipientWindow.Top, recipientWindow.Width, recipientWindow.Height, "Okno adresata (pomocnicze)")
-                  + doc.TextBox(26.5, 63.8, 52, 15, "AdresNadawcy", AddressParagraphs(sender, fontPt: 9))
+                  + doc.Picture(29.5, 65.5, 48, 12, "NalepkaR", Label(48, 12))
                   + doc.TextBox(117.5, 53.8, 72, 30, "AdresOdbiorcy",
                       AddressParagraphs(["Kancelaria Radców Prawnych", "Wiśniewski i Wspólnicy sp.k.", "al. Jerozolimskie 65/79", "00-697 Warszawa"]));
     doc.Body($"<w:p><w:pPr>{DatePPr}</w:pPr>{anchors}{Run(Date)}</w:p>" + Letter("Odpowiedź na wezwanie do uzupełnienia braków"));
     const string name = "02_C65_dwa_okienka_poprawny.docx";
     doc.Save(Path.Combine(outputDir, name));
-    files.Add((name, "Dwa okienka. Nadawca (9 pt) i adresat (4 wiersze) w polach tekstowych w swoich oknach."));
+    files.Add((name, "Dwa okienka. Nalepka R 48×12 mm jako grafika w oknie nadawcy, adresat (4 wiersze) w polu tekstowym."));
 }
 
 {
@@ -92,6 +110,19 @@ var files = new List<(string Name, string Description)>();
     files.Add((name, "Bez pól tekstowych: nadawca w ramce akapitu, adresat jako zwykłe akapity z wcięciem do okna po prawej (położenie szacowane)."));
 }
 
+{
+    var doc = new WordDocument();
+    doc.Header(Letterhead());
+    var anchors = doc.WindowGuide(senderWindow.Left, senderWindow.Top, senderWindow.Width, senderWindow.Height, "Okno nadawcy (pomocnicze)")
+                  + doc.WindowGuide(recipientWindow.Left, recipientWindow.Top, recipientWindow.Width, recipientWindow.Height, "Okno adresata (pomocnicze)")
+                  + doc.Picture(21, 59, 65, 25, "NalepkaR", Label(65, 25))
+                  + doc.TextBox(117.5, 53.8, 72, 30, "AdresOdbiorcy", AddressParagraphs(recipient));
+    doc.Body($"<w:p><w:pPr>{DatePPr}</w:pPr>{anchors}{Run(Date)}</w:p>" + Letter("Decyzja w sprawie wniosku"));
+    const string name = "05_C65_nalepka_R_za_duza.docx";
+    doc.Save(Path.Combine(outputDir, name));
+    files.Add((name, "Dwa okienka. Nalepka R w standardowym rozmiarze 65×25 mm: większa niż obszar okna nadawcy widoczny zawsze."));
+}
+
 var validator = new AddressWindowValidator();
 foreach (var (name, description) in files)
 {
@@ -104,9 +135,11 @@ foreach (var (name, description) in files)
         foreach (var window in result.Windows)
         {
             var block = window.Block;
-            Console.WriteLine(block is null
-                ? $"    {window.Role}: nie znaleziono"
-                : $"    {window.Role}: {block.Kind}, tekst {block.TextBounds}, wiersze: {string.Join(" | ", block.Lines)}");
+            Console.WriteLine(window.Label is { } label
+                ? $"    {window.Role}: nalepka R {label.Bounds}"
+                : block is null
+                    ? $"    {window.Role}: nie znaleziono"
+                    : $"    {window.Role}: {block.Kind}, tekst {block.TextBounds}, wiersze: {string.Join(" | ", block.Lines)}");
         }
 
         foreach (var issue in result.Issues)

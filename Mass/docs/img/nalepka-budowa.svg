@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 995 505" width="995" height="505" role="img" aria-label="Budowa nalepki R">
+<title>Budowa nalepki R</title>
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5A6782"/></marker><filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.18"/></filter></defs>
+<rect width="995" height="505" fill="#F7F9FC"/>
+<text x="40.0" y="34.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="19" fill="#1C2333" text-anchor="start" font-weight="700" >Budowa nalepki R</text>
+<text x="40.0" y="56.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" fill="#5A6782" text-anchor="start" font-weight="normal" >schemat: kreski są umowne, proporcje jak w generatorze</text>
+<rect x="290.0" y="130.0" width="585.0" height="225.0" rx="0" fill="#FFFFFF" stroke="#9AA5BA" stroke-width="1.2" filter="url(#sh)"/>
+<text x="301.0" y="298.4" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="191.55405405405406" fill="#D50000" text-anchor="start" font-weight="700" >R</text>
+<rect x="484.8" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="493.4" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="504.8" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="513.4" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="519.2" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="533.5" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="539.3" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="550.8" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="562.2" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="568.0" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="576.6" y="139.0" width="8.6" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="588.1" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="596.7" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="605.3" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="616.8" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="625.4" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="634.0" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="645.5" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="654.1" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="659.8" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="674.2" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="679.9" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="691.4" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="702.9" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="708.6" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="717.2" y="139.0" width="8.6" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="728.7" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="737.3" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="745.9" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="757.4" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="766.0" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="774.6" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="786.1" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="794.7" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="800.4" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="814.8" y="139.0" width="2.9" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<rect x="820.5" y="139.0" width="5.7" height="159.4" rx="0" fill="#1C2333" stroke="none" stroke-width="1.5" />
+<text x="582.5" y="336.9" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="33.948" fill="#1C2333" text-anchor="middle" font-weight="normal" >(00)75900773 1 51200062 1</text>
+<rect x="458.8" y="139.0" width="26.0" height="159.4" rx="0" fill="#DDF2E3" stroke="#1B8A3A" stroke-width="1" stroke-dasharray="4 3" />
+<rect x="832.0" y="139.0" width="34.0" height="159.4" rx="0" fill="#DDF2E3" stroke="#1B8A3A" stroke-width="1" stroke-dasharray="4 3" />
+<line x1="341.5" y1="210.7" x2="266.0" y2="140.0" stroke="#D50000" stroke-width="1.4"/>
+<circle cx="341.5" cy="210.7" r="3.5" fill="#D50000"/>
+<text x="256.0" y="144.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#D50000" text-anchor="end" font-weight="700" >Litera R</text>
+<text x="256.0" y="161.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#1C2333" text-anchor="end" font-weight="normal" >czerwień #D50000</text>
+<text x="256.0" y="178.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#1C2333" text-anchor="end" font-weight="normal" >wysokość kodu, do 25% szerokości</text>
+<line x1="664.0" y1="147.0" x2="582.5" y2="74.0" stroke="#1C2333" stroke-width="1.4"/>
+<circle cx="664.0" cy="147.0" r="3.5" fill="#1C2333"/>
+<text x="592.5" y="78.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#1C2333" text-anchor="start" font-weight="700" >Kod kreskowy</text>
+<text x="592.5" y="95.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#1C2333" text-anchor="start" font-weight="normal" >krajowy: GS1-128, zagraniczny: Code 128</text>
+<text x="592.5" y="112.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#1C2333" text-anchor="start" font-weight="normal" >kreska = pełna liczba pikseli</text>
+<line x1="471.8" y1="266.5" x2="266.0" y2="325.0" stroke="#1B8A3A" stroke-width="1.4"/>
+<circle cx="471.8" cy="266.5" r="3.5" fill="#1B8A3A"/>
+<text x="256.0" y="329.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#1B8A3A" text-anchor="end" font-weight="700" >Cicha strefa</text>
+<text x="256.0" y="346.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#1C2333" text-anchor="end" font-weight="normal" >po 10 modułów z obu stron kodu</text>
+<line x1="711.2" y1="327.4" x2="582.5" y2="389.0" stroke="#1E5AA8" stroke-width="1.4"/>
+<circle cx="711.2" cy="327.4" r="3.5" fill="#1E5AA8"/>
+<text x="592.5" y="393.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#1E5AA8" text-anchor="start" font-weight="700" >Numer w zapisie czytelnym</text>
+<text x="592.5" y="410.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12.5" fill="#1C2333" text-anchor="start" font-weight="normal" >20% wysokości, na całą szerokość</text>
+<line x1="290.0" y1="451.0" x2="875.0" y2="451.0" stroke="#5A6782" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+<text x="582.5" y="467.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#5A6782" text-anchor="middle" font-weight="normal" >szerokość: domyślnie 65 mm (do okna nadawcy C65 najwyżej 49 mm)</text>
+<line x1="905.0" y1="130.0" x2="905.0" y2="355.0" stroke="#5A6782" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+<text x="921.0" y="242.5" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#5A6782" text-anchor="middle" font-weight="normal" transform="rotate(-90 921.0 242.5)" >wysokość: 25 mm (do okna: 13 mm)</text>
+</svg>

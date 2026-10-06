@@ -9,6 +9,8 @@ public class PdfValidatorTests
 
     private readonly IPdfAddressWindowValidator _validator = new PdfAddressWindowValidator();
 
+    private static readonly ValidationProfile SenderAddress = new() { SenderWindowContent = WindowContent.Address };
+
     private static byte[] Letter(double recipientLeft = 121, double recipientTop = 56, bool withSender = false) =>
         new MiniPdf()
             .Text(25, 25, 11, "Lubartow, 28 wrzesnia 2026 r.")
@@ -66,7 +68,7 @@ public class PdfValidatorTests
     [Fact]
     public void Double_WithSender_IsValid()
     {
-        var result = _validator.Validate(Letter(withSender: true), WindowMode.Double);
+        var result = _validator.Validate(Letter(withSender: true), WindowMode.Double, SenderAddress);
 
         Assert.True(result.IsValid, string.Join("\n", result.Issues));
         Assert.Equal(Sender, result.For(WindowRole.Sender)!.Block!.Lines);

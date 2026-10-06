@@ -118,6 +118,39 @@ internal static class TestDocx
             "</wps:wsp></a:graphicData></a:graphic></wp:anchor>";
     }
 
+    private const string PictureUri = "http://schemas.openxmlformats.org/drawingml/2006/picture";
+
+    private static string Pic(double w, double h, double offX = 0, double offY = 0) =>
+        $"<pic:pic xmlns:pic=\"{PictureUri}\"><pic:nvPicPr><pic:cNvPr id=\"0\" name=\"nalepka.png\"/><pic:cNvPicPr/></pic:nvPicPr>" +
+        "<pic:blipFill><a:blip r:embed=\"rIdImg1\"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>" +
+        $"<pic:spPr><a:xfrm><a:off x=\"{Emu(offX)}\" y=\"{Emu(offY)}\"/><a:ext cx=\"{Emu(w)}\" cy=\"{Emu(h)}\"/></a:xfrm>" +
+        "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></pic:spPr></pic:pic>";
+
+    private static string AnchorOf(double x, double y, double w, double h, string name, string uri, string graphic) =>
+        "<wp:anchor distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\" simplePos=\"0\" relativeHeight=\"2\" behindDoc=\"0\" locked=\"0\" layoutInCell=\"1\" allowOverlap=\"1\">" +
+        "<wp:simplePos x=\"0\" y=\"0\"/>" +
+        $"<wp:positionH relativeFrom=\"page\"><wp:posOffset>{Emu(x)}</wp:posOffset></wp:positionH>" +
+        $"<wp:positionV relativeFrom=\"page\"><wp:posOffset>{Emu(y)}</wp:posOffset></wp:positionV>" +
+        $"<wp:extent cx=\"{Emu(w)}\" cy=\"{Emu(h)}\"/><wp:wrapNone/><wp:docPr id=\"9\" name=\"{name}\"/><wp:cNvGraphicFramePr/>" +
+        $"<a:graphic><a:graphicData uri=\"{uri}\">{graphic}</a:graphicData></a:graphic></wp:anchor>";
+
+    /// <summary>Grafika zakotwiczona do strony (położenie dokładne).</summary>
+    public static string Picture(double x, double y, double w, double h, string name = "NalepkaR") =>
+        $"<w:p><w:r><w:drawing>{AnchorOf(x, y, w, h, name, PictureUri, Pic(w, h))}</w:drawing></w:r></w:p>";
+
+    /// <summary>Grafika wstawiona w tekst akapitu (położenie szacowane).</summary>
+    public static string InlinePicture(double w, double h, string pPr = "") =>
+        $"<w:p><w:pPr>{pPr}</w:pPr><w:r><w:drawing><wp:inline distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\">" +
+        $"<wp:extent cx=\"{Emu(w)}\" cy=\"{Emu(h)}\"/><wp:docPr id=\"9\" name=\"NalepkaR\"/><wp:cNvGraphicFramePr/>" +
+        $"<a:graphic><a:graphicData uri=\"{PictureUri}\">{Pic(w, h)}</a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>";
+
+    /// <summary>Grafika w grupie kształtów; grupa zaczyna się w (x, y), a grafika jest przesunięta o (dx, dy).</summary>
+    public static string GroupedPicture(double x, double y, double groupW, double groupH, double dx, double dy, double w, double h) =>
+        "<w:p><w:r><w:drawing>" + AnchorOf(x, y, groupW, groupH, "Grupa", "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
+            "<wpg:wgp><wpg:cNvGrpSpPr/><wpg:grpSpPr><a:xfrm><a:off x=\"0\" y=\"0\"/>" +
+            $"<a:ext cx=\"{Emu(groupW)}\" cy=\"{Emu(groupH)}\"/><a:chOff x=\"0\" y=\"0\"/><a:chExt cx=\"{Emu(groupW)}\" cy=\"{Emu(groupH)}\"/></a:xfrm></wpg:grpSpPr>" +
+            Pic(w, h, dx, dy) + "</wpg:wgp>") + "</w:drawing></w:r></w:p>";
+
     public static string VmlShape(double x, double y, double w, double h, IEnumerable<string> lines, double fontPt = 10) =>
         $"<v:shape id=\"AdresVml\" type=\"#_x0000_t202\" style=\"position:absolute;margin-left:{F(x)}mm;margin-top:{F(y)}mm;width:{F(w)}mm;height:{F(h)}mm;" +
         "mso-position-horizontal-relative:page;mso-position-vertical-relative:page\" stroked=\"f\">" +

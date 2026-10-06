@@ -82,15 +82,17 @@ internal static class PreviewRenderer
             canvas.DrawRect(area, fill);
             canvas.DrawRect(area, line);
 
-            var status = window.Found ? (window.IsValid ? "OK" : "BŁĄD") : "BRAK ADRESU";
+            var isLabel = window.Content == WindowContent.RegisteredLabel;
+            var status = window.Found ? (window.IsValid ? "OK" : "BŁĄD") : isLabel ? "BRAK NALEPKI R" : "BRAK ADRESU";
             Label(canvas, font, color, $"{window.WindowName}: {status}", area.Left, area.Top - stroke * 2, above: true);
 
-            if (window.Block is null)
+            if (window.ContentBounds is not { } contentBounds)
             {
                 continue;
             }
 
-            var textRect = Rect(window.Block.TextBounds, scaleX, scaleY);
+            var what = isLabel ? "nalepka R" : "adres";
+            var textRect = Rect(contentBounds, scaleX, scaleY);
             using var addressLine = new SKPaint { Color = Address, Style = SKPaintStyle.Stroke, StrokeWidth = stroke, IsAntialias = true };
             canvas.DrawRect(textRect, addressLine);
 
@@ -103,7 +105,7 @@ internal static class PreviewRenderer
                 canvas.Restore();
             }
 
-            var caption = window.Overflow.Any ? $"adres wystaje: {window.Overflow.Describe()}" : "adres";
+            var caption = window.Overflow.Any ? $"{what} wystaje: {window.Overflow.Describe()}" : what;
             Label(canvas, font, window.Overflow.Any ? Error : Address, caption, textRect.Left, Math.Max(area.Bottom, textRect.Bottom) + stroke * 2, above: false);
         }
     }

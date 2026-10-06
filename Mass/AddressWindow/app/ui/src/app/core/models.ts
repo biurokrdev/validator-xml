@@ -2,6 +2,8 @@
 
 export type EnvelopeType = 'SingleWindow' | 'DoubleWindow';
 export type WindowKind = 'Recipient' | 'Sender';
+/** Czego szukamy w oknie: adresu czy nalepki R listu poleconego (grafiki). */
+export type WindowContent = 'Address' | 'RegisteredLabel';
 export type FindingSeverity = 'Info' | 'Warning' | 'Error';
 
 export const ENVELOPE_TYPES: readonly EnvelopeType[] = ['SingleWindow', 'DoubleWindow'];
@@ -13,7 +15,7 @@ export const ENVELOPE_LABEL: Record<EnvelopeType, string> = {
 
 export const ENVELOPE_HINT: Record<EnvelopeType, string> = {
   SingleWindow: 'sprawdzany jest tylko adresat',
-  DoubleWindow: 'sprawdzani są adresat i nadawca',
+  DoubleWindow: 'sprawdzane są adres adresata i nalepka R w oknie nadawcy',
 };
 
 export const SEVERITY_LABEL: Record<FindingSeverity, string> = {
@@ -45,6 +47,12 @@ export interface Address {
   maxFontSizePt: number | null;
 }
 
+/** Nalepka R wykryta w oknie: położenie i rozmiar grafiki na stronie. */
+export interface RegisteredLabel {
+  bounds: AreaMm;
+  positionEstimated: boolean;
+}
+
 export interface Overflow {
   leftMm: number;
   topMm: number;
@@ -61,7 +69,11 @@ export interface WindowInspection {
   isValid: boolean;
   area: AreaMm;
   clearanceMm: number;
+  content: WindowContent;
+  /** Wykryty adres; null w oknie nalepki R. */
   address: Address | null;
+  /** Wykryta nalepka R; null w oknie adresowym. */
+  label: RegisteredLabel | null;
   overflow: Overflow | null;
   findings: Finding[];
 }

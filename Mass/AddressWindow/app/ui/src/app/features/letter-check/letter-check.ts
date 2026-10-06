@@ -10,6 +10,7 @@ import {
   EnvelopeType,
   LetterInspection,
   MAX_FILE_SIZE_BYTES,
+  RegisteredLabel,
   SEVERITY_LABEL,
 } from '../../core/models';
 
@@ -80,6 +81,10 @@ export class LetterCheck implements OnDestroy {
     const { minFontSizePt: min, maxFontSizePt: max } = address;
     if (min == null || max == null) return null;
     return min === max ? `${LetterCheck.num(min)} pt` : `${LetterCheck.num(min)}–${LetterCheck.num(max)} pt`;
+  }
+
+  protected labelSize(label: RegisteredLabel): string {
+    return `${LetterCheck.num(label.bounds.width)} × ${LetterCheck.num(label.bounds.height)} mm`;
   }
 
   protected fileSize(bytes: number): string {

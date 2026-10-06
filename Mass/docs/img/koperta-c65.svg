@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 847 572" width="847" height="572" role="img" aria-label="Koperta C65 z dwoma okienkami">
+<title>Koperta C65 z dwoma okienkami</title>
+<defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5A6782"/></marker><filter id="sh" x="-5%" y="-5%" width="110%" height="115%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.18"/></filter></defs>
+<rect width="847" height="572" fill="#F7F9FC"/>
+<text x="90.0" y="34.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="19" fill="#1C2333" text-anchor="start" font-weight="700" >Koperta C65 z dwoma okienkami, widok od frontu</text>
+<text x="90.0" y="56.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" fill="#5A6782" text-anchor="start" font-weight="normal" >wymiary w milimetrach, rysunek w skali</text>
+<rect x="90.0" y="80.0" width="687.0" height="342.0" rx="6" fill="#F1E3C6" stroke="#C9B48A" stroke-width="2" filter="url(#sh)"/>
+<rect x="174.0" y="272.0" width="210.0" height="90.0" rx="5" fill="#FBE1E1" stroke="#D50000" stroke-width="2.5" />
+<text x="279.0" y="313.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="15" fill="#D50000" text-anchor="middle" font-weight="700" >OKNO NADAWCY</text>
+<text x="279.0" y="333.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" fill="#D50000" text-anchor="middle" font-weight="normal" >70 × 30 mm · nalepka R</text>
+<rect x="447.0" y="242.0" width="270.0" height="135.0" rx="5" fill="#DCE8F7" stroke="#1E5AA8" stroke-width="2.5" />
+<text x="582.0" y="305.5" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="15" fill="#1E5AA8" text-anchor="middle" font-weight="700" >OKNO ADRESATA</text>
+<text x="582.0" y="325.5" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" fill="#1E5AA8" text-anchor="middle" font-weight="normal" >90 × 45 mm · adres adresata</text>
+<line x1="90.0" y1="484.0" x2="777.0" y2="484.0" stroke="#5A6782" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+<text x="433.5" y="500.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#5A6782" text-anchor="middle" font-weight="normal" >229</text>
+<line x1="38.0" y1="80.0" x2="38.0" y2="422.0" stroke="#5A6782" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+<text x="31.0" y="251.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#5A6782" text-anchor="middle" font-weight="normal" transform="rotate(-90 31.0 251.0)" >114</text>
+<line x1="174.0" y1="362.0" x2="174.0" y2="450.0" stroke="#9AA5BA" stroke-width="1" stroke-dasharray="3 3"/>
+<line x1="90.0" y1="446.0" x2="174.0" y2="446.0" stroke="#D50000" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+<text x="132.0" y="462.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#D50000" text-anchor="middle" font-weight="normal" >28</text>
+<line x1="717.0" y1="377.0" x2="717.0" y2="450.0" stroke="#9AA5BA" stroke-width="1" stroke-dasharray="3 3"/>
+<line x1="717.0" y1="446.0" x2="777.0" y2="446.0" stroke="#1E5AA8" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+<text x="747.0" y="462.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#1E5AA8" text-anchor="middle" font-weight="normal" >20</text>
+<line x1="279.0" y1="362.0" x2="279.0" y2="422.0" stroke="#D50000" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+<text x="295.0" y="392.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#D50000" text-anchor="middle" font-weight="normal" transform="rotate(-90 295.0 392.0)" >20</text>
+<line x1="582.0" y1="377.0" x2="582.0" y2="422.0" stroke="#1E5AA8" stroke-width="1" marker-start="url(#arr)" marker-end="url(#arr)"/>
+<text x="598.0" y="399.5" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="12" fill="#1E5AA8" text-anchor="middle" font-weight="normal" transform="rotate(-90 598.0 399.5)" >15</text>
+<rect x="90.0" y="510.0" width="16.0" height="16.0" rx="3" fill="#FBE1E1" stroke="#D50000" stroke-width="2" />
+<text x="114.0" y="523.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" fill="#1C2333" text-anchor="start" font-weight="normal" >okno nadawcy: 28 mm od lewej, 20 mm od dołu</text>
+<rect x="450.0" y="510.0" width="16.0" height="16.0" rx="3" fill="#DCE8F7" stroke="#1E5AA8" stroke-width="2" />
+<text x="474.0" y="523.0" font-family="Segoe UI, Roboto, Helvetica, Arial, sans-serif" font-size="13" fill="#1C2333" text-anchor="start" font-weight="normal" >okno adresata: 20 mm od prawej, 15 mm od dołu</text>
+</svg>
