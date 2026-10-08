@@ -294,6 +294,20 @@ public class ContentControlTests
         Assert.Equal(expected ? 0 : 1, removed);
     }
 
+    [Theory]
+    [InlineData("^Wysłana", 0)]
+    [InlineData("^Odebrana", 1)]
+    [InlineData("o 10:15$", 0)]
+    public void Visible_when_matches_uses_regex_on_formatted_value(string pattern, int removed)
+    {
+        using var doc = Create(BlockControl("ikona", P("x")));
+        var model = JToken.Parse("""{ "data_czas_wiadomosci": "Wysłana 14.07.2026 o 10:15" }""");
+
+        var (actual, _) = new ContentControlVisibilityWorker().Apply(doc, [new ContentControlMapping { TagName = "ikona", VisiblePropertyPath = "data_czas_wiadomosci", VisibleWhenMatches = pattern }], model);
+
+        Assert.Equal(removed, actual);
+    }
+
     [Fact]
     public void Output_with_repeating_section_and_controls_is_valid_open_xml()
     {

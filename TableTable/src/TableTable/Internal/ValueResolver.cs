@@ -86,8 +86,9 @@ internal sealed class ValueResolver(JToken root, RecordTableOptions options, Act
         }
 
         var value = ResolveSource(mapping.VisiblePropertyExpression, mapping.VisiblePropertyPath, null, scope, label);
-        var visible = mapping.VisibleWhenEquals != null
-            ? string.Equals(Format(value, null) ?? string.Empty, mapping.VisibleWhenEquals, StringComparison.OrdinalIgnoreCase)
+        var text = Format(value, null) ?? string.Empty;
+        var visible = mapping.VisibleWhenEquals != null ? string.Equals(text, mapping.VisibleWhenEquals, StringComparison.OrdinalIgnoreCase)
+            : mapping.VisibleWhenMatches != null ? Regex.IsMatch(text, mapping.VisibleWhenMatches, RegexOptions.IgnoreCase)
             : IsTruthy(value);
         return mapping.Negate ? !visible : visible;
     }

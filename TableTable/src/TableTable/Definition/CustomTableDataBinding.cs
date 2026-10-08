@@ -157,6 +157,10 @@ public sealed class ContentControlMapping
     [JsonProperty("visible-when-equals")]
     public string? VisibleWhenEquals { get; set; }
 
+    /// <summary>Widoczny, gdy wartość jako tekst pasuje do wyrażenia regularnego (bez rozróżniania wielkości liter), np. <c>^Wysłana</c>.</summary>
+    [JsonProperty("visible-when-matches")]
+    public string? VisibleWhenMatches { get; set; }
+
     /// <summary>Odwraca warunek.</summary>
     [JsonProperty("negate")]
     public bool Negate { get; set; }

@@ -49,6 +49,13 @@ Run("A. Definicja minimalna – tylko tag + ścieżka, reszta z szablonu (data/d
 RunWithBinder("A2. Bez żadnej definicji – pomocnik DocxTableBinder z tego przykładu (rekordy spod właściwości o nazwie tagu)", "dokument-bez-definicji", model);
 Run("B. Definicja z nadpisaniami – formaty, teksty zastępcze, zdjęcie ramek (data/dokument.definicja.json)", "dokument-nadpisania", overrides.Tables, model);
 Run("C. Puste listy (data/dokument-puste.dane.json)", "dokument-puste", overrides.Tables, emptyModel);
+
+// D. Model w kształcie JModel aplikacji + konfiguracje workerów per tabela (data/workery/*.json) – to, co wkleja się do edytora workera.
+var appModel = JToken.Parse(File.ReadAllText(Path.Combine(dataDir, "workery", "model-aplikacji.przyklad.json")));
+var workers = new[] { "worker-wiadomosci.json", "worker-zalaczniki.json" }
+    .Select(f => CustomTableDataBinding.FromJson(File.ReadAllText(Path.Combine(dataDir, "workery", f))))
+    .ToList();
+Run("D. Model aplikacji – konfiguracje workerów per tabela (data/workery/*.json)", "dokument-model-aplikacji", workers, appModel);
 return;
 
 void Run(string title, string outputName, IEnumerable<CustomTableDataBinding> tables, JToken data)

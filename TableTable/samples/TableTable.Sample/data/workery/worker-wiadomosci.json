@@ -1,0 +1,12 @@
+{
+  "tag": "tabela_wiadomosci",
+  "model-property-path": "wiadomosci",
+  "empty-text": "Brak wiadomości w sprawie.",
+  "collections": [
+    { "tag-name": "zalaczniki", "model-property-path": "nazwy_zalacznikow", "empty-text": "brak załączników" }
+  ],
+  "content-controls": [
+    { "tag-name": "ikona_wyslana",  "visible-property-path": "data_czas_wiadomosci", "visible-when-matches": "^Wysłana", "unwrap": true },
+    { "tag-name": "ikona_odebrana", "visible-property-path": "data_czas_wiadomosci", "visible-when-matches": "^Odebrana", "unwrap": true }
+  ]
+}
