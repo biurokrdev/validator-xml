@@ -1,0 +1,77 @@
+{
+  // Klucz = tag tabeli w szablonie, wartość = lista rekordów tej tabeli.
+  // Nazwy właściwości rekordu = nazwy znaczników <%...%>, tagi formantów i nazwy grafik w szablonie (konwencja).
+  // Szkielet tego pliku generuje inspektor szablonu: zobacz out/schemat.json.
+  //
+  // "zalaczniki" to lista w komórce (formant o tym tagu owija akapit z punktorem): każdy rekord ma inną liczbę
+  // elementów – 3, 0, 1, 4, 2 – więc w wyniku punktów w komórce jest tyle, ile elementów, a przy pustej liście
+  // formant znika (lub pojawia się tekst z empty-text, gdy definicja go podaje).
+  "tabela_wiadomosci": [
+    {
+      "rodzaj_wiadomosci": "E-mail",
+      "data_czas_wiadomosci": "2026-09-14T08:15:00Z",
+      "nadawca_wiadomosci": "Jan Kowalski (OH)",
+      "tresc_wiadomosci": "Dzień dobry,\nw załączeniu przesyłam podpisaną umowę, zestawienie oraz skan pełnomocnictwa.\n\nPozdrawiam\nJan Kowalski",
+      "ikona_wyslana": true,
+      "ikona_odebrana": false,
+      "zalaczniki": [
+        { "nazwa_pliku": "umowa_podpisana.pdf", "rozmiar_pliku": 248193 },
+        { "nazwa_pliku": "zestawienie_2026Q3.xlsx", "rozmiar_pliku": 18422 },
+        { "nazwa_pliku": "pelnomocnictwo_skan.jpg", "rozmiar_pliku": 1310720 }
+      ]
+    },
+    {
+      "rodzaj_wiadomosci": "SMS",
+      "data_czas_wiadomosci": "2026-09-15T06:00:00Z",
+      "nadawca_wiadomosci": "System powiadomień",
+      "tresc_wiadomosci": "Przypomnienie o terminie 30.09.2026.",
+      "ikona_wyslana": false,
+      "ikona_odebrana": true,
+      "zalaczniki": []
+    },
+    {
+      "rodzaj_wiadomosci": "Pismo",
+      "data_czas_wiadomosci": "2026-09-16",
+      "nadawca_wiadomosci": "Urząd Miasta",
+      "tresc_wiadomosci": null,
+      "ikona_wyslana": false,
+      "ikona_odebrana": true,
+      "zalaczniki": [
+        { "nazwa_pliku": "decyzja_2026_0142.pdf", "rozmiar_pliku": 90211 }
+      ]
+    },
+    {
+      "rodzaj_wiadomosci": "E-mail",
+      "data_czas_wiadomosci": "2026-09-18T13:42:00Z",
+      "nadawca_wiadomosci": "Anna Nowak (Kancelaria)",
+      "tresc_wiadomosci": "W nawiązaniu do rozmowy przesyłam komplet dokumentów do weryfikacji.",
+      "ikona_wyslana": false,
+      "ikona_odebrana": true,
+      "zalaczniki": [
+        { "nazwa_pliku": "wniosek.docx", "rozmiar_pliku": 44120 },
+        { "nazwa_pliku": "zalacznik_1_mapa.pdf", "rozmiar_pliku": 5242880 },
+        { "nazwa_pliku": "zalacznik_2_wypis.pdf", "rozmiar_pliku": 301455 },
+        { "nazwa_pliku": "zalacznik_3_zdjecia.zip", "rozmiar_pliku": 20971520 }
+      ]
+    },
+    {
+      "rodzaj_wiadomosci": "E-mail",
+      "data_czas_wiadomosci": "2026-09-19T07:05:00Z",
+      "nadawca_wiadomosci": "Jan Kowalski (OH)",
+      "tresc_wiadomosci": "Potwierdzam odbiór. Odsyłam dwa dokumenty z uwagami.",
+      "ikona_wyslana": true,
+      "ikona_odebrana": false,
+      "zalaczniki": [
+        { "nazwa_pliku": "wniosek_uwagi.docx", "rozmiar_pliku": 45873 },
+        { "nazwa_pliku": "protokol_uwag.pdf", "rozmiar_pliku": 120400 }
+      ]
+    }
+  ],
+  "tabela_zalaczniki": [
+    { "nazwa_zalacznika": "umowa_podpisana.pdf",    "data_dolaczenia": "2026-09-14T08:15:00Z", "dodajacy": "Jan Kowalski", "archiwizuj": true },
+    { "nazwa_zalacznika": "zestawienie_2026Q3.xlsx", "data_dolaczenia": "2026-09-14T08:15:00Z", "dodajacy": "Jan Kowalski", "archiwizuj": false },
+    { "nazwa_zalacznika": "decyzja_2026_0142.pdf",  "data_dolaczenia": "2026-09-16",           "dodajacy": "Urząd Miasta", "archiwizuj": true },
+    { "nazwa_zalacznika": "wniosek.docx",           "data_dolaczenia": "2026-09-18T13:42:00Z", "dodajacy": "Anna Nowak",   "archiwizuj": false },
+    { "nazwa_zalacznika": "notatka.txt",            "data_dolaczenia": null,                   "dodajacy": null,           "archiwizuj": true }
+  ]
+}

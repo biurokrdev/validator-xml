@@ -1,0 +1,32 @@
+{
+  // Ta sama lista tabel co w definicji minimalnej, plus nadpisania konwencji tam, gdzie szablon nie mówi wszystkiego:
+  // formaty dat i liczb, teksty dla null i pustych list, zdjęcie ramek formantów z wyniku.
+  "tables": [
+    {
+      "tag": "tabela_wiadomosci",
+      "model-property-path": "tabela_wiadomosci",
+      "empty-text": "Brak wiadomości w sprawie.",
+      "fields": [
+        { "search-for": "<%data_czas_wiadomosci%>", "replacement-property-path": "data_czas_wiadomosci", "display-format": "dd-MM-yyyy HH:mm" },
+        { "search-for": "<%tresc_wiadomosci%>",     "replacement-property-path": "tresc_wiadomosci",     "null-text": "(brak treści)" }
+      ],
+      "collections": [
+        { "tag-name": "zalaczniki", "empty-text": "brak załączników", "unwrap": true,
+          "fields": [ { "search-for": "<%rozmiar_pliku%>", "replacement-property-path": "rozmiar_pliku", "display-format": "N0" } ] }
+      ],
+      "content-controls": [
+        { "tag-name": "ikona_wyslana",  "visible-property-path": "ikona_wyslana",  "unwrap": true },
+        { "tag-name": "ikona_odebrana", "visible-property-path": "ikona_odebrana", "unwrap": true }
+      ]
+    },
+    {
+      "tag": "tabela_zalaczniki",
+      "model-property-path": "tabela_zalaczniki",
+      "empty-text": "Brak załączników",
+      "fields": [
+        { "search-for": "<%data_dolaczenia%>", "replacement-property-path": "data_dolaczenia", "display-format": "dd-MM-yyyy", "null-text": "–" },
+        { "search-for": "<%dodajacy%>",        "replacement-property-path": "dodajacy",        "null-text": "system" }
+      ]
+    }
+  ]
+}

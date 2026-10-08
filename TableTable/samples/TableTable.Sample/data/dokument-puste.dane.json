@@ -1,0 +1,5 @@
+{
+  // Obie tabele bez rekordów: wiersze szablonu znikają, a z definicją pojawia się wiersz z empty-text.
+  "tabela_wiadomosci": [],
+  "tabela_zalaczniki": []
+}

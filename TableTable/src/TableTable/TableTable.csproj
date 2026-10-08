@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>TableTable</RootNamespace>
+    <AssemblyName>TableTable</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Description>Budowanie tabel „wiele rekordów” w dokumentach DOCX (Open XML SDK): wiersze-szablon ze znacznikami &lt;%nazwa%&gt; są klonowane dla każdego rekordu z modelu JSON, z obsługą kolekcji zagnieżdżonych (np. lista załączników w komórce).</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Open XML SDK (MIT) – odczyt i modyfikacja DOCX bez Worda. -->
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+    <!-- Newtonsoft.Json (MIT) – model danych jako JToken i ścieżki JSONPath (SelectToken), tak jak w istniejących workerach. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <!-- Tylko abstrakcje ILogger; wersja 8.x pasuje do net8.0 i nie wymusza nowszych pakietów Microsoft.Extensions.*. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="TableTable.Tests" />
+  </ItemGroup>
+
+</Project>
