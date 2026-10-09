@@ -180,7 +180,7 @@ public class DocXTableDataWorker : DocXConditionalWorker
 }
 ```
 
-`replacement-property-expression` trafia do `ctx.GetExpressionValue` (silnik na `formModel`); wartości per rekord bierz przez `replacement-property-path`, dopóki silnik nie dostanie `scope.Current` jako zmiennej bieżącego rekordu.
+`replacement-property-expression` / `visible-property-expression` liczy silnik aplikacji; adapter wystawia mu zmienne `record` (bieżący rekord), `index` (numer od 1) i `root` (cały model), a `formModel` działa jak dotąd. Wartości per rekord prościej brać przez `replacement-property-path` – wyrażenia zostaw tam, gdzie trzeba policzyć coś, czego ścieżka nie da.
 
 Kształt rekordów pod `model-property-path` podaje `TemplateSchema` dla danego szablonu.
 

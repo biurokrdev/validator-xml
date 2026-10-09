@@ -136,8 +136,9 @@ namespace CommonDocXDataBinder.DocX.Utilities
 
     /// <summary>
     /// Most do biblioteki TableTable: wyrażenia z definicji (replacement-property-expression, visible-property-expression)
-    /// liczy silnik aplikacji. Bieżący rekord i jego numer są wystawiane jako zmienne „item” i „index”, więc w wyrażeniu
-    /// można pisać np. item.data_czas_wiadomosci.StartsWith("Wysłana").
+    /// liczy silnik aplikacji. Bieżący rekord, jego numer i cały model są wystawiane jako zmienne „record”, „index” i „root”
+    /// (formModel działa jak dotąd). Uwaga: składnia record.pole wymaga, by zmienna była obiektem dynamicznym – jeśli formModel
+    /// jest budowany np. jako ExpandoObject z JSON, record i root przekazuj tą samą drogą (poniżej ToDynamic).
     /// </summary>
     public sealed class DocXExpressionEvaluator : IExpressionEvaluator
     {
@@ -147,10 +148,19 @@ namespace CommonDocXDataBinder.DocX.Utilities
 
         public object Evaluate(string expression, ExpressionScope scope)
         {
-            _interpreter.SetVariable("item", scope.Current);
+            _interpreter.SetVariable("record", ToDynamic(scope.Current));
             _interpreter.SetVariable("index", scope.Index);
+            _interpreter.SetVariable("root", ToDynamic(scope.Root));
             var value = _interpreter.Eval(expression);
             return value is JToken jt && jt.Type == JTokenType.Null ? null : value;
         }
+
+        /// <summary>JObject → ExpandoObject (dostęp record.pole w wyrażeniu); wartości proste bez zmian.</summary>
+        private static object ToDynamic(JToken token) => token switch
+        {
+            JObject or JArray => Newtonsoft.Json.JsonConvert.DeserializeObject<System.Dynamic.ExpandoObject>(token.ToString(Newtonsoft.Json.Formatting.None)) ?? new System.Dynamic.ExpandoObject(),
+            JValue v => v.Value,
+            _ => token,
+        };
     }
 }
