@@ -1,0 +1,29 @@
+{
+  "temat_sprawy": "Istniejącej sprawy na odnowienie CDD",
+  "wybrana_sprawa_IWA": "123456/123456",
+  "opis_sprawy": "Tutaj znajduje się treść zgłoszenia, która będzie widoczna w całości.",
+  "data_pisma": "2026-10-08T07:30:00Z",
+  "osoba_fizyczna": true,
+  "uwagi": null,
+  "zalaczniki_zglaszajacego": [
+    { "nazwa_zalacznika": "JPEG1.JPG", "dodajacy": "Maja Cichowicz (UC56TM)", "data_dolaczenia": "14.07.2026 o 10:07", "archiwizuj": "Tak" },
+    { "nazwa_zalacznika": "umowa.pdf", "dodajacy": "Jan Kowalski (OH)", "data_dolaczenia": "15.07.2026 o 08:12", "archiwizuj": "Nie" }
+  ],
+  "wiadomosci": [
+    {
+      "rodzaj_wiadomosci": "Odpowiedź w sprawie",
+      "tresc_wiadomosci": "Dzień dobry,\nprzesyłam odpowiedź.",
+      "data_czas_wiadomosci": "Wysłana 14.07.2026 o 10:15",
+      "nadawca_wiadomosci": "Maja Cichowicz (UC56TM)",
+      "nazwy_zalacznikow": [ { "nazwa_pliku": "odpowiedz1.JPG" }, { "nazwa_pliku": "odpowiedz2.PDF" } ]
+    },
+    {
+      "rodzaj_wiadomosci": "Zgłoszenie",
+      "tresc_wiadomosci": "Proszę o odnowienie CDD.",
+      "data_czas_wiadomosci": "Odebrana 13.07.2026 o 09:40",
+      "nadawca_wiadomosci": "Jan Kowalski (OH)",
+      "nazwy_zalacznikow": []
+    }
+  ],
+  "powod_zamkniecia": "nie wymaga obsługi"
+}

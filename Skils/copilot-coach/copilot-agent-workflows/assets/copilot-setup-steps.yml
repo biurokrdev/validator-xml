@@ -1,0 +1,43 @@
+# .github/workflows/copilot-setup-steps.yml
+# Pre-installs dependencies in the Copilot coding agent environment.
+# Only the job named `copilot-setup-steps` is used. Run it manually once to validate.
+name: Copilot Setup Steps
+
+on:
+  workflow_dispatch:
+  push:
+    paths: [".github/workflows/copilot-setup-steps.yml"]
+  pull_request:
+    paths: [".github/workflows/copilot-setup-steps.yml"]
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # .NET
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - run: dotnet restore
+      - run: dotnet tool restore
+
+      # Angular
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: src/Web/package-lock.json
+      - run: npm ci --prefix src/Web
+
+      # Terraform (plan only; no credentials here)
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.x"
+
+      # Images used by Testcontainers
+      - run: docker pull postgres:16-alpine

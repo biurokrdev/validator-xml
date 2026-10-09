@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Description>Wtyczka DocxPipeline: worker „record-table” opakowujący bibliotekę TableTable (tabele „wiele rekordów”). Dowód, że do potoku wchodzi dowolny worker z osobnego assembly.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DocxPipeline\DocxPipeline.csproj" />
+    <ProjectReference Include="..\..\..\TableTable\src\TableTable\TableTable.csproj" />
+  </ItemGroup>
+
+</Project>

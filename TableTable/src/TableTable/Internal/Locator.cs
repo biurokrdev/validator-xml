@@ -21,28 +21,36 @@ internal static class Locator
         foreach (var footer in main.FooterParts) if (footer.Footer != null) yield return footer.Footer;
     }
 
-    /// <summary>Tabela (lub sekcja powtarzana) według wiązania: tag, zakładka, albo pierwsza tabela ze znacznikami.</summary>
+    /// <summary>
+    /// Tabela (lub sekcja powtarzana) według wiązania: <c>tag</c> = formant o tym tagu, a gdy go nie ma – zakładka Word o tej nazwie
+    /// (szablony z DocXTableArchitect); <c>bookmark-name</c> = tylko zakładka; bez obu – pierwsza tabela ze znacznikami.
+    /// </summary>
     public static OpenXmlElement? Find(WordprocessingDocument document, CustomTableDataBinding binding, PlaceholderScanner scanner)
     {
         var roots = Roots(document).ToList();
 
         if (!string.IsNullOrWhiteSpace(binding.Tag))
-            return ContentControls.Find(roots, binding.Tag).Select(ResolveTarget).FirstOrDefault(t => t != null);
+            return ContentControls.Find(roots, binding.Tag).Select(ResolveTarget).FirstOrDefault(t => t != null) ?? FindByBookmark(roots, binding.Tag);
 
         if (!string.IsNullOrWhiteSpace(binding.BookmarkName))
-        {
-            var start = roots.SelectMany(r => r.Descendants<BookmarkStart>())
-                .FirstOrDefault(b => string.Equals(b.Name?.Value, binding.BookmarkName, StringComparison.OrdinalIgnoreCase));
-            if (start == null) return null;
-            return start.Ancestors<Table>().FirstOrDefault()
-                   ?? TopLevelTables(roots).FirstOrDefault(t => ReferenceEquals(t.Ancestors<OpenXmlPartRootElement>().First(), start.Ancestors<OpenXmlPartRootElement>().First()) && t.IsAfter(start));
-        }
+            return FindByBookmark(roots, binding.BookmarkName);
 
         return TopLevelTables(roots).FirstOrDefault(t => scanner.ContainsTag(t.InnerText));
     }
 
+    /// <summary>Zakładka wewnątrz tabeli albo bezpośrednio przed nią (w tej samej części dokumentu).</summary>
+    private static Table? FindByBookmark(List<OpenXmlPartRootElement> roots, string name)
+    {
+        var start = roots.SelectMany(r => r.Descendants<BookmarkStart>())
+            .FirstOrDefault(b => string.Equals(b.Name?.Value, name, StringComparison.OrdinalIgnoreCase));
+        if (start == null) return null;
+        var root = start.Ancestors<OpenXmlPartRootElement>().First();
+        return start.Ancestors<Table>().FirstOrDefault()
+               ?? TopLevelTables([root]).FirstOrDefault(t => t.IsAfter(start));
+    }
+
     public static string Describe(CustomTableDataBinding binding) =>
-        !string.IsNullOrWhiteSpace(binding.Tag) ? $"Nie znaleziono formantu o tagu '{binding.Tag}' wskazującego tabelę ani sekcji powtarzanej."
+        !string.IsNullOrWhiteSpace(binding.Tag) ? $"Nie znaleziono formantu o tagu '{binding.Tag}' (Deweloper → Właściwości → Tag) ani zakładki o tej nazwie w tabeli lub przed nią."
         : !string.IsNullOrWhiteSpace(binding.BookmarkName) ? $"Nie znaleziono tabeli dla zakładki '{binding.BookmarkName}' (zakładka musi leżeć w tabeli albo przed nią)."
         : "Żadna tabela w dokumencie nie zawiera znaczników.";
 

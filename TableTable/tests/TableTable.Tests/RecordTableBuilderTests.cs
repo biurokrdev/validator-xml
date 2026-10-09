@@ -193,6 +193,20 @@ public class RecordTableBuilderTests
     }
 
     [Fact]
+    public void Tag_falls_back_to_bookmark_with_same_name()
+    {
+        // Szablon oznaczony zakładką (jak w DocXTableArchitect), worker skonfigurowany tagiem o tej samej nazwie.
+        using var doc = Create(
+            new Paragraph(new BookmarkStart { Id = "1", Name = "tabela_zalaczniki_zglaszajacego" }, new BookmarkEnd { Id = "1" }),
+            MessagesTable());
+
+        var result = Builder.Apply(doc, "tabela_zalaczniki_zglaszajacego", "wiadomosci", Model());
+
+        Assert.Equal(3, result.RecordCount);
+        Assert.DoesNotContain("<%", FirstTable(doc).InnerText);
+    }
+
+    [Fact]
     public void Missing_table_throws_with_description()
     {
         using var doc = Create(new Paragraph(new Run(new Text("bez tabeli"))));

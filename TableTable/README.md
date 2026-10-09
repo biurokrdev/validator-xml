@@ -94,7 +94,7 @@ Tabela (`tables[]`, klasa `CustomTableDataBinding`):
 
 | Klucz | Domyślnie | Uwagi |
 |---|---|---|
-| `tag` | – | tag formantu tabeli (`*` jako symbol wieloznaczny); zamiast tagu `bookmark-name`; bez obu – pierwsza tabela ze znacznikami |
+| `tag` | – | tag formantu tabeli (`*` jako symbol wieloznaczny); gdy formantu nie ma, szukana jest zakładka Word o tej nazwie (w tabeli lub przed nią); `bookmark-name` = tylko zakładka; bez obu – pierwsza tabela ze znacznikami |
 | `model-property-path` | – | JSONPath do rekordów od korzenia modelu, np. `sprawa.korespondencja[?(@.typ=='email')]`; puste = model jest tablicą |
 | `fields` | `[]` | `search-for`, `replacement-property-path` / `replacement-property-expression` / `replacement-text`, `display-format` (`dd-MM-yyyy`, `N0`, `N2`, `C`), `match-case`, `null-text` |
 | `collections` | `[]` | `tag-name` (formant-lista), `model-property-path` (= `tag-name`), `empty-text`, `unwrap`, zagnieżdżone `fields`/`collections`/`content-controls` |

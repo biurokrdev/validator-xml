@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\DocxPipeline\DocxPipeline.csproj" />
+    <!-- Wtyczka nie jest używana w kodzie przykładu – referencja tylko po to, by jej DLL (i zależności: TableTable.dll)
+         trafiły do katalogu programu, skąd rejestr ładuje je refleksją (AddPluginsFolder). -->
+    <ProjectReference Include="..\..\src\DocxPipeline.TableTable\DocxPipeline.TableTable.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="data\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>
