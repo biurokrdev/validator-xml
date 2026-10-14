@@ -98,6 +98,27 @@ public sealed class FieldMapping
     /// <summary>Tekst dla <see langword="null"/> lub brakującej właściwości; domyślnie pusty.</summary>
     [JsonProperty("null-text")]
     public string? NullText { get; set; }
+
+    /// <summary>Podmiany regex wykonywane po sformatowaniu wartości, a przed wstawieniem do dokumentu, w podanej kolejności (np. usunięcie słowa).</summary>
+    [JsonProperty("replace")]
+    public List<TextReplacement> Replace { get; set; } = new();
+}
+
+/// <summary>Jedna podmiana regex na tekście wartości.</summary>
+[JsonObject]
+public sealed class TextReplacement
+{
+    /// <summary>Wyrażenie regularne .NET, np. <c>\s*\bkrzak\b</c>.</summary>
+    [JsonProperty("pattern")]
+    public string Pattern { get; set; } = string.Empty;
+
+    /// <summary>Tekst zastępujący (grupy jako <c>$1</c>); domyślnie pusty = usunięcie.</summary>
+    [JsonProperty("with")]
+    public string With { get; set; } = string.Empty;
+
+    /// <summary>Bez rozróżniania wielkości liter.</summary>
+    [JsonProperty("ignore-case")]
+    public bool IgnoreCase { get; set; }
 }
 
 /// <summary>Lista: zawartość formantu o tagu <see cref="TagName"/> jest powtarzana per element tablicy; przy pustej liście formant znika.</summary>

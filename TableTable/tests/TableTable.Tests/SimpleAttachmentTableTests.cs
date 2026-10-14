@@ -67,6 +67,33 @@ public class SimpleAttachmentTableTests
     }
 
     [Fact]
+    public void Replace_rules_transform_value_before_insert()
+    {
+        using var doc = Create(AttachmentsTable());
+        var binding = CustomTableDataBinding.FromJson("""
+            {
+              "model-property-path": "zalaczniki",
+              "fields": [
+                { "search-for": "<%nazwa_zalacznika%>", "replacement-property-path": "nazwa",
+                  "replace": [ { "pattern": "\\s*\\bKRZAK\\b\\s*", "with": "", "ignore-case": true }, { "pattern": "\\.pdf$", "with": " (PDF)" } ] },
+                { "search-for": "<%dodajacy%>", "replacement-property-path": "uzytkownik", "null-text": "system",
+                  "replace": [ { "pattern": "^(\\w+) (\\w+)$", "with": "$2, $1" } ] }
+              ]
+            }
+            """);
+        var model = JToken.Parse("""
+            { "zalaczniki": [ { "nazwa": "umowa krzak.pdf", "uzytkownik": "Jan Kowalski" }, { "nazwa": "Krzak skan.jpg", "uzytkownik": null } ] }
+            """);
+
+        var result = new RecordTableBuilder().Apply(doc, binding, model);
+
+        Assert.Empty(result.Warnings);
+        var rows = Rows(doc).Select(CellTexts).ToList();
+        Assert.Equal(["umowa (PDF)", "", "Kowalski, Jan", ""], rows[1]);
+        Assert.Equal(["skan.jpg", "", "system", ""], rows[2]);
+    }
+
+    [Fact]
     public void Empty_list_replaces_template_row_with_full_width_text()
     {
         using var doc = Create(AttachmentsTable());

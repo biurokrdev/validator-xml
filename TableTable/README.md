@@ -96,7 +96,7 @@ Tabela (`tables[]`, klasa `CustomTableDataBinding`):
 |---|---|---|
 | `tag` | – | tag formantu tabeli (`*` jako symbol wieloznaczny); gdy formantu nie ma, szukana jest zakładka Word o tej nazwie (w tabeli lub przed nią); `bookmark-name` = tylko zakładka; bez obu – pierwsza tabela ze znacznikami |
 | `model-property-path` | – | JSONPath do rekordów od korzenia modelu, np. `sprawa.korespondencja[?(@.typ=='email')]`; puste = model jest tablicą |
-| `fields` | `[]` | `search-for`, `replacement-property-path` / `replacement-property-expression` / `replacement-text`, `display-format` (`dd-MM-yyyy`, `N0`, `N2`, `C`), `match-case`, `null-text` |
+| `fields` | `[]` | `search-for`, `replacement-property-path` / `replacement-property-expression` / `replacement-text`, `display-format` (`dd-MM-yyyy`, `N0`, `N2`, `C`), `match-case`, `null-text`, `replace[]` (`pattern`, `with`, `ignore-case` – podmiany regex na gotowym tekście, np. usunięcie słowa) |
 | `collections` | `[]` | `tag-name` (formant-lista), `model-property-path` (= `tag-name`), `empty-text`, `unwrap`, zagnieżdżone `fields`/`collections`/`content-controls` |
 | `content-controls` | `[]` | `tag-name`, `visible-property-path` / `visible-property-expression`, `visible-when-equals`, `negate`, `unwrap` |
 | `auto-bind` | `true` | konwencja dla elementów bez mapowania |
