@@ -71,19 +71,9 @@ internal sealed class ValueResolver(JToken root, RecordTableOptions options, Act
         return null;
     }
 
-    public string FieldText(FieldMapping field, Scope scope)
-    {
-        var text = Format(ResolveSource(field.ReplacementPropertyExpression, field.ReplacementPropertyPath, field.ReplacementText, scope, $"Pole '{field.SearchFor}'"), field.DisplayFormat);
-        if (text == null) return field.NullText ?? string.Empty;
-
-        foreach (var replacement in field.Replace.Where(r => !string.IsNullOrEmpty(r.Pattern)))
-        {
-            try { text = Regex.Replace(text, replacement.Pattern, replacement.With, replacement.IgnoreCase ? RegexOptions.IgnoreCase : RegexOptions.None); }
-            catch (ArgumentException ex) { warn($"Pole '{field.SearchFor}': błędny wzorzec '{replacement.Pattern}': {ex.Message}"); }
-        }
-
-        return text;
-    }
+    public string FieldText(FieldMapping field, Scope scope) =>
+        Format(ResolveSource(field.ReplacementPropertyExpression, field.ReplacementPropertyPath, field.ReplacementText, scope, $"Pole '{field.SearchFor}'"), field.DisplayFormat)
+        ?? field.NullText ?? string.Empty;
 
     /// <summary>Czy formant ma zostać; przy braku warunku zostaje (z ostrzeżeniem).</summary>
     public bool IsVisible(ContentControlMapping mapping, Scope scope)
