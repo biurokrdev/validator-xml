@@ -1,18 +1,18 @@
+var interpreter = new Interpreter()
+    .Reference(ctx.BindingContext.DynamicExpressoTypeReferences.Select(type => new ReferenceType(type)))
+    .Reference(typeof(NumberFormats))
+    .SetVariable("formModel", ctx.FormModel)
+    .SetVariable("docTree", ctx.DocTree)
+    .SetVariable("parentForm", ctx.FormModel?.ParentForm);
+
+var builder = new RecordTableBuilder(new RecordTableOptions
 {
-  "tag": "tabela_wiadomosci",
-  "model-property-path": "wiadomosci",
-  "template-row-count": 4,
-  "fields": [
+    Logger = logger,
+    ExpressionEvaluator = new DelegateExpressionEvaluator((expr, scope) =>
     {
-      "search-for": "<%data_czas_wiadomosci%>",
-      "replacement-property-expression": "record.data_czas_wiadomosci.Replace(\"Odebrana\", \"\").Replace(\"Wysłana\", \"\").Trim()"
-    }
-  ],
-  "collections": [
-    { "tag-name": "tag_zalaczniki", "model-property-path": "nazwy_zalacznikow", "empty-text": "Brak załączników" }
-  ],
-  "content-controls": [
-    { "tag-name": "tag_wyslano",  "visible-property-path": "data_czas_wiadomosci", "visible-when-matches": "^Wysłana",  "unwrap": true },
-    { "tag-name": "tag_odebrano", "visible-property-path": "data_czas_wiadomosci", "visible-when-matches": "^Odebrana", "unwrap": true }
-  ]
-}
+        interpreter.SetVariable("record", scope.Current);   // JObject – w wyrażeniu record["pole"]
+        interpreter.SetVariable("index", scope.Index);
+        interpreter.SetVariable("root", scope.Root);
+        return interpreter.Eval(expr);
+    }),
+});
