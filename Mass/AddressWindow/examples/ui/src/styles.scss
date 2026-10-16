@@ -1,0 +1,93 @@
+/* Styl wzorowany na firmowych aplikacjach: pomarańczowy tytuł, białe panele na szarym tle, przyciski indygo.
+   Wynik czytelny także bez rozróżniania kolorów (znaki ✓ ✗ ? i tekst). */
+:root {
+  --ink: #333;
+  --muted: #666;
+  --line: #d6d6d6;
+  --line-strong: #b5b5b5;
+  --page: #f0f0f0;
+  --surface: #fff;
+  --surface-2: #f6f6f6;
+  --orange: #ff6200;
+  --indigo: #524fb7;
+  --indigo-dark: #443f9f;
+  --green: #1f8a3b;
+  --green-dark: #166d2e;
+  --green-bg: #e6f4ea;
+  --lavender: #ecebf6;
+  --ok: #1b7a3c;
+  --ok-bg: #e8f5ec;
+  --bad: #c1281f;
+  --bad-bg: #fcebe9;
+  --unsure: #9a6200;
+  --unsure-bg: #fff4dc;
+  --note-bg: #fff8e6;
+  --radius: 8px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--page);
+}
+
+button {
+  font: inherit;
+  font-weight: 700;
+  padding: 0.55rem 1.2rem;
+  border: 2px solid var(--green);
+  border-radius: var(--radius);
+  background: var(--green);
+  color: #fff;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--green-dark);
+    border-color: var(--green-dark);
+  }
+
+  &.secondary {
+    background: var(--surface);
+    color: var(--green);
+
+    &:hover:not(:disabled) {
+      background: var(--green-bg);
+    }
+  }
+
+  &:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+}
+
+button,
+input,
+textarea,
+summary {
+  &:focus-visible {
+    outline: 2px solid var(--orange);
+    outline-offset: 2px;
+  }
+}
+
+a {
+  color: var(--orange);
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.mono {
+  font-family: ui-monospace, Consolas, monospace;
+}

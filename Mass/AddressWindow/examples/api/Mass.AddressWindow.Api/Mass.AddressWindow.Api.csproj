@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\Mass.AddressWindow\Mass.AddressWindow.csproj" />
+    <!-- The mock of the external application renders real R labels. -->
+    <ProjectReference Include="..\..\..\..\RLabel\src\Mass.RLabel\Mass.RLabel.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The mock builds its DOCX with the same minimal writer as the sample letters. -->
+    <Compile Include="..\..\..\samples\SampleGenerator\WordDocument.cs" Link="External\WordDocument.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Ready renders the mock conversion service returns for the sample DOCX letters. -->
+    <None Include="..\..\..\samples\pdf\*.pdf" Link="samples\pdf\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.9.0" />
+  </ItemGroup>
+
+</Project>

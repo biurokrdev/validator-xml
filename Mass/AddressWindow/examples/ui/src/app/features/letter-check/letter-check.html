@@ -1,0 +1,199 @@
+<h1 class="page-title">Walidacja pisma (koperty z okienkami)</h1>
+@if (formVisible()) {
+<form class="setup" (submit)="$event.preventDefault()">
+  <section class="panel">
+    <h2 class="panel-title">Typ koperty</h2>
+    <div class="segments" role="radiogroup" aria-label="Typ koperty">
+      @for (e of envelopes; track e) {
+        <label class="segment">
+          <input type="radio" name="envelope" [value]="e" [checked]="envelope() === e" (change)="setEnvelope(e)" [attr.data-testid]="'envelope-' + e" />
+          <span>{{ envelopeLabel[e] }}</span>
+        </label>
+      }
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel-title">Co chcesz zrobić?</h2>
+    <div class="segments" role="radiogroup" aria-label="Co chcesz zrobić?">
+      <label class="segment"><input type="radio" name="variant" value="upload" [checked]="variant() === 'upload'" (change)="setVariant('upload')" data-testid="variant-upload" /><span>Wczytać plik</span></label>
+      <label class="segment"><input type="radio" name="variant" value="order" [checked]="variant() === 'order'" (change)="setVariant('order')" data-testid="variant-order" /><span>Ręcznie podać dane</span></label>
+      <label class="segment"><input type="radio" name="variant" value="form" [checked]="variant() === 'form'" (change)="setVariant('form')" data-testid="variant-form" /><span>Sprawdzić konkretny forms</span></label>
+    </div>
+  </section>
+
+  <section class="panel">
+    @if (variant() === 'upload') {
+      <h2 class="panel-title">Dokument</h2>
+      <div class="file-picker">
+        <input #fileInput type="file" class="visually-hidden" accept=".pdf,.docx" (change)="onFileSelected($event)" data-testid="file-input" />
+        <button type="button" (click)="fileInput.click()">Wybierz plik</button>
+        <button type="button" class="secondary" (click)="clear()" data-testid="clear-button">Wyczyść</button>
+        <span class="muted">PDF lub DOCX, do 20 MB</span>
+      </div>
+    } @else if (variant() === 'form') {
+      <h2 class="panel-title">Formularz</h2>
+      <label class="field">
+        <span>Identyfikator formularza (GUID)</span>
+        <input type="text" class="mono" [value]="formId()" (input)="formId.set($any($event.target).value)" placeholder="np. 3f2504e0-4f89-11d3-9a0c-0305e82c3301" data-testid="form-id" />
+      </label>
+      <div class="actions">
+        <button type="button" (click)="checkForm()" [disabled]="!canCheckForm()" data-testid="form-button">Sprawdź</button>
+        <button type="button" class="secondary" (click)="clear()" data-testid="clear-button">Wyczyść</button>
+        @if (formId().trim() && !canCheckForm()) {
+          <span class="muted">Podaj identyfikator w formacie GUID.</span>
+        }
+      </div>
+    } @else {
+      <h2 class="panel-title">Dane do dokumentu</h2>
+      <label class="field">
+        <span>Source</span>
+        <input type="text" [value]="source()" (input)="source.set($any($event.target).value)" data-testid="source" />
+      </label>
+      <label class="field">
+        <span>Adres odbiorcy (każdy wiersz osobno, od 2 do 6 wierszy)</span>
+        <textarea rows="4" [value]="recipientText()" (input)="recipientText.set($any($event.target).value)" placeholder="Pan Jan Kowalski&#10;ul. Marszałkowska 142 m. 5&#10;00-061 Warszawa" data-testid="recipient"></textarea>
+      </label>
+      @if (envelope() === 'DoubleWindow') {
+        <label class="field">
+          <span>Numer R listu poleconego</span>
+          <input type="text" class="mono" [value]="registeredNumber()" (input)="registeredNumber.set($any($event.target).value)" placeholder="np. 00759007731512000621 albo RR473124829PL" data-testid="registered-number" />
+        </label>
+      }
+      <div class="actions">
+        <button type="button" (click)="order()" [disabled]="!canOrder()" data-testid="order-button">Pobierz dokument i sprawdź</button>
+        <button type="button" class="secondary" (click)="clear()" data-testid="clear-button">Wyczyść</button>
+      </div>
+    }
+  </section>
+</form>
+}
+
+@if (busy() || error() || result()) {
+  <section class="panel">
+    <h2 class="panel-title">Wynik sprawdzenia</h2>
+
+    @if (busy()) {
+      <p class="status" role="status" aria-live="polite" data-testid="stage">{{ stage() }}</p>
+    }
+
+    @if (error()) {
+      <div class="box error" role="alert" data-testid="error">
+        <b>Nie udało się sprawdzić dokumentu.</b> {{ error() }}
+      </div>
+    }
+
+@if (result(); as r) {
+  <section class="result" data-testid="result" [attr.data-status]="r.status">
+    <h2 [class]="'verdict ' + r.status.toLowerCase()">
+      <span class="mark" aria-hidden="true">{{ r.status === 'Valid' ? '✓' : r.status === 'Invalid' ? '✗' : '?' }}</span>
+      Wynik: {{ outcomeLabel[r.status] }}
+    </h2>
+    <p data-testid="summary">{{ r.summary }}</p>
+    <p class="muted">
+      Dokument: {{ r.document.fileName }}
+      @if (r.document.convertedToPdf) { (DOCX skonwertowany do PDF) }
+      @if (r.document.source === 'ExternalMock') { · pobrany z aplikacji zewnętrznej (mock) }
+      @else if (r.document.source === 'FormMock') { · pobrany dla formularza z aplikacji zewnętrznej (mock) }
+      · koperta: {{ envelopeLabel[r.envelope] }} · profil: {{ r.profile.name }}
+    </p>
+
+    @if (r.documentReasons.length > 0) {
+      <ul class="reasons" data-testid="document-reasons">
+        @for (f of r.documentReasons; track $index) {
+          <li [attr.data-code]="f.code">{{ f.message }}</li>
+        }
+      </ul>
+    }
+
+    <div class="elements">
+      @if (r.address; as a) {
+        <ng-container *ngTemplateOutlet="elementTpl; context: { $implicit: a, title: 'Adres odbiorcy', id: 'address' }" />
+      }
+      @if (r.label; as l) {
+        <ng-container *ngTemplateOutlet="elementTpl; context: { $implicit: l, title: 'Etykieta R', id: 'label' }" />
+      }
+    </div>
+
+    @if (r.preview; as p) {
+      <details>
+        <summary>Podgląd pierwszej strony z zaznaczonymi okienkami</summary>
+        <img [src]="p.dataUri" [width]="p.widthPx" [height]="p.heightPx" alt="Podgląd pierwszej strony" data-testid="preview" />
+      </details>
+    }
+  </section>
+}
+
+    @if (!busy()) {
+      <div class="actions">
+        @if (result()) {
+          <button type="button" (click)="next()" data-testid="next-button">Weryfikuj kolejny</button>
+        } @else {
+          <button type="button" (click)="back()" data-testid="back-button">Wróć do formularza</button>
+        }
+      </div>
+    }
+  </section>
+}
+
+<ng-template #elementTpl let-e let-title="title" let-id="id">
+  <section class="element" [attr.data-testid]="'element-' + id" [attr.data-status]="e.status">
+    <h3>{{ title }} <span [class]="'status-chip ' + e.status.toLowerCase()">{{ statusText(e.status) }}</span></h3>
+
+    @if (e.address; as a) {
+      <pre class="address" data-testid="address-lines">{{ a.lines.join('\n') }}</pre>
+      <p class="muted">
+        @if (e.recipientMatch === 'Matched') { Treść zgodna z podanymi danymi odbiorcy. }
+        @else if (e.recipientMatch === 'Mismatch') { Treść różni się od podanych danych odbiorcy. }
+        @else { Wykryto blok przypominający adres; zgodności z konkretnym odbiorcą nie sprawdzano. }
+      </p>
+    }
+
+    @if (e.label; as l) {
+      <p data-testid="label-number">
+        @if (l.number) {
+          Numer z kodu kreskowego: <span class="mono">{{ l.humanReadableNumber ?? l.number }}</span>
+          @if (l.kind) { ({{ mailKindLabel[l.kind] }}) }
+          · cyfra kontrolna {{ l.numberIsValid ? 'poprawna' : 'niepoprawna' }}
+        } @else {
+          Kodu kreskowego nie udało się odczytać.
+        }
+      </p>
+    }
+
+    @if (!e.found) {
+      <p>Nie znaleziono w dokumencie.</p>
+    } @else if (e.overflow; as o) {
+      <p data-testid="overflow"><b>Wystaje poza okienko:</b> {{ o.description }}.</p>
+    } @else if (e.status === 'Valid') {
+      <p>Mieści się w okienku przy każdym położeniu kartki w kopercie.</p>
+    }
+
+    @if (problems(e.reasons).length > 0) {
+      <ul class="reasons">
+        @for (f of problems(e.reasons); track $index) {
+          <li [attr.data-code]="f.code">{{ f.message }}</li>
+        }
+      </ul>
+    }
+    @if (notes(e.reasons).length > 0) {
+      <details>
+        <summary>Uwagi ({{ notes(e.reasons).length }})</summary>
+        <ul class="reasons">
+          @for (f of notes(e.reasons); track $index) {
+            <li [attr.data-code]="f.code">{{ f.message }}</li>
+          }
+        </ul>
+      </details>
+    }
+
+    <details>
+      <summary>Dane geometryczne</summary>
+      <dl class="geometry">
+        <dt>Obszar okienka</dt><dd>{{ area(e.windowArea) }}</dd>
+        @if (e.address; as a) { <dt>Tekst adresu</dt><dd>{{ area(a.textBounds) }}</dd> }
+        @if (e.label; as l) { <dt>Etykieta</dt><dd>{{ area(l.bounds) }} · obraz {{ l.widthPx }} × {{ l.heightPx }} px</dd> }
+      </dl>
+    </details>
+  </section>
+</ng-template>
